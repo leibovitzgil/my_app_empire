@@ -13,9 +13,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         super(const AuthState.unknown()) {
     on<AuthStatusChanged>(_onAuthStatusChanged);
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
+    on<AuthLoginRequested>(_onAuthLoginRequested);
     _userSubscription = _authRepository.user.listen(
       (user) => add(AuthStatusChanged(
         user != null ? AuthStatus.authenticated : AuthStatus.unauthenticated,
+        user: user,
       )),
     );
   }
@@ -31,8 +33,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       case AuthStatus.unauthenticated:
         return emit(const AuthState.unauthenticated());
       case AuthStatus.authenticated:
-        // In a real app we might fetch user details here
-        return emit(const AuthState.authenticated('test_user'));
+        final user = event.user;
+        if (user != null) {
+          return emit(AuthState.authenticated(user));
+        }
+        return emit(const AuthState.unauthenticated());
+      case AuthStatus.failure:
+        return emit(const AuthState.failure("Unknown error"));
     }
   }
 
@@ -41,6 +48,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) {
     _authRepository.logout();
+  }
+
+  Future<void> _onAuthLoginRequested(
+    AuthLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    try {
+      await _authRepository.login(event.email, event.password);
+    } catch (e) {
+      emit(AuthState.failure(e.toString()));
+    }
   }
 
   @override
