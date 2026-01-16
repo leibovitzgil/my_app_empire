@@ -15,6 +15,8 @@ dependencies:
   equatable: ^2.0.5
   core_ui:
     path: ../../core/core_ui
+  firebase_auth: ^4.10.0
+  firebase_core: ^2.17.0
 
 dev_dependencies:
   flutter_test:
