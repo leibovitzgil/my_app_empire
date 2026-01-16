@@ -1,17 +1,16 @@
-name: core_ui
-description: Shared UI components and theme.
-version: 0.0.1
+name: template_app
+description: A new Flutter project.
 publish_to: 'none'
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
-  flutter: ">=3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  google_fonts: ^6.1.0
-  flutter_animate: ^4.2.0
+  core_ui:
+    path: ../../packages/core/core_ui
 
 dev_dependencies:
   flutter_test:
