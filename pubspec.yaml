@@ -1,0 +1,9 @@
+name: my_app_empire
+description: A Flutter Monorepo Workspace.
+publish_to: 'none'
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dev_dependencies:
+  melos: ^6.0.0
+  flutter_lints: ^4.0.0
