@@ -1,11 +1,15 @@
-name: my_app_empire
-repository: https://github.com/my_org/my_app_empire
+name: my_app_factory
+repository: https://github.com/my_org/my_app_factory
 
 packages:
   - apps/**
   - packages/**
 
 scripts:
+  lint:
+    run: melos exec -- flutter analyze .
+    description: Run `flutter analyze` in all packages.
+
   bootstrap:
     run: melos bootstrap
     description: Bootstrap all packages.
@@ -13,15 +17,3 @@ scripts:
   clean:
     run: melos clean
     description: Clean all packages.
-
-  analyze:
-    run: melos exec -- flutter analyze .
-    description: Run `flutter analyze` in all packages.
-
-  test:
-    run: melos exec --dir-exists="test" -- flutter test
-    description: Run `flutter test` for selected packages.
-
-  format:
-    run: melos exec -- dart format .
-    description: Run `dart format` in all packages.
