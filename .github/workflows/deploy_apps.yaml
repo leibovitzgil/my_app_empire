@@ -1,0 +1,119 @@
+name: Deploy Apps
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      deploy_all:
+        description: 'Deploy all apps regardless of changes'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install Melos
+        run: dart pub global activate melos
+      - name: Bootstrap
+        run: melos bootstrap
+      - name: Analyze
+        run: melos run analyze
+      - name: Test
+        run: melos run test
+
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set-apps.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install Melos
+        run: dart pub global activate melos
+      - name: Determine changed apps
+        id: set-apps
+        run: |
+           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ inputs.deploy_all }}" == "true" ]; then
+             echo "Running for all apps..."
+             APPS=$(dart tool/ci_script.dart --all)
+           else
+             echo "Checking for changes..."
+             # For push events, github.event.before gives the previous commit SHA.
+             # For workflow_dispatch, we default to HEAD^ (last commit).
+             BASE_SHA="${{ github.event.before }}"
+
+             if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" == "0000000000000000000000000000000000000000" ]; then
+               BASE_SHA="HEAD^"
+             fi
+
+             echo "Diff base: $BASE_SHA"
+             APPS=$(dart tool/ci_script.dart --diff $BASE_SHA)
+           fi
+           echo "Changed apps: $APPS"
+           echo "apps=$APPS" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [lint-and-test, check-changes]
+    if: needs.check-changes.outputs.apps != '[]' && needs.check-changes.outputs.apps != ''
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.check-changes.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install Melos
+        run: dart pub global activate melos
+      - name: Bootstrap
+        run: melos bootstrap
+
+      - name: Build IPA (Mock Signing)
+        run: |
+          cd ${{ matrix.app }}
+          # MOCK SIGNING PROCESS
+          # In a real environment, you would set up your certificates and provisioning profiles here.
+          # Example:
+          # echo "${{ secrets.IOS_CERTIFICATE_BASE64 }}" | base64 --decode > certificate.p12
+          # echo "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > profile.mobileprovision
+          #
+          # For now, we build with --no-codesign to verify the build process.
+          flutter build ipa --no-codesign
+
+      - name: Build AppBundle
+        run: |
+          cd ${{ matrix.app }}
+          flutter build appbundle
+
+      - name: Set Artifact Name
+        run: |
+          APP_PATH="${{ matrix.app }}"
+          CLEAN_NAME="${APP_PATH//\//-}"
+          echo "ARTIFACT_NAME=$CLEAN_NAME" >> $GITHUB_ENV
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: ${{ env.ARTIFACT_NAME }}-ipa
+          path: ${{ matrix.app }}/build/ios/archive/Runner.xcarchive
+
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+           name: ${{ env.ARTIFACT_NAME }}-aab
+           path: ${{ matrix.app }}/build/app/outputs/bundle/release/app-release.aab
