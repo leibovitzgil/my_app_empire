@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter/material.dart';
@@ -17,41 +18,85 @@ class App extends StatelessWidget {
   }
 }
 
-class AppView extends StatelessWidget {
+/// A [ChangeNotifier] that listens to a [Stream] and notifies its listeners.
+///
+/// Used to make [GoRouter] reactive to [Stream] events, such as authentication
+/// state changes from a BLoC.
+class GoRouterRefreshStream extends ChangeNotifier {
+  /// Creates a [GoRouterRefreshStream].
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    _subscription = stream.asBroadcastStream().listen(
+          (dynamic _) => notifyListeners(),
+        );
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+class AppView extends StatefulWidget {
   const AppView({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // We can use a stream for refreshListenable if AuthBloc exposes it,
-    // or just rely on the fact that the Router will rebuild when dependencies change if wired up correctly.
-    // For simplicity here, we might not have the full redirection logic without a Listenable.
-    // But let's set up a basic router that checks auth status.
+  State<AppView> createState() => _AppViewState();
+}
 
-    // Note: To make GoRouter reactive to Bloc state changes, we typically need a `GoRouterRefreshStream`.
-    // Since I can't import that extra utility easily, I'll keep it simple.
+class _AppViewState extends State<AppView> {
+  late final GoRouterRefreshStream _refreshStream;
+  late final GoRouter _router;
 
-    final router = GoRouter(
+  @override
+  void initState() {
+    super.initState();
+    final authBloc = context.read<AuthBloc>();
+    _refreshStream = GoRouterRefreshStream(authBloc.stream);
+    _router = GoRouter(
+      refreshListenable: _refreshStream,
+      initialLocation: '/',
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) {
-            // A simple check here just for demonstration.
-            // Real apps use redirect logic.
-            final authState = context.watch<AuthBloc>().state;
-             if (authState.status == AuthStatus.authenticated) {
-               return const HomeScreen();
-             } else {
-               return const LoginScreen();
-             }
-          },
+          builder: (context, state) => const HomeScreen(),
+        ),
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => const LoginScreen(),
         ),
       ],
-    );
+      redirect: (context, state) {
+        final authStatus = authBloc.state.status;
+        final isLoggingIn = state.matchedLocation == '/login';
 
+        if (authStatus != AuthStatus.authenticated) {
+          return isLoggingIn ? null : '/login';
+        }
+
+        if (isLoggingIn) {
+          return '/';
+        }
+
+        return null;
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshStream.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      routerConfig: router,
+      routerConfig: _router,
     );
   }
 }
