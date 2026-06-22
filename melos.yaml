@@ -17,3 +17,21 @@ scripts:
   clean:
     run: melos clean
     description: Clean all packages.
+
+  test:
+    run: melos exec --dir-exists="test" -- flutter test
+    description: Run `flutter test` for packages that have tests.
+
+  format:
+    run: melos exec -- dart format .
+    description: Format all packages.
+
+  format-check:
+    run: melos exec -- dart format --output=none --set-exit-if-changed .
+    description: Fail if any package is not formatted (used by CI).
+
+  create_app:
+    run: dart run tool/create_app.dart
+    description: |
+      Scaffold a new app from app_template.
+      Usage: melos run create_app -- <app_name> [--description "..."]
