@@ -3,19 +3,24 @@
 // (domain / data / bloc / ui + a bloc test).
 //
 // Usage:
-//   dart run tool/create_feature.dart <name> [--description "..."]
+//   dart run tool/create_feature.dart <name> [--description "..."] [--wire <app>]
 //
 // <name> is the feature name in snake_case, without the `feature_` prefix
 // (e.g. `profile` -> package `feature_profile`, classes `ProfileBloc`, ...).
+// --wire <app> also registers the feature's in-memory repository in the app's
+// get_it injection (before the `// generated:register` marker).
 //
-// Intentionally dependency-free (dart:io only) so it runs without bootstrapping.
+// Intentionally dependency-free (dart:io only) apart from a sibling helper.
 import 'dart:io';
+
+import 'src/wiring.dart';
 
 final _validName = RegExp(r'^[a-z][a-z0-9_]*$');
 
 void main(List<String> args) {
   final positional = <String>[];
   String? description;
+  String? wireApp;
 
   for (var i = 0; i < args.length; i++) {
     final arg = args[i];
@@ -24,6 +29,9 @@ void main(List<String> args) {
       description = args[++i];
     } else if (arg.startsWith('--description=')) {
       description = arg.substring('--description='.length);
+    } else if (arg == '--wire' || arg == '-w') {
+      if (i + 1 >= args.length) _fail('Missing value for $arg');
+      wireApp = args[++i];
     } else if (arg == '--help' || arg == '-h') {
       stdout.writeln(_usage);
       exit(0);
@@ -60,15 +68,21 @@ void main(List<String> args) {
     file.writeAsStringSync(entry.value);
   }
 
-  stdout.writeln('''
-✓ Created packages/features/feature_$name (class prefix: $pascal)
+  stdout.writeln('✓ Created packages/features/feature_$name (prefix: $pascal)');
 
-Next steps:
-  melos bootstrap
-  melos run lint && melos run test
-  # then wire it into an app: add `feature_$name: { path: ... }` to the
-  # app's pubspec and provide a $pascal'Repository implementation.
-''');
+  if (wireApp != null) {
+    wireIntoApp(
+      repoRoot: repoRoot,
+      app: wireApp,
+      depName: 'feature_$name',
+      depPath: '../../packages/features/feature_$name',
+      importLine: "import 'package:feature_$name/feature_$name.dart';",
+      registrationLine: '  getIt.registerLazySingleton<${pascal}Repository>'
+          '(InMemory${pascal}Repository.new);',
+    );
+  }
+
+  stdout.writeln('\nNext: melos bootstrap && melos run lint && melos run test');
 }
 
 String _toPascalCase(String snake) =>

@@ -6,6 +6,9 @@ analyzer:
     - "**/*.freezed.dart"
     - "**/*.config.dart"
     - "**/*.mocks.dart"
+    # Standalone dev/CI scripts (generators, ci helper). Validated by their
+    # output and tests rather than the package lint bar.
+    - "tool/**"
   language:
     strict-casts: true
     strict-inference: true

@@ -48,4 +48,10 @@ scripts:
     run: dart run tool/create_feature.dart
     description: |
       Scaffold a new feature package (domain/data/bloc/ui + test).
-      Usage: melos run create_feature -- <name> [--description "..."]
+      Usage: melos run create_feature -- <name> [--description "..."] [--wire <app>]
+
+  create_package:
+    run: dart run tool/create_package.dart
+    description: |
+      Scaffold a new core/service package (service + barrel + test).
+      Usage: melos run create_package -- <name> [--layer core|services] [--wire <app>]
