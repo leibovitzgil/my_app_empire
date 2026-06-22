@@ -3,7 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ReviewPrompter {
   static const String _kAppOpenCountKey = 'review_prompter_app_open_count';
-  static const String _kCoreActionCompletedKey = 'review_prompter_core_action_completed';
+  static const String _kCoreActionCompletedKey =
+      'review_prompter_core_action_completed';
   static const String _kReviewRequestedKey = 'review_prompter_review_requested';
 
   final InAppReview _inAppReview;
@@ -36,7 +37,8 @@ class ReviewPrompter {
     if (alreadyRequested) return;
 
     final openCount = _prefs.getInt(_kAppOpenCountKey) ?? 0;
-    final coreActionCompleted = _prefs.getBool(_kCoreActionCompletedKey) ?? false;
+    final coreActionCompleted =
+        _prefs.getBool(_kCoreActionCompletedKey) ?? false;
 
     // Logic: 5 opens AND core action completed
     if (openCount >= 5 && coreActionCompleted) {

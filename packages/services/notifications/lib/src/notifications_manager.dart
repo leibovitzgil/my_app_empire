@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ui/soft_prompt_dialog.dart';
 
 class NotificationsManager {
-  static const String _kSoftPromptDeclinedKey = 'notifications_soft_prompt_declined_timestamp';
+  static const String _kSoftPromptDeclinedKey =
+      'notifications_soft_prompt_declined_timestamp';
   // Cooldown in days before showing soft prompt again
   static const int _kSoftPromptCooldownDays = 7;
 
@@ -55,12 +56,13 @@ class NotificationsManager {
       }
 
       final bool userAgreed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => SoftPromptDialog(
-          onAllow: () => Navigator.of(ctx).pop(true),
-          onLater: () => Navigator.of(ctx).pop(false),
-        ),
-      ) ?? false;
+            context: context,
+            builder: (ctx) => SoftPromptDialog(
+              onAllow: () => Navigator.of(ctx).pop(true),
+              onLater: () => Navigator.of(ctx).pop(false),
+            ),
+          ) ??
+          false;
 
       if (!userAgreed) {
         await _markSoftPromptDeclined();
@@ -98,6 +100,7 @@ class NotificationsManager {
   }
 
   Future<void> _markSoftPromptDeclined() async {
-    await _prefs.setInt(_kSoftPromptDeclinedKey, DateTime.now().millisecondsSinceEpoch);
+    await _prefs.setInt(
+        _kSoftPromptDeclinedKey, DateTime.now().millisecondsSinceEpoch);
   }
 }

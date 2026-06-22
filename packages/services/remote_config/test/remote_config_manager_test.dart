@@ -7,7 +7,8 @@ class FakeFirebaseRemoteConfig extends Fake implements FirebaseRemoteConfig {
   final Map<String, dynamic> _values = {};
 
   @override
-  Future<void> setConfigSettings(RemoteConfigSettings remoteConfigSettings) async {}
+  Future<void> setConfigSettings(
+      RemoteConfigSettings remoteConfigSettings) async {}
 
   @override
   Future<void> setDefaults(Map<String, dynamic> defaultParameters) async {

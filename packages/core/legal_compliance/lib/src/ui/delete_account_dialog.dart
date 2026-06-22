@@ -19,7 +19,8 @@ class DeleteAccountDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(title ?? 'Delete Account?'),
-      content: Text(content ?? 'This action is irreversible. All your data will be permanently removed.'),
+      content: Text(content ??
+          'This action is irreversible. All your data will be permanently removed.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
@@ -36,7 +37,8 @@ class DeleteAccountDialog extends StatelessWidget {
 }
 
 /// Shows the [DeleteAccountDialog].
-Future<bool?> showDeleteAccountDialog(BuildContext context, {
+Future<bool?> showDeleteAccountDialog(
+  BuildContext context, {
   String? title,
   String? content,
   String? cancelText,

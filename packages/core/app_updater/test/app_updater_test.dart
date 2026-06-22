@@ -1,7 +1,6 @@
 import 'package:app_updater/app_updater.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 // Simple Mock/Fake implementation
