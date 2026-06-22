@@ -38,19 +38,19 @@ class AppView extends StatelessWidget {
             // A simple check here just for demonstration.
             // Real apps use redirect logic.
             final authState = context.watch<AuthBloc>().state;
-             if (authState.status == AuthStatus.authenticated) {
-               return const HomeScreen();
-             } else {
-               return const LoginScreen();
-             }
+            if (authState.status == AuthStatus.authenticated) {
+              return const HomeScreen();
+            } else {
+              return const LoginScreen();
+            }
           },
         ),
       ],
     );
 
     return MaterialApp.router(
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       routerConfig: router,
     );
   }
