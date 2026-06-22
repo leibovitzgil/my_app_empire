@@ -1,6 +1,26 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// Emits a user id on [login] and null on [logout], like a real backend.
+class LoginEmittingAuthRepository implements AuthRepository {
+  final _controller = StreamController<String?>.broadcast();
+
+  @override
+  Stream<String?> get user => _controller.stream;
+
+  @override
+  Future<void> login(String email, String password) async {
+    _controller.add('user_id');
+  }
+
+  @override
+  Future<void> logout() async {
+    _controller.add(null);
+  }
+}
 
 class FakeAuthRepository implements AuthRepository {
   final Stream<String?> _userStream;
@@ -45,6 +65,13 @@ void main() {
         ),
       ),
       expect: () => [const AuthState.authenticated('user')],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits [authenticated] after AuthLoginRequested succeeds',
+      build: () => AuthBloc(authRepository: LoginEmittingAuthRepository()),
+      act: (bloc) => bloc.add(const AuthLoginRequested('a@b.com', 'password')),
+      expect: () => [const AuthState.authenticated('user_id')],
     );
   });
 }

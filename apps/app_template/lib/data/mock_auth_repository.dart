@@ -11,13 +11,13 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<void> login(String email, String password) async {
-    await Future.delayed(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(seconds: 1));
     _controller.add('user_id_123');
   }
 
   @override
   Future<void> logout() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     _controller.add(null);
   }
 }
