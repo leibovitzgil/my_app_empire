@@ -1,0 +1,17 @@
+#!/bin/bash
+# Pre-commit hook: keep the workspace green (format + analyze).
+# Enable with `melos run install-hooks`. Bypass once with `git commit --no-verify`.
+set -euo pipefail
+
+if ! command -v melos >/dev/null 2>&1; then
+  echo "pre-commit: 'melos' not on PATH; skipping checks." >&2
+  exit 0
+fi
+
+echo "pre-commit: checking formatting…"
+melos run format-check
+
+echo "pre-commit: analyzing…"
+melos run lint
+
+echo "pre-commit: OK"
