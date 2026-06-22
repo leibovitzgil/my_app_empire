@@ -5,7 +5,8 @@ import 'package:rxdart/rxdart.dart';
 import 'monetization_service.dart';
 
 class RevenueCatService implements MonetizationService {
-  final BehaviorSubject<CustomerInfo> _customerInfoSubject = BehaviorSubject<CustomerInfo>();
+  final BehaviorSubject<CustomerInfo> _customerInfoSubject =
+      BehaviorSubject<CustomerInfo>();
 
   RevenueCatService() {
     Purchases.addCustomerInfoUpdateListener((customerInfo) {
@@ -72,7 +73,8 @@ class RevenueCatService implements MonetizationService {
   @override
   Future<CustomerInfo?> purchasePackage(Package package) async {
     try {
-      return await Purchases.purchasePackage(package);
+      final result = await Purchases.purchase(PurchaseParams.package(package));
+      return result.customerInfo;
     } catch (e) {
       // TODO: Add proper error handling/logging
       return null;
@@ -117,11 +119,14 @@ class RevenueCatService implements MonetizationService {
       // However, usually we can rely on cached value if we trust the listener.
       // Let's stick to checking fresh info or latest from subject.
       if (_customerInfoSubject.hasValue) {
-        return _customerInfoSubject.value.entitlements.all[entitlementIdentifier]?.isActive ?? false;
+        return _customerInfoSubject
+                .value.entitlements.all[entitlementIdentifier]?.isActive ??
+            false;
       }
 
       final customerInfo = await Purchases.getCustomerInfo();
-      return customerInfo.entitlements.all[entitlementIdentifier]?.isActive ?? false;
+      return customerInfo.entitlements.all[entitlementIdentifier]?.isActive ??
+          false;
     } catch (e) {
       return false;
     }
@@ -129,9 +134,10 @@ class RevenueCatService implements MonetizationService {
 
   @override
   Stream<bool> isProUserStream({String entitlementIdentifier = 'pro'}) {
-    return _customerInfoSubject.stream.map((info) =>
-      info.entitlements.all[entitlementIdentifier]?.isActive ?? false
-    ).distinct();
+    return _customerInfoSubject.stream
+        .map((info) =>
+            info.entitlements.all[entitlementIdentifier]?.isActive ?? false)
+        .distinct();
   }
 
   void dispose() {

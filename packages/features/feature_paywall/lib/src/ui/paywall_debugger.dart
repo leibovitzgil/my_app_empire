@@ -53,11 +53,13 @@ class PaywallDebugger extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (monetizationService is SimulatedMonetizationService)
-              _buildSimulationControls(context, monetizationService as SimulatedMonetizationService)
+              _buildSimulationControls(
+                  context, monetizationService as SimulatedMonetizationService)
             else
               const Text(
                 'Running on real RevenueCat service.\nSimulation controls disabled.',
-                style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                style:
+                    TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
               ),
           ],
         ),
@@ -65,7 +67,8 @@ class PaywallDebugger extends StatelessWidget {
     );
   }
 
-  Widget _buildSimulationControls(BuildContext context, SimulatedMonetizationService service) {
+  Widget _buildSimulationControls(
+      BuildContext context, SimulatedMonetizationService service) {
     return StreamBuilder<bool>(
       stream: service.isProUserStream(),
       builder: (context, snapshot) {

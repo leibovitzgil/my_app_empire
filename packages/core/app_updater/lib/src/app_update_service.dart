@@ -35,10 +35,13 @@ class AppUpdateService {
   }
 
   bool _isVersionBelowMin(String current, String min) {
-    final currentParts = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final currentParts =
+        current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
     final minParts = min.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
-    final length = currentParts.length > minParts.length ? currentParts.length : minParts.length;
+    final length = currentParts.length > minParts.length
+        ? currentParts.length
+        : minParts.length;
 
     for (var i = 0; i < length; i++) {
       final currentPart = i < currentParts.length ? currentParts[i] : 0;

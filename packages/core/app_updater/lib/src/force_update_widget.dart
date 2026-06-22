@@ -80,7 +80,8 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
                   onPressed: () {
                     final url = _service.getStoreUrl();
                     if (url.isNotEmpty) {
-                      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                      launchUrl(Uri.parse(url),
+                          mode: LaunchMode.externalApplication);
                     }
                   },
                   child: const Text('Update Now'),
