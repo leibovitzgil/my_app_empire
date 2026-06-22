@@ -1,10 +1,12 @@
 import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:notifications/src/ui/soft_prompt_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'ui/soft_prompt_dialog.dart';
 
 class NotificationsManager {
+  NotificationsManager(this._firebaseMessaging, this._prefs);
   static const String _kSoftPromptDeclinedKey =
       'notifications_soft_prompt_declined_timestamp';
   // Cooldown in days before showing soft prompt again
@@ -12,8 +14,6 @@ class NotificationsManager {
 
   final FirebaseMessaging _firebaseMessaging;
   final SharedPreferences _prefs;
-
-  NotificationsManager(this._firebaseMessaging, this._prefs);
 
   /// Creates a [NotificationsManager] with default dependencies.
   static Future<NotificationsManager> create() async {
@@ -23,10 +23,11 @@ class NotificationsManager {
 
   /// Request permission for notifications.
   ///
-  /// Returns [true] if permission is granted (or provisional).
+  /// Returns `true` if permission is granted (or provisional).
   ///
-  /// [useSoftPrompt] if true, will show a dialog explaining why notifications are needed
-  /// before requesting system permission. This is highly recommended for iOS and Android 13+.
+  /// [useSoftPrompt] if true, shows a dialog explaining why notifications are
+  /// needed before requesting system permission. This is highly recommended
+  /// for iOS and Android 13+.
   ///
   /// [context] is required if [useSoftPrompt] is true.
   Future<bool> requestPermission({
@@ -55,7 +56,11 @@ class NotificationsManager {
         return false;
       }
 
-      final bool userAgreed = await showDialog<bool>(
+      // Guard against using the context if it was unmounted during the
+      // preceding async work.
+      if (!context.mounted) return false;
+
+      final userAgreed = await showDialog<bool>(
             context: context,
             builder: (ctx) => SoftPromptDialog(
               onAllow: () => Navigator.of(ctx).pop(true),
@@ -71,11 +76,7 @@ class NotificationsManager {
     }
 
     // User agreed or soft prompt disabled/not possible.
-    final newSettings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    final newSettings = await _firebaseMessaging.requestPermission();
 
     return newSettings.authorizationStatus == AuthorizationStatus.authorized ||
         newSettings.authorizationStatus == AuthorizationStatus.provisional;
@@ -90,7 +91,7 @@ class NotificationsManager {
   Stream<String> get onTokenRefresh => _firebaseMessaging.onTokenRefresh;
 
   bool _canShowSoftPrompt() {
-    final int? lastDeclined = _prefs.getInt(_kSoftPromptDeclinedKey);
+    final lastDeclined = _prefs.getInt(_kSoftPromptDeclinedKey);
     if (lastDeclined == null) return true;
 
     final lastDeclinedDate = DateTime.fromMillisecondsSinceEpoch(lastDeclined);
@@ -101,6 +102,8 @@ class NotificationsManager {
 
   Future<void> _markSoftPromptDeclined() async {
     await _prefs.setInt(
-        _kSoftPromptDeclinedKey, DateTime.now().millisecondsSinceEpoch);
+      _kSoftPromptDeclinedKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 }

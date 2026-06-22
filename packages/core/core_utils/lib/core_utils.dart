@@ -1,5 +1,3 @@
-library core_utils;
-
 import 'package:intl/intl.dart';
 
 /// Shared utility functions for date formatting and extensions.

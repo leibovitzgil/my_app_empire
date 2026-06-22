@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 
 class SoftPromptDialog extends StatelessWidget {
-  final VoidCallback onAllow;
-  final VoidCallback onLater;
-  final String title;
-  final String description;
-  final String allowButtonText;
-  final String laterButtonText;
-
   const SoftPromptDialog({
-    super.key,
     required this.onAllow,
     required this.onLater,
+    super.key,
     this.title = 'Enable Notifications',
     this.description = 'Stay updated with the latest news and updates. '
         'We promise not to spam you!',
     this.allowButtonText = 'Allow',
     this.laterButtonText = 'Maybe Later',
   });
+  final VoidCallback onAllow;
+  final VoidCallback onLater;
+  final String title;
+  final String description;
+  final String allowButtonText;
+  final String laterButtonText;
 
   @override
   Widget build(BuildContext context) {

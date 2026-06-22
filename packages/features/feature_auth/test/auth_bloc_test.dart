@@ -23,10 +23,9 @@ class LoginEmittingAuthRepository implements AuthRepository {
 }
 
 class FakeAuthRepository implements AuthRepository {
-  final Stream<String?> _userStream;
-
   FakeAuthRepository({Stream<String?>? userStream})
       : _userStream = userStream ?? const Stream.empty();
+  final Stream<String?> _userStream;
 
   @override
   Stream<String?> get user => _userStream;

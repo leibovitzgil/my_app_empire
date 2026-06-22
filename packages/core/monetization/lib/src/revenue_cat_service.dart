@@ -1,13 +1,11 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
+import 'package:monetization/src/monetization_service.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:rxdart/rxdart.dart';
-import 'monetization_service.dart';
 
 class RevenueCatService implements MonetizationService {
-  final BehaviorSubject<CustomerInfo> _customerInfoSubject =
-      BehaviorSubject<CustomerInfo>();
-
   RevenueCatService() {
     Purchases.addCustomerInfoUpdateListener((customerInfo) {
       if (!_customerInfoSubject.isClosed) {
@@ -18,6 +16,8 @@ class RevenueCatService implements MonetizationService {
     // Also try to fetch initial info
     _fetchInitialCustomerInfo();
   }
+  final BehaviorSubject<CustomerInfo> _customerInfoSubject =
+      BehaviorSubject<CustomerInfo>();
 
   Future<void> _fetchInitialCustomerInfo() async {
     try {
@@ -37,7 +37,7 @@ class RevenueCatService implements MonetizationService {
   Future<void> initialize(String apiKey, {String? appUserId}) async {
     await Purchases.setLogLevel(LogLevel.debug);
 
-    PurchasesConfiguration configuration = PurchasesConfiguration(apiKey);
+    final configuration = PurchasesConfiguration(apiKey);
     if (appUserId != null) {
       configuration.appUserID = appUserId;
     }
@@ -64,8 +64,13 @@ class RevenueCatService implements MonetizationService {
   Future<Offerings?> getOfferings() async {
     try {
       return await Purchases.getOfferings();
-    } catch (e) {
-      // TODO: Add proper error handling/logging
+    } catch (e, s) {
+      developer.log(
+        'getOfferings failed',
+        name: 'monetization',
+        error: e,
+        stackTrace: s,
+      );
       return null;
     }
   }
@@ -75,8 +80,13 @@ class RevenueCatService implements MonetizationService {
     try {
       final result = await Purchases.purchase(PurchaseParams.package(package));
       return result.customerInfo;
-    } catch (e) {
-      // TODO: Add proper error handling/logging
+    } catch (e, s) {
+      developer.log(
+        'purchasePackage failed',
+        name: 'monetization',
+        error: e,
+        stackTrace: s,
+      );
       return null;
     }
   }
@@ -86,7 +96,7 @@ class RevenueCatService implements MonetizationService {
     final offerings = await getOfferings();
     final monthly = offerings?.current?.monthly;
     if (monthly != null) {
-      return await purchasePackage(monthly);
+      return purchasePackage(monthly);
     }
     return null;
   }
@@ -96,7 +106,7 @@ class RevenueCatService implements MonetizationService {
     final offerings = await getOfferings();
     final annual = offerings?.current?.annual;
     if (annual != null) {
-      return await purchasePackage(annual);
+      return purchasePackage(annual);
     }
     return null;
   }
@@ -105,8 +115,13 @@ class RevenueCatService implements MonetizationService {
   Future<CustomerInfo?> restorePurchases() async {
     try {
       return await Purchases.restorePurchases();
-    } catch (e) {
-      // TODO: Add proper error handling/logging
+    } catch (e, s) {
+      developer.log(
+        'restorePurchases failed',
+        name: 'monetization',
+        error: e,
+        stackTrace: s,
+      );
       return null;
     }
   }
@@ -114,10 +129,7 @@ class RevenueCatService implements MonetizationService {
   @override
   Future<bool> isProUser({String entitlementIdentifier = 'pro'}) async {
     try {
-      // If we have a cached value in subject, check it first to avoid async delay if possible?
-      // But method is async, so better fetch fresh.
-      // However, usually we can rely on cached value if we trust the listener.
-      // Let's stick to checking fresh info or latest from subject.
+      // Prefer the cached value from the listener; otherwise fetch fresh.
       if (_customerInfoSubject.hasValue) {
         return _customerInfoSubject
                 .value.entitlements.all[entitlementIdentifier]?.isActive ??
@@ -135,8 +147,10 @@ class RevenueCatService implements MonetizationService {
   @override
   Stream<bool> isProUserStream({String entitlementIdentifier = 'pro'}) {
     return _customerInfoSubject.stream
-        .map((info) =>
-            info.entitlements.all[entitlementIdentifier]?.isActive ?? false)
+        .map(
+          (info) =>
+              info.entitlements.all[entitlementIdentifier]?.isActive ?? false,
+        )
         .distinct();
   }
 

@@ -1,5 +1,5 @@
+import 'package:feature_auth/src/domain/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../domain/auth_repository.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository({firebase_auth.FirebaseAuth? firebaseAuth})

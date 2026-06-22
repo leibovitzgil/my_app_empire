@@ -22,6 +22,10 @@ scripts:
     run: melos exec --dir-exists="test" -- flutter test
     description: Run `flutter test` for packages that have tests.
 
+  coverage:
+    run: melos exec --dir-exists="test" -- flutter test --coverage
+    description: Run tests with coverage; writes coverage/lcov.info per package.
+
   format:
     run: melos exec -- dart format .
     description: Format all packages.

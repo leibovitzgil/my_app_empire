@@ -12,16 +12,15 @@ assembled from shared packages rather than built from scratch.
 
 ```
 apps/
-  app_template/         # Composed reference app (auth + DI + go_router). Clone this.
-  template_app/         # Minimal stub. See KNOWN_ISSUES.md.
+  app_template/         # The single canonical app (auth + DI + go_router). Clone this.
 packages/
   core/                 # Cross-cutting building blocks
-    core_ui/ core_utils/ analytics_logger/ app_updater/
-    legal_compliance/ local_storage/ monetization/ review_prompter/
+    core_ui/ core_utils/ app_updater/ legal_compliance/
+    local_storage/ monetization/ review_prompter/
   services/             # Integration wrappers (Firebase, network, etc.)
     analytics/ networking/ notifications/ remote_config/
   features/             # Vertical feature slices
-    feature_auth/ feature_paywall/
+    feature_auth/
 ```
 
 - **`core/`** holds reusable building blocks. **`services/`** wraps external
@@ -41,7 +40,8 @@ Run from the repo root. All use Melos.
 | Run tests | `melos run test` |
 | Format | `melos run format` |
 | Format check (CI) | `melos run format-check` |
-| Scaffold a new app | `melos run create_app -- <name>` |
+| Test with coverage | `melos run coverage` |
+| Scaffold a new app | `dart run tool/create_app.dart <name>` |
 | Clean | `melos clean` |
 
 **Always run `melos bootstrap` first** in a fresh checkout — packages link via
@@ -49,15 +49,22 @@ path dependencies and won't resolve otherwise.
 
 ## Linting
 
-The root `analysis_options.yaml` uses [`very_good_analysis`](https://pub.dev/packages/very_good_analysis)
-with `strict-casts`, `strict-inference`, and `strict-raw-types`. This is strict:
-prefer single quotes, add type arguments to generic calls (e.g. `any<T>()`),
-keep lines ≤ 80 chars, and avoid implicit `dynamic`. Run `melos run lint` before
-committing.
+Every package declares `very_good_analysis` and includes the root
+`analysis_options.yaml`, so the **same strict rules apply uniformly** across the
+whole workspace: `strict-casts`, `strict-inference`, `strict-raw-types`, single
+quotes, explicit type arguments on generics (e.g. `any<T>()`), trailing commas,
+and lines ≤ 80 chars. Generated files (`*.g.dart`, `*.config.dart`, `*.mocks.dart`,
+`*.freezed.dart`) are excluded.
 
-> ⚠️ The workspace is **not currently fully green** — several pre-existing
-> packages fail analysis. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md). When working in
-> a package, get *that package* green; don't be misled by unrelated failures.
+Two rules are intentionally disabled in the root config (with rationale):
+`public_member_api_docs` (these are internal `publish_to: none` packages) and
+`avoid_positional_boolean_parameters` (natural for setters). Run
+`melos run lint` before committing; `dart fix --apply` resolves most findings
+automatically. **The workspace is fully green — keep it that way.**
+
+When adding a new package, give it a one-line `analysis_options.yaml`
+(`include:` the root) and add `very_good_analysis` to its `dev_dependencies` so
+the shared rules resolve.
 
 ## Code generation
 
@@ -109,7 +116,6 @@ Use the generator — it clones `app_template` and rewrites the package name:
 
 ```bash
 dart run tool/create_app.dart my_new_app --description "My new app."
-# or: melos run create_app -- my_new_app
 ```
 
 Then:

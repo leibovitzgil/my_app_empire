@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import '../domain/auth_repository.dart';
+import 'package:feature_auth/src/domain/auth_repository.dart';
 
 part 'auth_event.dart';
 part 'auth_state.dart';
@@ -15,10 +15,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
     on<AuthLoginRequested>(_onAuthLoginRequested);
     _userSubscription = _authRepository.user.listen(
-      (user) => add(AuthStatusChanged(
-        user != null ? AuthStatus.authenticated : AuthStatus.unauthenticated,
-        user: user,
-      )),
+      (user) => add(
+        AuthStatusChanged(
+          user != null ? AuthStatus.authenticated : AuthStatus.unauthenticated,
+          user: user,
+        ),
+      ),
     );
   }
 
@@ -39,7 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         return emit(const AuthState.unauthenticated());
       case AuthStatus.failure:
-        return emit(const AuthState.failure("Unknown error"));
+        return emit(const AuthState.failure('Unknown error'));
     }
   }
 

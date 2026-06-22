@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:monetization/src/monetization_service.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
-import 'monetization_service.dart';
 
 /// A mock implementation of [MonetizationService] for testing and debugging.
 /// Allows simulating "Pro" status without real payments.
@@ -75,15 +75,12 @@ class SimulatedMonetizationService implements MonetizationService {
 
   @override
   Stream<bool> isProUserStream({String entitlementIdentifier = 'pro'}) {
-    // Return a stream that starts with the current value
-    // We create a new controller that emits current value on listen, then pipes events
-    StreamController<bool> controller = StreamController<bool>();
+    // A controller that emits the current value on listen, then later events.
+    final controller = StreamController<bool>();
     controller.onListen = () {
       controller.add(_isPro);
       final subscription = _isProStreamController.stream.listen(controller.add);
-      controller.onCancel = () {
-        subscription.cancel();
-      };
+      controller.onCancel = subscription.cancel;
     };
     return controller.stream;
   }
