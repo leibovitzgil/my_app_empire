@@ -1,0 +1,31 @@
+name: showcase
+description: A reference app composing auth, onboarding, paywall and monetization.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  core_ui:
+    path: ../../packages/core/core_ui
+  feature_auth:
+    path: ../../packages/features/feature_auth
+  feature_onboarding:
+    path: ../../packages/features/feature_onboarding
+  feature_paywall:
+    path: ../../packages/features/feature_paywall
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^8.1.0
+  get_it: ^7.6.0
+  local_storage:
+    path: ../../packages/core/local_storage
+  monetization:
+    path: ../../packages/core/monetization
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  shared_preferences: ^2.2.0
+  very_good_analysis: ^5.1.0
