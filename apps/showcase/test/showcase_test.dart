@@ -34,8 +34,9 @@ void main() {
 
   // The same funnel as integration_test/app_flow_test.dart, but headless so it
   // runs in the standard gate without a device.
-  testWidgets('full funnel: onboarding -> login -> home -> paywall',
-      (tester) async {
+  testWidgets('full funnel: onboarding -> login -> home -> paywall', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     await configureDependencies();
 

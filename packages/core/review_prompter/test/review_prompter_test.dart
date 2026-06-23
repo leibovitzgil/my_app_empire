@@ -24,10 +24,12 @@ void main() {
     // Default shared prefs values (null means not set)
     when(() => mockSharedPreferences.getInt(any())).thenReturn(null);
     when(() => mockSharedPreferences.getBool(any())).thenReturn(null);
-    when(() => mockSharedPreferences.setInt(any(), any()))
-        .thenAnswer((_) async => true);
-    when(() => mockSharedPreferences.setBool(any(), any()))
-        .thenAnswer((_) async => true);
+    when(
+      () => mockSharedPreferences.setInt(any(), any()),
+    ).thenAnswer((_) async => true);
+    when(
+      () => mockSharedPreferences.setBool(any(), any()),
+    ).thenAnswer((_) async => true);
 
     reviewPrompter = ReviewPrompter(
       inAppReview: mockInAppReview,
@@ -37,8 +39,9 @@ void main() {
 
   group('ReviewPrompter', () {
     test('increments app open count', () async {
-      when(() => mockSharedPreferences.getInt('review_prompter_app_open_count'))
-          .thenReturn(0);
+      when(
+        () => mockSharedPreferences.getInt('review_prompter_app_open_count'),
+      ).thenReturn(0);
 
       await reviewPrompter.incrementAppOpenCount();
 
@@ -50,8 +53,9 @@ void main() {
     test('does not prompt if conditions are not met (low opens)', () async {
       // Simulate count 3 -> 4
       var count = 3;
-      when(() => mockSharedPreferences.getInt('review_prompter_app_open_count'))
-          .thenAnswer((_) => count);
+      when(
+        () => mockSharedPreferences.getInt('review_prompter_app_open_count'),
+      ).thenAnswer((_) => count);
       when(
         () => mockSharedPreferences.setInt(
           'review_prompter_app_open_count',
@@ -62,8 +66,9 @@ void main() {
         return true;
       });
       when(
-        () => mockSharedPreferences
-            .getBool('review_prompter_core_action_completed'),
+        () => mockSharedPreferences.getBool(
+          'review_prompter_core_action_completed',
+        ),
       ).thenReturn(true);
 
       await reviewPrompter.incrementAppOpenCount();
@@ -72,96 +77,110 @@ void main() {
       verifyNever(() => mockInAppReview.requestReview());
     });
 
-    test('does not prompt if conditions are not met (no core action)',
-        () async {
-      // Simulate count 4 -> 5
-      var count = 4;
-      when(() => mockSharedPreferences.getInt('review_prompter_app_open_count'))
-          .thenAnswer((_) => count);
-      when(
-        () => mockSharedPreferences.setInt(
-          'review_prompter_app_open_count',
-          any(),
-        ),
-      ).thenAnswer((invocation) async {
-        count = invocation.positionalArguments[1] as int;
-        return true;
-      });
-      when(
-        () => mockSharedPreferences
-            .getBool('review_prompter_core_action_completed'),
-      ).thenReturn(false);
+    test(
+      'does not prompt if conditions are not met (no core action)',
+      () async {
+        // Simulate count 4 -> 5
+        var count = 4;
+        when(
+          () => mockSharedPreferences.getInt('review_prompter_app_open_count'),
+        ).thenAnswer((_) => count);
+        when(
+          () => mockSharedPreferences.setInt(
+            'review_prompter_app_open_count',
+            any(),
+          ),
+        ).thenAnswer((invocation) async {
+          count = invocation.positionalArguments[1] as int;
+          return true;
+        });
+        when(
+          () => mockSharedPreferences.getBool(
+            'review_prompter_core_action_completed',
+          ),
+        ).thenReturn(false);
 
-      await reviewPrompter.incrementAppOpenCount();
+        await reviewPrompter.incrementAppOpenCount();
 
-      verifyNever(() => mockInAppReview.requestReview());
-    });
+        verifyNever(() => mockInAppReview.requestReview());
+      },
+    );
 
-    test('prompts when app open count reaches 5 and core action is completed',
-        () async {
-      // Setup: Open count is 4, will become 5. Core action is true.
-      var count = 4;
-      when(() => mockSharedPreferences.getInt('review_prompter_app_open_count'))
-          .thenAnswer((_) => count);
-      when(
-        () => mockSharedPreferences.setInt(
-          'review_prompter_app_open_count',
-          any(),
-        ),
-      ).thenAnswer((invocation) async {
-        count = invocation.positionalArguments[1] as int;
-        return true;
-      });
-      when(
-        () => mockSharedPreferences
-            .getBool('review_prompter_core_action_completed'),
-      ).thenReturn(true);
+    test(
+      'prompts when app open count reaches 5 and core action is completed',
+      () async {
+        // Setup: Open count is 4, will become 5. Core action is true.
+        var count = 4;
+        when(
+          () => mockSharedPreferences.getInt('review_prompter_app_open_count'),
+        ).thenAnswer((_) => count);
+        when(
+          () => mockSharedPreferences.setInt(
+            'review_prompter_app_open_count',
+            any(),
+          ),
+        ).thenAnswer((invocation) async {
+          count = invocation.positionalArguments[1] as int;
+          return true;
+        });
+        when(
+          () => mockSharedPreferences.getBool(
+            'review_prompter_core_action_completed',
+          ),
+        ).thenReturn(true);
 
-      await reviewPrompter.incrementAppOpenCount();
+        await reviewPrompter.incrementAppOpenCount();
 
-      verify(() => mockInAppReview.requestReview()).called(1);
-      verify(
-        () => mockSharedPreferences.setBool(
-          'review_prompter_review_requested',
-          true,
-        ),
-      ).called(1);
-    });
+        verify(() => mockInAppReview.requestReview()).called(1);
+        verify(
+          () => mockSharedPreferences.setBool(
+            'review_prompter_review_requested',
+            true,
+          ),
+        ).called(1);
+      },
+    );
 
-    test('prompts when core action completed and app open count already 5+',
-        () async {
-      when(() => mockSharedPreferences.getInt('review_prompter_app_open_count'))
-          .thenReturn(6);
-      // core action currently false/null
-      var coreAction = false;
-      when(
-        () => mockSharedPreferences
-            .getBool('review_prompter_core_action_completed'),
-      ).thenAnswer((_) => coreAction);
-      when(
-        () => mockSharedPreferences.setBool(
-          'review_prompter_core_action_completed',
-          any(),
-        ),
-      ).thenAnswer((invocation) async {
-        coreAction = invocation.positionalArguments[1] as bool;
-        return true;
-      });
+    test(
+      'prompts when core action completed and app open count already 5+',
+      () async {
+        when(
+          () => mockSharedPreferences.getInt('review_prompter_app_open_count'),
+        ).thenReturn(6);
+        // core action currently false/null
+        var coreAction = false;
+        when(
+          () => mockSharedPreferences.getBool(
+            'review_prompter_core_action_completed',
+          ),
+        ).thenAnswer((_) => coreAction);
+        when(
+          () => mockSharedPreferences.setBool(
+            'review_prompter_core_action_completed',
+            any(),
+          ),
+        ).thenAnswer((invocation) async {
+          coreAction = invocation.positionalArguments[1] as bool;
+          return true;
+        });
 
-      await reviewPrompter.logCoreActionCompleted();
+        await reviewPrompter.logCoreActionCompleted();
 
-      verify(() => mockInAppReview.requestReview()).called(1);
-    });
+        verify(() => mockInAppReview.requestReview()).called(1);
+      },
+    );
 
     test('does not prompt if already requested', () async {
       when(
         () => mockSharedPreferences.getBool('review_prompter_review_requested'),
       ).thenReturn(true);
-      when(() => mockSharedPreferences.getInt('review_prompter_app_open_count'))
-          .thenReturn(10);
       when(
-        () => mockSharedPreferences
-            .getBool('review_prompter_core_action_completed'),
+        () => mockSharedPreferences.getInt('review_prompter_app_open_count'),
+      ).thenReturn(10);
+      when(
+        () => mockSharedPreferences.getBool(
+          'review_prompter_core_action_completed',
+        ),
       ).thenReturn(true);
 
       await reviewPrompter.incrementAppOpenCount();

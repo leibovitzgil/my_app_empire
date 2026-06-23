@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_onboarding/src/bloc/onboarding_bloc.dart';
 import 'package:flutter/material.dart';
@@ -49,10 +51,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             }
             if (_controller.hasClients &&
                 _controller.page?.round() != state.page) {
-              _controller.animateToPage(
-                state.page,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
+              unawaited(
+                _controller.animateToPage(
+                  state.page,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                ),
               );
             }
           },
@@ -63,9 +67,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: PageView.builder(
                     controller: _controller,
                     itemCount: widget.pages.length,
-                    onPageChanged: (page) => context
-                        .read<OnboardingBloc>()
-                        .add(OnboardingPageChanged(page)),
+                    onPageChanged: (page) => context.read<OnboardingBloc>().add(
+                      OnboardingPageChanged(page),
+                    ),
                     itemBuilder: (context, index) =>
                         _Page(page: widget.pages[index]),
                   ),
@@ -74,9 +78,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   padding: const EdgeInsets.all(24),
                   child: PrimaryButton(
                     label: state.isLastPage ? 'Get started' : 'Next',
-                    onPressed: () => context
-                        .read<OnboardingBloc>()
-                        .add(const OnboardingAdvanced()),
+                    onPressed: () => context.read<OnboardingBloc>().add(
+                      const OnboardingAdvanced(),
+                    ),
                   ),
                 ),
               ],

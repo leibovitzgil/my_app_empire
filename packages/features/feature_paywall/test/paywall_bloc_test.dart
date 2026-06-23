@@ -36,14 +36,18 @@ void main() {
         final offerings = MockOfferings();
         when(() => offering.availablePackages).thenReturn([package]);
         when(() => offerings.current).thenReturn(offering);
-        when(() => monetization.getOfferings())
-            .thenAnswer((_) async => offerings);
+        when(
+          () => monetization.getOfferings(),
+        ).thenAnswer((_) async => offerings);
         return build();
       },
       act: (bloc) => bloc.add(const PaywallStarted()),
       expect: () => [
-        isA<PaywallState>()
-            .having((s) => s.status, 'status', PaywallStatus.loading),
+        isA<PaywallState>().having(
+          (s) => s.status,
+          'status',
+          PaywallStatus.loading,
+        ),
         isA<PaywallState>()
             .having((s) => s.status, 'status', PaywallStatus.ready)
             .having((s) => s.packages.length, 'packages', 1),
@@ -53,32 +57,46 @@ void main() {
     blocTest<PaywallBloc, PaywallState>(
       'emits [purchasing, purchased] on a successful purchase',
       build: () {
-        when(() => monetization.purchasePackage(any()))
-            .thenAnswer((_) async => MockCustomerInfo());
+        when(
+          () => monetization.purchasePackage(any()),
+        ).thenAnswer((_) async => MockCustomerInfo());
         return build();
       },
       act: (bloc) => bloc.add(PaywallPackagePurchased(MockPackage())),
       expect: () => [
-        isA<PaywallState>()
-            .having((s) => s.status, 'status', PaywallStatus.purchasing),
-        isA<PaywallState>()
-            .having((s) => s.status, 'status', PaywallStatus.purchased),
+        isA<PaywallState>().having(
+          (s) => s.status,
+          'status',
+          PaywallStatus.purchasing,
+        ),
+        isA<PaywallState>().having(
+          (s) => s.status,
+          'status',
+          PaywallStatus.purchased,
+        ),
       ],
     );
 
     blocTest<PaywallBloc, PaywallState>(
       'emits [purchasing, failure] when the purchase returns null',
       build: () {
-        when(() => monetization.purchasePackage(any()))
-            .thenAnswer((_) async => null);
+        when(
+          () => monetization.purchasePackage(any()),
+        ).thenAnswer((_) async => null);
         return build();
       },
       act: (bloc) => bloc.add(PaywallPackagePurchased(MockPackage())),
       expect: () => [
-        isA<PaywallState>()
-            .having((s) => s.status, 'status', PaywallStatus.purchasing),
-        isA<PaywallState>()
-            .having((s) => s.status, 'status', PaywallStatus.failure),
+        isA<PaywallState>().having(
+          (s) => s.status,
+          'status',
+          PaywallStatus.purchasing,
+        ),
+        isA<PaywallState>().having(
+          (s) => s.status,
+          'status',
+          PaywallStatus.failure,
+        ),
       ],
     );
   });

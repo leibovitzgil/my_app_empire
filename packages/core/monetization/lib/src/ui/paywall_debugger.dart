@@ -60,8 +60,10 @@ class PaywallDebugger extends StatelessWidget {
               const Text(
                 'Running on real RevenueCat service.\n'
                 'Simulation controls disabled.',
-                style:
-                    TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey,
+                ),
               ),
           ],
         ),

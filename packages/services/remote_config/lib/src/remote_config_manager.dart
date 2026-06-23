@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 /// Wrapper around [FirebaseRemoteConfig] for typed access to config values.
 class RemoteConfigManager {
   RemoteConfigManager({FirebaseRemoteConfig? remoteConfig})
-      : _remoteConfig = remoteConfig ?? FirebaseRemoteConfig.instance;
+    : _remoteConfig = remoteConfig ?? FirebaseRemoteConfig.instance;
 
   final FirebaseRemoteConfig _remoteConfig;
 
@@ -19,8 +19,9 @@ class RemoteConfigManager {
     await _remoteConfig.setConfigSettings(
       RemoteConfigSettings(
         fetchTimeout: const Duration(minutes: 1),
-        minimumFetchInterval:
-            kDebugMode ? const Duration(minutes: 5) : const Duration(hours: 12),
+        minimumFetchInterval: kDebugMode
+            ? const Duration(minutes: 5)
+            : const Duration(hours: 12),
       ),
     );
 
@@ -32,7 +33,7 @@ class RemoteConfigManager {
 
     try {
       await _remoteConfig.fetchAndActivate();
-    } catch (_) {
+    } on Object {
       // Ignored: Default values will be used if fetch fails.
     }
   }

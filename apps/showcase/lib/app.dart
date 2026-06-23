@@ -52,7 +52,7 @@ class _RootFlow extends StatefulWidget {
 class _RootFlowState extends State<_RootFlow> {
   late bool _onboarded =
       getIt<LocalStorageService>().getBool(OnboardingBloc.completedKey) ??
-          false;
+      false;
 
   @override
   Widget build(BuildContext context) {

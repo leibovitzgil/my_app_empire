@@ -8,9 +8,9 @@ part 'onboarding_state.dart';
 /// Tracks onboarding progress and persists completion so it is shown only once.
 class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
   OnboardingBloc({required LocalStorageService storage, int pageCount = 3})
-      : assert(pageCount > 0, 'pageCount must be positive'),
-        _storage = storage,
-        super(OnboardingState(pageCount: pageCount)) {
+    : assert(pageCount > 0, 'pageCount must be positive'),
+      _storage = storage,
+      super(OnboardingState(pageCount: pageCount)) {
     on<OnboardingPageChanged>(
       (event, emit) => emit(state.copyWith(page: event.page)),
     );

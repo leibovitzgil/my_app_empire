@@ -23,11 +23,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onLoginPressed() {
     context.read<AuthBloc>().add(
-          AuthLoginRequested(
-            _emailController.text,
-            _passwordController.text,
-          ),
-        );
+      AuthLoginRequested(
+        _emailController.text,
+        _passwordController.text,
+      ),
+    );
   }
 
   @override

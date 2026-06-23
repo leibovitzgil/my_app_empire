@@ -8,7 +8,7 @@ import 'package:monetization/monetization.dart';
 import 'package:showcase/data/mock_auth_repository.dart';
 
 /// The app's service locator.
-final getIt = GetIt.instance;
+final GetIt getIt = GetIt.instance;
 
 /// Registers every dependency the showcase composes. This is the canonical
 /// wiring pattern: register a concrete implementation against the contract that

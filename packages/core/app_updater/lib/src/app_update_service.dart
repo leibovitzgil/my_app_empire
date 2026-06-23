@@ -14,7 +14,7 @@ class AppUpdateService {
   Future<bool> isUpdateRequired() async {
     try {
       await _remoteConfig.fetchAndActivate();
-    } catch (e) {
+    } on Object {
       // In case of error (e.g. offline), we don't force update.
       return false;
     }
@@ -35,8 +35,10 @@ class AppUpdateService {
   }
 
   bool _isVersionBelowMin(String current, String min) {
-    final currentParts =
-        current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final currentParts = current
+        .split('.')
+        .map((e) => int.tryParse(e) ?? 0)
+        .toList();
     final minParts = min.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
     final length = currentParts.length > minParts.length

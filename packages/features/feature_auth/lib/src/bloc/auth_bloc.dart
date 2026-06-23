@@ -9,8 +9,8 @@ part 'auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc({required AuthRepository authRepository})
-      : _authRepository = authRepository,
-        super(const AuthState.unknown()) {
+    : _authRepository = authRepository,
+      super(const AuthState.unknown()) {
     on<AuthStatusChanged>(_onAuthStatusChanged);
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
     on<AuthLoginRequested>(_onAuthLoginRequested);
@@ -45,11 +45,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  void _onAuthLogoutRequested(
+  Future<void> _onAuthLogoutRequested(
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
-  ) {
-    _authRepository.logout();
+  ) async {
+    await _authRepository.logout();
   }
 
   Future<void> _onAuthLoginRequested(
@@ -58,14 +58,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     try {
       await _authRepository.login(event.email, event.password);
-    } catch (e) {
+    } on Object catch (e) {
       emit(AuthState.failure(e.toString()));
     }
   }
 
   @override
-  Future<void> close() {
-    _userSubscription.cancel();
+  Future<void> close() async {
+    await _userSubscription.cancel();
     return super.close();
   }
 }
