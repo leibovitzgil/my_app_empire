@@ -12,7 +12,8 @@ assembled from shared packages rather than built from scratch.
 
 ```
 apps/
-  app_template/         # The single canonical app (auth + DI + go_router). Clone this.
+  app_template/         # Minimal app template (auth + DI + go_router). Clone for new apps.
+  showcase/             # Reference app composing auth + onboarding + paywall via get_it.
 packages/
   core/                 # Cross-cutting building blocks
     core_ui/ core_utils/ app_updater/ legal_compliance/
@@ -20,14 +21,17 @@ packages/
   services/             # Integration wrappers (Firebase, network, etc.)
     analytics/ networking/ notifications/ remote_config/
   features/             # Vertical feature slices
-    feature_auth/
+    feature_auth/ feature_onboarding/ feature_paywall/
 ```
 
-- **`core/`** holds reusable building blocks. **`services/`** wraps external
-  integrations. **`features/`** own a vertical slice (domain + data + bloc + ui)
-  and may depend on `core/` and `services/`.
-- **`apps/*`** wire packages together, supply concrete dependencies (real vs.
-  mock repositories), and own routing.
+- **`core/`** holds reusable building blocks. `core_utils` includes a shared
+  `Result<T>` type (`Success` / `ResultFailure`) for error handling without
+  throwing across boundaries. **`services/`** wraps external integrations
+  (`networking` returns `Result` and maps Dio errors to `NetworkException`).
+  **`features/`** own a vertical slice (domain + data + bloc + ui).
+- **`apps/*`** wire packages together via DI. See `apps/showcase/lib/injection.dart`
+  for the canonical get_it wiring pattern (register a concrete implementation
+  against the contract features depend on).
 
 ## Commands
 
@@ -42,7 +46,8 @@ Run from the repo root. All use Melos.
 | Format check (CI) | `melos run format-check` |
 | Test with coverage | `melos run coverage` |
 | Scaffold a new app | `dart run tool/create_app.dart <name>` |
-| Scaffold a new feature | `dart run tool/create_feature.dart <name>` |
+| Scaffold a new feature | `dart run tool/create_feature.dart <name> [--wire <app>]` |
+| Scaffold a core/service package | `dart run tool/create_package.dart <name> [--layer services] [--wire <app>]` |
 | Install git hooks | `melos run install-hooks` |
 | Clean | `melos clean` |
 
@@ -147,11 +152,16 @@ flesh out the repository/bloc, and wire it into an app (path dependency + DI).
 
 ## Agentic tooling
 
-- **Generators** (`tool/create_app.dart`, `tool/create_feature.dart`):
-  deterministic, dependency-free scaffolding. Prefer these over hand-creating
-  packages so new code starts consistent and green.
-- **Skills** (`.claude/skills/`): `new-app`, `new-feature`, and
-  `workspace-check` encode these workflows as slash-commands.
+- **Generators** (`tool/create_app.dart`, `tool/create_feature.dart`,
+  `tool/create_package.dart`): deterministic, dependency-free scaffolding.
+  Prefer these over hand-creating packages so new code starts consistent and
+  green. `create_feature`/`create_package` accept `--wire <app>` to also add the
+  dependency and register the implementation in that app's get_it injection
+  (at the `// generated:register` marker).
+- **Skills** (`.claude/skills/`): `new-app`, `new-feature`, `workspace-check`,
+  and `run-app` encode these workflows as slash-commands.
+- **Reference app** (`apps/showcase`): a runnable composition (mock/simulated
+  backends, no Firebase) — the golden example for wiring capabilities together.
 - **Pre-commit hook** (`.githooks/pre-commit`): runs format-check + lint. Enable
   with `melos run install-hooks`; bypass once with `git commit --no-verify`.
 - **SessionStart hook** (`.claude/hooks/session-start.sh`): installs Flutter and
