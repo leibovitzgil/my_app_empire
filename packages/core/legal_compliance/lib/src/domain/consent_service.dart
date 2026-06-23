@@ -3,7 +3,8 @@ abstract class ConsentService {
   /// Request consent from the user (e.g. for GDPR).
   ///
   /// This should trigger the CMP UI if necessary.
-  /// Returns `true` if the consent flow completed successfully, `false` otherwise.
+  /// Returns `true` if the consent flow completed successfully, `false`
+  /// otherwise.
   Future<bool> requestConsent();
 
   /// Resets the consent state.

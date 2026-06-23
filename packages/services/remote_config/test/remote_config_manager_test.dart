@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_config/remote_config.dart';
 
 class FakeFirebaseRemoteConfig extends Fake implements FirebaseRemoteConfig {
@@ -8,7 +8,8 @@ class FakeFirebaseRemoteConfig extends Fake implements FirebaseRemoteConfig {
 
   @override
   Future<void> setConfigSettings(
-      RemoteConfigSettings remoteConfigSettings) async {}
+    RemoteConfigSettings remoteConfigSettings,
+  ) async {}
 
   @override
   Future<void> setDefaults(Map<String, dynamic> defaultParameters) async {
@@ -63,9 +64,10 @@ void main() {
     });
 
     test('values are retrieved from remote config', () async {
-      fakeRemoteConfig.setVal('show_paywall_on_onboarding', true);
-      fakeRemoteConfig.setVal('maintenance_mode', true);
-      fakeRemoteConfig.setVal('min_supported_version', '1.2.3');
+      fakeRemoteConfig
+        ..setVal('show_paywall_on_onboarding', true)
+        ..setVal('maintenance_mode', true)
+        ..setVal('min_supported_version', '1.2.3');
 
       await manager.init();
 

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  # Pub dependencies, one entry per package (Dependabot needs an explicit dir).
+  - package-ecosystem: pub
+    directory: /apps/app_template
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+  - package-ecosystem: pub
+    directory: /packages/features/feature_auth
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+  - package-ecosystem: pub
+    directory: /packages/core/monetization
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies

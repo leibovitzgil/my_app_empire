@@ -20,8 +20,10 @@ Future<void> main(List<String> args) async {
     stderr.writeln('Running: melos list --json');
     result = await Process.run('melos', ['list', '--json']);
   } else if (diffBase != null) {
-    stderr.writeln('Running: melos list --diff $diffBase --include-dependents --json');
-    result = await Process.run('melos', ['list', '--diff', diffBase, '--include-dependents', '--json']);
+    stderr.writeln(
+        'Running: melos list --diff $diffBase --include-dependents --json');
+    result = await Process.run('melos',
+        ['list', '--diff', diffBase, '--include-dependents', '--json']);
   } else {
     stderr.writeln('Error: Either --all or --diff <base> must be provided.');
     exit(1);
@@ -36,7 +38,7 @@ Future<void> main(List<String> args) async {
   String output = result.stdout as String;
   List<dynamic> packages;
   try {
-    packages = jsonDecode(output);
+    packages = jsonDecode(output) as List<dynamic>;
   } catch (e) {
     stderr.writeln('Failed to decode melos output: $e');
     stderr.writeln('Output was: $output');
@@ -46,7 +48,9 @@ Future<void> main(List<String> args) async {
   List<String> appPaths = [];
   for (var pkg in packages) {
     var path = pkg['relativePath'];
-    if (path != null && (path.toString().startsWith('apps/') || path.toString().startsWith('apps\\'))) {
+    if (path != null &&
+        (path.toString().startsWith('apps/') ||
+            path.toString().startsWith('apps\\'))) {
       appPaths.add(path.toString());
     }
   }

@@ -1,6 +1,0 @@
-include: ../../analysis_options.yaml
-
-linter:
-  rules:
-    # Applications don't expose a public API; documenting every widget is noise.
-    public_member_api_docs: false

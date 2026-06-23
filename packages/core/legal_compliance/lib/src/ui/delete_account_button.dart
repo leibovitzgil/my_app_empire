@@ -1,8 +1,19 @@
 import 'package:flutter/material.dart';
-import 'delete_account_dialog.dart';
+import 'package:legal_compliance/src/ui/delete_account_dialog.dart';
 
 /// A button that triggers the delete account flow.
 class DeleteAccountButton extends StatelessWidget {
+  const DeleteAccountButton({
+    required this.onDelete,
+    super.key,
+    this.child,
+    this.style,
+    this.confirmationTitle,
+    this.confirmationContent,
+    this.cancelText,
+    this.deleteText,
+  });
+
   /// Callback function to execute when the user confirms deletion.
   final Future<void> Function() onDelete;
 
@@ -24,17 +35,6 @@ class DeleteAccountButton extends StatelessWidget {
   /// Text for the delete button in the confirmation dialog.
   final String? deleteText;
 
-  const DeleteAccountButton({
-    super.key,
-    required this.onDelete,
-    this.child,
-    this.style,
-    this.confirmationTitle,
-    this.confirmationContent,
-    this.cancelText,
-    this.deleteText,
-  });
-
   @override
   Widget build(BuildContext context) {
     return TextButton(
@@ -53,7 +53,7 @@ class DeleteAccountButton extends StatelessWidget {
       deleteText: deleteText,
     );
 
-    if (confirmed == true) {
+    if (confirmed ?? false) {
       await onDelete();
     }
   }

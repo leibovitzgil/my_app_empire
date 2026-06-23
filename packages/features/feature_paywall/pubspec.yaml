@@ -1,5 +1,5 @@
 name: feature_paywall
-description: Core monetization package using RevenueCat.
+description: A paywall feature (offerings + purchase) on top of monetization.
 version: 0.0.1
 publish_to: 'none'
 
@@ -8,12 +8,19 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
+  bloc: ^8.1.0
+  core_ui:
+    path: ../../core/core_ui
+  equatable: ^2.0.5
   flutter:
     sdk: flutter
-  purchases_flutter: ^9.10.0
-  rxdart: ^0.27.7
+  flutter_bloc: ^8.1.0
+  monetization:
+    path: ../../core/monetization
 
 dev_dependencies:
+  bloc_test: ^9.1.0
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  mocktail: ^1.0.0
+  very_good_analysis: ^5.1.0

@@ -1,6 +1,6 @@
+import 'package:app_updater/src/app_update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'app_update_service.dart';
 
 class ForceUpdateWidget extends StatefulWidget {
   const ForceUpdateWidget({
@@ -62,7 +62,7 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
       return Scaffold(
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -72,7 +72,8 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'A new version of the app is available. Please update to continue using the app.',
+                  'A new version of the app is available. Please update to '
+                  'continue using the app.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -80,8 +81,10 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
                   onPressed: () {
                     final url = _service.getStoreUrl();
                     if (url.isNotEmpty) {
-                      launchUrl(Uri.parse(url),
-                          mode: LaunchMode.externalApplication);
+                      launchUrl(
+                        Uri.parse(url),
+                        mode: LaunchMode.externalApplication,
+                      );
                     }
                   },
                   child: const Text('Update Now'),

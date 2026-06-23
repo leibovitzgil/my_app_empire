@@ -1,9 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
+import 'package:analytics/analytics.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:talker_flutter/talker_flutter.dart';
-import 'package:analytics/analytics.dart';
 
 class MockFirebaseAnalytics extends Mock implements FirebaseAnalytics {}
 
@@ -55,8 +55,10 @@ void main() {
 
     verify(() => mockTalker.info(any<dynamic>(that: contains('test_event'))))
         .called(1);
-    verify(() => mockAnalytics
-        .logEvent(name: 'test_event', parameters: {'param': 1})).called(1);
+    verify(
+      () =>
+          mockAnalytics.logEvent(name: 'test_event', parameters: {'param': 1}),
+    ).called(1);
   });
 
   test('logInfo calls talker and crashlytics log', () {
@@ -71,7 +73,12 @@ void main() {
     await appLogger.logError('error message', exception);
 
     verify(() => mockTalker.error('error message', exception, any())).called(1);
-    verify(() => mockCrashlytics.recordError(exception, any(),
-        reason: 'error message')).called(1);
+    verify(
+      () => mockCrashlytics.recordError(
+        exception,
+        any(),
+        reason: 'error message',
+      ),
+    ).called(1);
   });
 }

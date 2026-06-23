@@ -6,10 +6,6 @@ import 'package:talker_flutter/talker_flutter.dart';
 /// A unified logger that sends events to Firebase Analytics,
 /// errors to Crashlytics, and local logs to Talker.
 class AppLogger {
-  final FirebaseAnalytics _analytics;
-  final FirebaseCrashlytics _crashlytics;
-  final Talker _talker;
-
   AppLogger({
     FirebaseAnalytics? analytics,
     FirebaseCrashlytics? crashlytics,
@@ -17,6 +13,9 @@ class AppLogger {
   })  : _analytics = analytics ?? FirebaseAnalytics.instance,
         _crashlytics = crashlytics ?? FirebaseCrashlytics.instance,
         _talker = talker ?? TalkerFlutter.init();
+  final FirebaseAnalytics _analytics;
+  final FirebaseCrashlytics _crashlytics;
+  final Talker _talker;
 
   /// Returns the underlying Talker instance for UI display.
   Talker get talker => _talker;

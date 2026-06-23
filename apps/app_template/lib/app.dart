@@ -1,9 +1,9 @@
+import 'package:app_template/injection.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'injection.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -22,14 +22,9 @@ class AppView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We can use a stream for refreshListenable if AuthBloc exposes it,
-    // or just rely on the fact that the Router will rebuild when dependencies change if wired up correctly.
-    // For simplicity here, we might not have the full redirection logic without a Listenable.
-    // But let's set up a basic router that checks auth status.
-
-    // Note: To make GoRouter reactive to Bloc state changes, we typically need a `GoRouterRefreshStream`.
-    // Since I can't import that extra utility easily, I'll keep it simple.
-
+    // A minimal router that picks the screen from auth state. `context.watch`
+    // rebuilds this builder when AuthBloc emits, so no GoRouterRefreshStream is
+    // needed for this simple single-route setup.
     final router = GoRouter(
       routes: [
         GoRoute(

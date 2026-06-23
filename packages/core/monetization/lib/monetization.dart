@@ -1,5 +1,3 @@
-library monetization;
-
 export 'package:purchases_flutter/purchases_flutter.dart';
 export 'src/monetization_service.dart';
 export 'src/revenue_cat_service.dart';

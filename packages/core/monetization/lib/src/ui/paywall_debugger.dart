@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../monetization_service.dart';
-import '../simulated_monetization_service.dart';
+import 'package:monetization/src/monetization_service.dart';
+import 'package:monetization/src/simulated_monetization_service.dart';
 
 /// A widget that provides debugging tools for the Monetization system.
 ///
@@ -9,19 +9,18 @@ import '../simulated_monetization_service.dart';
 ///
 /// If it is a real service, it displays the current status.
 class PaywallDebugger extends StatelessWidget {
-  final MonetizationService monetizationService;
-
   const PaywallDebugger({
-    super.key,
     required this.monetizationService,
+    super.key,
   });
+  final MonetizationService monetizationService;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.all(16.0),
+      margin: const EdgeInsets.all(16),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,10 +53,13 @@ class PaywallDebugger extends StatelessWidget {
             const SizedBox(height: 16),
             if (monetizationService is SimulatedMonetizationService)
               _buildSimulationControls(
-                  context, monetizationService as SimulatedMonetizationService)
+                context,
+                monetizationService as SimulatedMonetizationService,
+              )
             else
               const Text(
-                'Running on real RevenueCat service.\nSimulation controls disabled.',
+                'Running on real RevenueCat service.\n'
+                'Simulation controls disabled.',
                 style:
                     TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
               ),
@@ -68,7 +70,9 @@ class PaywallDebugger extends StatelessWidget {
   }
 
   Widget _buildSimulationControls(
-      BuildContext context, SimulatedMonetizationService service) {
+    BuildContext context,
+    SimulatedMonetizationService service,
+  ) {
     return StreamBuilder<bool>(
       stream: service.isProUserStream(),
       builder: (context, snapshot) {

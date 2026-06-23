@@ -12,23 +12,26 @@ assembled from shared packages rather than built from scratch.
 
 ```
 apps/
-  app_template/         # Composed reference app (auth + DI + go_router). Clone this.
-  template_app/         # Minimal stub. See KNOWN_ISSUES.md.
+  app_template/         # Minimal app template (auth + DI + go_router). Clone for new apps.
+  showcase/             # Reference app composing auth + onboarding + paywall via get_it.
 packages/
   core/                 # Cross-cutting building blocks
-    core_ui/ core_utils/ analytics_logger/ app_updater/
-    legal_compliance/ local_storage/ monetization/ review_prompter/
+    core_ui/ core_utils/ app_updater/ legal_compliance/
+    local_storage/ monetization/ review_prompter/
   services/             # Integration wrappers (Firebase, network, etc.)
     analytics/ networking/ notifications/ remote_config/
   features/             # Vertical feature slices
-    feature_auth/ feature_paywall/
+    feature_auth/ feature_onboarding/ feature_paywall/
 ```
 
-- **`core/`** holds reusable building blocks. **`services/`** wraps external
-  integrations. **`features/`** own a vertical slice (domain + data + bloc + ui)
-  and may depend on `core/` and `services/`.
-- **`apps/*`** wire packages together, supply concrete dependencies (real vs.
-  mock repositories), and own routing.
+- **`core/`** holds reusable building blocks. `core_utils` includes a shared
+  `Result<T>` type (`Success` / `ResultFailure`) for error handling without
+  throwing across boundaries. **`services/`** wraps external integrations
+  (`networking` returns `Result` and maps Dio errors to `NetworkException`).
+  **`features/`** own a vertical slice (domain + data + bloc + ui).
+- **`apps/*`** wire packages together via DI. See `apps/showcase/lib/injection.dart`
+  for the canonical get_it wiring pattern (register a concrete implementation
+  against the contract features depend on).
 
 ## Commands
 
@@ -41,7 +44,11 @@ Run from the repo root. All use Melos.
 | Run tests | `melos run test` |
 | Format | `melos run format` |
 | Format check (CI) | `melos run format-check` |
-| Scaffold a new app | `melos run create_app -- <name>` |
+| Test with coverage | `melos run coverage` |
+| Scaffold a new app | `dart run tool/create_app.dart <name>` |
+| Scaffold a new feature | `dart run tool/create_feature.dart <name> [--wire <app>]` |
+| Scaffold a core/service package | `dart run tool/create_package.dart <name> [--layer services] [--wire <app>]` |
+| Install git hooks | `melos run install-hooks` |
 | Clean | `melos clean` |
 
 **Always run `melos bootstrap` first** in a fresh checkout — packages link via
@@ -49,15 +56,22 @@ path dependencies and won't resolve otherwise.
 
 ## Linting
 
-The root `analysis_options.yaml` uses [`very_good_analysis`](https://pub.dev/packages/very_good_analysis)
-with `strict-casts`, `strict-inference`, and `strict-raw-types`. This is strict:
-prefer single quotes, add type arguments to generic calls (e.g. `any<T>()`),
-keep lines ≤ 80 chars, and avoid implicit `dynamic`. Run `melos run lint` before
-committing.
+Every package declares `very_good_analysis` and includes the root
+`analysis_options.yaml`, so the **same strict rules apply uniformly** across the
+whole workspace: `strict-casts`, `strict-inference`, `strict-raw-types`, single
+quotes, explicit type arguments on generics (e.g. `any<T>()`), trailing commas,
+and lines ≤ 80 chars. Generated files (`*.g.dart`, `*.config.dart`, `*.mocks.dart`,
+`*.freezed.dart`) are excluded.
 
-> ⚠️ The workspace is **not currently fully green** — several pre-existing
-> packages fail analysis. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md). When working in
-> a package, get *that package* green; don't be misled by unrelated failures.
+Two rules are intentionally disabled in the root config (with rationale):
+`public_member_api_docs` (these are internal `publish_to: none` packages) and
+`avoid_positional_boolean_parameters` (natural for setters). Run
+`melos run lint` before committing; `dart fix --apply` resolves most findings
+automatically. **The workspace is fully green — keep it that way.**
+
+When adding a new package, give it a one-line `analysis_options.yaml`
+(`include:` the root) and add `very_good_analysis` to its `dev_dependencies` so
+the shared rules resolve.
 
 ## Code generation
 
@@ -109,7 +123,6 @@ Use the generator — it clones `app_template` and rewrites the package name:
 
 ```bash
 dart run tool/create_app.dart my_new_app --description "My new app."
-# or: melos run create_app -- my_new_app
 ```
 
 Then:
@@ -123,3 +136,33 @@ Then:
 The generator (`tool/create_app.dart`) is dependency-free (dart:io only) and
 skips generated artifacts (`.dart_tool/`, `build/`, `pubspec.lock`, `*.iml`,
 `pubspec_overrides.yaml`).
+
+## Adding a new feature
+
+Generate a feature package modelled on `feature_auth`:
+
+```bash
+dart run tool/create_feature.dart profile --description "User profile."
+```
+
+This creates `packages/features/feature_profile/` with the full vertical slice
+(domain contract, in-memory data impl, bloc + event + state, screen, barrel) and
+a passing bloc test. Then `melos bootstrap && melos run lint && melos run test`,
+flesh out the repository/bloc, and wire it into an app (path dependency + DI).
+
+## Agentic tooling
+
+- **Generators** (`tool/create_app.dart`, `tool/create_feature.dart`,
+  `tool/create_package.dart`): deterministic, dependency-free scaffolding.
+  Prefer these over hand-creating packages so new code starts consistent and
+  green. `create_feature`/`create_package` accept `--wire <app>` to also add the
+  dependency and register the implementation in that app's get_it injection
+  (at the `// generated:register` marker).
+- **Skills** (`.claude/skills/`): `new-app`, `new-feature`, `workspace-check`,
+  and `run-app` encode these workflows as slash-commands.
+- **Reference app** (`apps/showcase`): a runnable composition (mock/simulated
+  backends, no Firebase) — the golden example for wiring capabilities together.
+- **Pre-commit hook** (`.githooks/pre-commit`): runs format-check + lint. Enable
+  with `melos run install-hooks`; bypass once with `git commit --no-verify`.
+- **SessionStart hook** (`.claude/hooks/session-start.sh`): installs Flutter and
+  bootstraps so Claude Code on the web sessions are build-ready.

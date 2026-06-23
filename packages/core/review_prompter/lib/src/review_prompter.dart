@@ -2,6 +2,11 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ReviewPrompter {
+  ReviewPrompter({
+    required SharedPreferences prefs,
+    InAppReview? inAppReview,
+  })  : _inAppReview = inAppReview ?? InAppReview.instance,
+        _prefs = prefs;
   static const String _kAppOpenCountKey = 'review_prompter_app_open_count';
   static const String _kCoreActionCompletedKey =
       'review_prompter_core_action_completed';
@@ -10,21 +15,16 @@ class ReviewPrompter {
   final InAppReview _inAppReview;
   final SharedPreferences _prefs;
 
-  ReviewPrompter({
-    InAppReview? inAppReview,
-    required SharedPreferences prefs,
-  })  : _inAppReview = inAppReview ?? InAppReview.instance,
-        _prefs = prefs;
-
-  /// Increments the app open count and checks if the review prompt should be shown.
-  /// Should be called on app startup.
+  /// Increments the app open count and checks whether the review prompt should
+  /// be shown. Should be called on app startup.
   Future<void> incrementAppOpenCount() async {
     final currentCount = _prefs.getInt(_kAppOpenCountKey) ?? 0;
     await _prefs.setInt(_kAppOpenCountKey, currentCount + 1);
     await _tryPrompt();
   }
 
-  /// Logs that a core action has been completed and checks if the review prompt should be shown.
+  /// Logs that a core action completed and checks whether the review prompt
+  /// should be shown.
   Future<void> logCoreActionCompleted() async {
     await _prefs.setBool(_kCoreActionCompletedKey, true);
     await _tryPrompt();

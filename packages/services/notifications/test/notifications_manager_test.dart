@@ -1,9 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:mockito/mockito.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mockito/mockito.dart';
 import 'package:notifications/notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 @GenerateNiceMocks([
   MockSpec<FirebaseMessaging>(),
@@ -35,10 +35,13 @@ void main() {
 
       final result = await notificationsManager.requestPermission();
       expect(result, isTrue);
-      verifyNever(mockFirebaseMessaging.requestPermission(
+      verifyNever(
+        mockFirebaseMessaging.requestPermission(
           alert: anyNamed('alert'),
           badge: anyNamed('badge'),
-          sound: anyNamed('sound')));
+          sound: anyNamed('sound'),
+        ),
+      );
     });
 
     test('requestPermission returns false if already denied', () async {

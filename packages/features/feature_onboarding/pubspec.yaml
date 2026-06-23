@@ -1,0 +1,26 @@
+name: feature_onboarding
+description: A simple onboarding flow that persists completion.
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  bloc: ^8.1.0
+  core_ui:
+    path: ../../core/core_ui
+  equatable: ^2.0.5
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^8.1.0
+  local_storage:
+    path: ../../core/local_storage
+
+dev_dependencies:
+  bloc_test: ^9.1.0
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.0
+  very_good_analysis: ^5.1.0

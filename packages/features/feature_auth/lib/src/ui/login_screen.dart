@@ -1,7 +1,7 @@
 import 'package:core_ui/core_ui.dart';
+import 'package:feature_auth/src/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../bloc/auth_bloc.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
