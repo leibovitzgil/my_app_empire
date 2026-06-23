@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  purchases_flutter: ^9.10.0
+  purchases_flutter: ^10.3.0
   rxdart: ^0.27.7
 
 dev_dependencies:
