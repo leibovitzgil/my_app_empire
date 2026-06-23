@@ -105,14 +105,14 @@ jobs:
           echo "ARTIFACT_NAME=$CLEAN_NAME" >> $GITHUB_ENV
 
       - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: success()
         with:
           name: ${{ env.ARTIFACT_NAME }}-ipa
           path: ${{ matrix.app }}/build/ios/archive/Runner.xcarchive
 
       - name: Upload AAB Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: success()
         with:
            name: ${{ env.ARTIFACT_NAME }}-aab
