@@ -159,9 +159,22 @@ flesh out the repository/bloc, and wire it into an app (path dependency + DI).
   dependency and register the implementation in that app's get_it injection
   (at the `// generated:register` marker).
 - **Skills** (`.claude/skills/`): `new-app`, `new-feature`, `workspace-check`,
-  and `run-app` encode these workflows as slash-commands.
+  `run-app`, `golden`, `flutter-e2e`, and `widget-preview` encode these
+  workflows as slash-commands.
 - **Reference app** (`apps/showcase`): a runnable composition (mock/simulated
   backends, no Firebase) — the golden example for wiring capabilities together.
+- **Dart MCP server** (`.mcp.json`): wires the official `dart mcp-server` into
+  agent sessions, exposing first-class tools for `analyze`, `dart fix`, running
+  tests, and pub operations — plus runtime tools (hot reload, widget inspector,
+  runtime errors) that light up when an app is actually running. Prefer these
+  over shelling out to `dart`/`flutter` when available; they return structured
+  results the agent can act on directly.
+- **Widget previews** (`@Preview`): `core_ui` annotates design-system widgets
+  (`lib/src/previews.dart`) with `@Preview` from
+  `package:flutter/widget_previews.dart`. Browse them hot-reloadably with
+  `flutter widget-preview start` (run from an app, e.g. `apps/showcase`) to
+  iterate on a widget in isolation without wiring a whole screen. Previews are
+  development-only and excluded from release builds. Skill: `widget-preview`.
 
 ### Runtime verification
 
