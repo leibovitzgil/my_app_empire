@@ -38,6 +38,10 @@ scripts:
     run: melos exec --dir-exists="test" -- flutter test --exclude-tags golden --coverage
     description: Run tests with coverage; writes coverage/lcov.info per package.
 
+  e2e:
+    run: melos exec --dir-exists="integration_test" -- flutter test integration_test
+    description: Run integration_test end-to-end flows headlessly.
+
   format:
     run: melos exec -- dart format .
     description: Format all packages.
