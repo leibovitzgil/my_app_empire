@@ -141,10 +141,18 @@ String _rewritePubspec(String contents, String name, String description) {
     if (lines[i].startsWith('name:')) {
       lines[i] = 'name: $name';
     } else if (lines[i].startsWith('description:')) {
-      lines[i] = 'description: $description';
+      lines[i] = 'description: ${_yamlString(description)}';
     }
   }
   return lines.join('\n');
+}
+
+/// Encodes [value] as a double-quoted YAML scalar so descriptions containing
+/// colons, quotes, or other YAML-significant characters can't produce an
+/// invalid `pubspec.yaml`. Double-quoted YAML accepts JSON-style escapes.
+String _yamlString(String value) {
+  final escaped = value.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+  return '"$escaped"';
 }
 
 Never _fail(String message) {

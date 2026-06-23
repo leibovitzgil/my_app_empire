@@ -80,15 +80,23 @@ void main(List<String> args) {
 String _toPascalCase(String snake) =>
     snake.split('_').map((p) => p[0].toUpperCase() + p.substring(1)).join();
 
+/// Encodes [value] as a double-quoted YAML scalar so descriptions containing
+/// colons, quotes, or other YAML-significant characters can't produce an
+/// invalid `pubspec.yaml`. Double-quoted YAML accepts JSON-style escapes.
+String _yamlString(String value) {
+  final escaped = value.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+  return '"$escaped"';
+}
+
 Map<String, String> _templates(String name, String pascal, String desc) => {
       'pubspec.yaml': '''
 name: $name
-description: $desc
+description: ${_yamlString(desc)}
 version: 0.0.1
 publish_to: 'none'
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
   flutter: ">=3.0.0"
 
 dependencies:
@@ -98,7 +106,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  very_good_analysis: ^5.1.0
+  very_good_analysis: ^10.3.0
 ''',
       'analysis_options.yaml': 'include: ../../../analysis_options.yaml\n',
       'lib/$name.dart': "export 'src/${name}_service.dart';\n",
