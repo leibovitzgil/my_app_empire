@@ -22,16 +22,20 @@ void main() {
     setUp(() {
       mockFirebaseMessaging = MockFirebaseMessaging();
       mockSharedPreferences = MockSharedPreferences();
-      notificationsManager =
-          NotificationsManager(mockFirebaseMessaging, mockSharedPreferences);
+      notificationsManager = NotificationsManager(
+        mockFirebaseMessaging,
+        mockSharedPreferences,
+      );
       mockSettings = MockNotificationSettings();
     });
 
     test('requestPermission returns true if already authorized', () async {
-      when(mockSettings.authorizationStatus)
-          .thenReturn(AuthorizationStatus.authorized);
-      when(mockFirebaseMessaging.getNotificationSettings())
-          .thenAnswer((_) async => mockSettings);
+      when(
+        mockSettings.authorizationStatus,
+      ).thenReturn(AuthorizationStatus.authorized);
+      when(
+        mockFirebaseMessaging.getNotificationSettings(),
+      ).thenAnswer((_) async => mockSettings);
 
       final result = await notificationsManager.requestPermission();
       expect(result, isTrue);
@@ -45,10 +49,12 @@ void main() {
     });
 
     test('requestPermission returns false if already denied', () async {
-      when(mockSettings.authorizationStatus)
-          .thenReturn(AuthorizationStatus.denied);
-      when(mockFirebaseMessaging.getNotificationSettings())
-          .thenAnswer((_) async => mockSettings);
+      when(
+        mockSettings.authorizationStatus,
+      ).thenReturn(AuthorizationStatus.denied);
+      when(
+        mockFirebaseMessaging.getNotificationSettings(),
+      ).thenAnswer((_) async => mockSettings);
 
       final result = await notificationsManager.requestPermission();
       expect(result, isFalse);

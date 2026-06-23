@@ -60,7 +60,8 @@ class NotificationsManager {
       // preceding async work.
       if (!context.mounted) return false;
 
-      final userAgreed = await showDialog<bool>(
+      final userAgreed =
+          await showDialog<bool>(
             context: context,
             builder: (ctx) => SoftPromptDialog(
               onAllow: () => Navigator.of(ctx).pop(true),

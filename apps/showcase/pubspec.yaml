@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
   core_ui:
@@ -17,8 +17,8 @@ dependencies:
     path: ../../packages/features/feature_paywall
   flutter:
     sdk: flutter
-  flutter_bloc: ^8.1.0
-  get_it: ^7.6.0
+  flutter_bloc: ^9.1.1
+  get_it: ^9.2.1
   local_storage:
     path: ../../packages/core/local_storage
   monetization:
@@ -27,5 +27,5 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  shared_preferences: ^2.2.0
-  very_good_analysis: ^5.1.0
+  shared_preferences: ^2.2.2
+  very_good_analysis: ^10.3.0

@@ -4,8 +4,7 @@ import 'package:legal_compliance/legal_compliance.dart';
 
 void main() {
   group('DeleteAccountButton', () {
-    testWidgets('shows dialog and calls onDelete on confirm',
-        (WidgetTester tester) async {
+    testWidgets('shows dialog and calls onDelete on confirm', (tester) async {
       var deleteCalled = false;
       Future<void> onDelete() async {
         deleteCalled = true;
@@ -34,8 +33,9 @@ void main() {
       expect(deleteCalled, true);
     });
 
-    testWidgets('shows dialog and does NOT call onDelete on cancel',
-        (WidgetTester tester) async {
+    testWidgets('shows dialog and does NOT call onDelete on cancel', (
+      tester,
+    ) async {
       var deleteCalled = false;
       Future<void> onDelete() async {
         deleteCalled = true;
@@ -67,7 +67,7 @@ void main() {
   });
 
   group('PrivacyPolicyButton', () {
-    testWidgets('renders correctly', (WidgetTester tester) async {
+    testWidgets('renders correctly', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(

@@ -18,9 +18,9 @@ sealed class Result<T> {
 
   /// The value if this is a [Success], otherwise null.
   T? get valueOrNull => switch (this) {
-        final Success<T> s => s.value,
-        ResultFailure<T>() => null,
-      };
+    final Success<T> s => s.value,
+    ResultFailure<T>() => null,
+  };
 
   /// Folds both cases into a single value.
   R fold<R>(

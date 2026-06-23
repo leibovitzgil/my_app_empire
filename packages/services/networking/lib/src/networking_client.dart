@@ -11,7 +11,7 @@ typedef TokenProvider = FutureOr<String?> Function();
 /// [Result]s with errors mapped to [NetworkException] instead of throwing.
 class NetworkingClient {
   NetworkingClient({BaseOptions? options, TokenProvider? tokenProvider})
-      : _dio = Dio(options ?? BaseOptions()) {
+    : _dio = Dio(options ?? BaseOptions()) {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -34,8 +34,7 @@ class NetworkingClient {
   Future<Result<Response<T>>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
-  }) =>
-      _send(() => _dio.get<T>(path, queryParameters: queryParameters));
+  }) => _send(() => _dio.get<T>(path, queryParameters: queryParameters));
 
   /// Performs a POST request.
   Future<Result<Response<T>>> post<T>(String path, {Object? data}) =>

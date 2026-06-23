@@ -38,7 +38,7 @@ class PrivacyPolicyButton extends StatelessWidget {
           );
         }
       }
-    } catch (e) {
+    } on Object catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error launching privacy policy: $e')),

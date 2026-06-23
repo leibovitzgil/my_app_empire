@@ -53,8 +53,9 @@ void main() {
   test('logEvent calls analytics and talker', () async {
     await appLogger.logEvent('test_event', {'param': 1});
 
-    verify(() => mockTalker.info(any<dynamic>(that: contains('test_event'))))
-        .called(1);
+    verify(
+      () => mockTalker.info(any<dynamic>(that: contains('test_event'))),
+    ).called(1);
     verify(
       () =>
           mockAnalytics.logEvent(name: 'test_event', parameters: {'param': 1}),

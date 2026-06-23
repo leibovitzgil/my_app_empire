@@ -5,8 +5,8 @@ class ReviewPrompter {
   ReviewPrompter({
     required SharedPreferences prefs,
     InAppReview? inAppReview,
-  })  : _inAppReview = inAppReview ?? InAppReview.instance,
-        _prefs = prefs;
+  }) : _inAppReview = inAppReview ?? InAppReview.instance,
+       _prefs = prefs;
   static const String _kAppOpenCountKey = 'review_prompter_app_open_count';
   static const String _kCoreActionCompletedKey =
       'review_prompter_core_action_completed';

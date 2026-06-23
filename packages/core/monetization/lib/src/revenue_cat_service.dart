@@ -14,7 +14,7 @@ class RevenueCatService implements MonetizationService {
     });
 
     // Also try to fetch initial info
-    _fetchInitialCustomerInfo();
+    unawaited(_fetchInitialCustomerInfo());
   }
   final BehaviorSubject<CustomerInfo> _customerInfoSubject =
       BehaviorSubject<CustomerInfo>();
@@ -25,7 +25,7 @@ class RevenueCatService implements MonetizationService {
       if (!_customerInfoSubject.isClosed) {
         _customerInfoSubject.add(info);
       }
-    } catch (_) {
+    } on Object catch (_) {
       // Ignore initial fetch error
     }
   }
@@ -64,7 +64,7 @@ class RevenueCatService implements MonetizationService {
   Future<Offerings?> getOfferings() async {
     try {
       return await Purchases.getOfferings();
-    } catch (e, s) {
+    } on Object catch (e, s) {
       developer.log(
         'getOfferings failed',
         name: 'monetization',
@@ -80,7 +80,7 @@ class RevenueCatService implements MonetizationService {
     try {
       final result = await Purchases.purchase(PurchaseParams.package(package));
       return result.customerInfo;
-    } catch (e, s) {
+    } on Object catch (e, s) {
       developer.log(
         'purchasePackage failed',
         name: 'monetization',
@@ -115,7 +115,7 @@ class RevenueCatService implements MonetizationService {
   Future<CustomerInfo?> restorePurchases() async {
     try {
       return await Purchases.restorePurchases();
-    } catch (e, s) {
+    } on Object catch (e, s) {
       developer.log(
         'restorePurchases failed',
         name: 'monetization',
@@ -132,14 +132,17 @@ class RevenueCatService implements MonetizationService {
       // Prefer the cached value from the listener; otherwise fetch fresh.
       if (_customerInfoSubject.hasValue) {
         return _customerInfoSubject
-                .value.entitlements.all[entitlementIdentifier]?.isActive ??
+                .value
+                .entitlements
+                .all[entitlementIdentifier]
+                ?.isActive ??
             false;
       }
 
       final customerInfo = await Purchases.getCustomerInfo();
       return customerInfo.entitlements.all[entitlementIdentifier]?.isActive ??
           false;
-    } catch (e) {
+    } on Object {
       return false;
     }
   }
@@ -155,6 +158,6 @@ class RevenueCatService implements MonetizationService {
   }
 
   void dispose() {
-    _customerInfoSubject.close();
+    unawaited(_customerInfoSubject.close());
   }
 }

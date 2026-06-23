@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_paywall/feature_paywall.dart';
@@ -11,13 +13,15 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   void _openPaywall(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => BlocProvider(
-          create: (_) => PaywallBloc(
-            monetizationService: getIt<MonetizationService>(),
-          )..add(const PaywallStarted()),
-          child: const PaywallScreen(),
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BlocProvider(
+            create: (_) => PaywallBloc(
+              monetizationService: getIt<MonetizationService>(),
+            )..add(const PaywallStarted()),
+            child: const PaywallScreen(),
+          ),
         ),
       ),
     );
