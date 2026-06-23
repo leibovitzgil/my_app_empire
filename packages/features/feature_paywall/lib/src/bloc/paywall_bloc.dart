@@ -9,8 +9,8 @@ part 'paywall_state.dart';
 /// the [MonetizationService].
 class PaywallBloc extends Bloc<PaywallEvent, PaywallState> {
   PaywallBloc({required MonetizationService monetizationService})
-      : _monetization = monetizationService,
-        super(const PaywallState()) {
+    : _monetization = monetizationService,
+      super(const PaywallState()) {
     on<PaywallStarted>(_onStarted);
     on<PaywallPackagePurchased>(_onPurchased);
     on<PaywallRestoreRequested>(_onRestore);

@@ -4,17 +4,17 @@ version: 0.0.1
 publish_to: 'none'
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
   flutter: ">=3.0.0"
 
 dependencies:
-  firebase_core: ^2.17.0
-  firebase_remote_config: ^4.2.0
+  firebase_core: ^4.11.0
+  firebase_remote_config: ^6.5.3
   flutter:
     sdk: flutter
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mockito: ^5.4.2
-  very_good_analysis: ^5.1.0
+  mockito: ^5.4.4
+  very_good_analysis: ^10.3.0

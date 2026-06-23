@@ -6,7 +6,8 @@ class SoftPromptDialog extends StatelessWidget {
     required this.onLater,
     super.key,
     this.title = 'Enable Notifications',
-    this.description = 'Stay updated with the latest news and updates. '
+    this.description =
+        'Stay updated with the latest news and updates. '
         'We promise not to spam you!',
     this.allowButtonText = 'Allow',
     this.laterButtonText = 'Maybe Later',

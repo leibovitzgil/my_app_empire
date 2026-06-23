@@ -47,7 +47,7 @@ class _PaywallBody extends StatelessWidget {
           Expanded(
             child: ListView.separated(
               itemCount: state.packages.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final package = state.packages[index];
                 return Card(
@@ -57,9 +57,9 @@ class _PaywallBody extends StatelessWidget {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: busy
                         ? null
-                        : () => context
-                            .read<PaywallBloc>()
-                            .add(PaywallPackagePurchased(package)),
+                        : () => context.read<PaywallBloc>().add(
+                            PaywallPackagePurchased(package),
+                          ),
                   ),
                 );
               },
@@ -78,9 +78,9 @@ class _PaywallBody extends StatelessWidget {
             label: 'Restore purchases',
             onPressed: busy
                 ? null
-                : () => context
-                    .read<PaywallBloc>()
-                    .add(const PaywallRestoreRequested()),
+                : () => context.read<PaywallBloc>().add(
+                    const PaywallRestoreRequested(),
+                  ),
           ),
         ],
       ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_updater/src/app_update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -25,7 +27,7 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
   void initState() {
     super.initState();
     _service = widget.appUpdateService ?? AppUpdateService();
-    _checkUpdate();
+    unawaited(_checkUpdate());
   }
 
   Future<void> _checkUpdate() async {
@@ -37,7 +39,7 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } on Object {
       // If check fails, we proceed to app
       if (mounted) {
         setState(() {
@@ -81,9 +83,11 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
                   onPressed: () {
                     final url = _service.getStoreUrl();
                     if (url.isNotEmpty) {
-                      launchUrl(
-                        Uri.parse(url),
-                        mode: LaunchMode.externalApplication,
+                      unawaited(
+                        launchUrl(
+                          Uri.parse(url),
+                          mode: LaunchMode.externalApplication,
+                        ),
                       );
                     }
                   },
