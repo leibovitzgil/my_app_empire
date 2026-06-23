@@ -162,6 +162,23 @@ flesh out the repository/bloc, and wire it into an app (path dependency + DI).
   and `run-app` encode these workflows as slash-commands.
 - **Reference app** (`apps/showcase`): a runnable composition (mock/simulated
   backends, no Firebase) — the golden example for wiring capabilities together.
+
+### Runtime verification
+
+Beyond `analyze`/`test`, the factory can verify the app actually runs and looks
+right:
+
+- **Golden tests** (`melos run golden`, `melos run update-goldens`): render
+  widgets/screens to PNGs and diff them — headless screenshots, no device. Tag
+  tests `golden`; the `test` gate excludes them (`--exclude-tags golden`). Skill:
+  `golden`.
+- **E2E** (`apps/showcase/integration_test/`): drives the full
+  onboarding→login→home→paywall funnel. The same flow runs headless as a widget
+  test in the standard gate; `melos run e2e` runs it on a device. Skill:
+  `flutter-e2e`.
+- **Web engine** (`tool/web_e2e.sh`): drives the built web app in headless
+  Chrome with screenshots. Wired but has prerequisites — see
+  [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 - **Pre-commit hook** (`.githooks/pre-commit`): runs format-check + lint. Enable
   with `melos run install-hooks`; bypass once with `git commit --no-verify`.
 - **SessionStart hook** (`.claude/hooks/session-start.sh`): installs Flutter and

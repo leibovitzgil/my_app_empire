@@ -30,3 +30,12 @@ dart pub global activate melos
 # 4. Bootstrap the workspace so path-linked packages resolve.
 cd "${CLAUDE_PROJECT_DIR}"
 melos bootstrap
+
+# 5. Best-effort: install Chrome + chromedriver so web E2E (tool/web_e2e.sh)
+#    can drive the app headlessly. Never fail the hook if this can't complete.
+if ! command -v chromedriver >/dev/null 2>&1; then
+  (
+    apt-get update -qq && \
+      apt-get install -y -qq chromium-driver chromium 2>/dev/null
+  ) || echo "Chrome/chromedriver not installed; web E2E unavailable this session."
+fi

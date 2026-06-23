@@ -46,3 +46,35 @@ jobs:
           name: coverage
           path: packages/**/coverage/lcov.info
           if-no-files-found: ignore
+
+  goldens:
+    name: Golden screenshots
+    runs-on: ubuntu-latest
+    # Non-blocking: golden rendering can drift across environments. Failures
+    # are uploaded as artifacts (actual + diff) for review rather than blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Activate Melos
+        run: dart pub global activate melos
+
+      - name: Bootstrap
+        run: melos bootstrap
+
+      - name: Golden tests
+        run: melos run golden
+
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: "**/test/golden/failures/*.png"
+          if-no-files-found: ignore

@@ -23,12 +23,24 @@ scripts:
     description: Install the repo git hooks (format + analyze on pre-commit).
 
   test:
-    run: melos exec --dir-exists="test" -- flutter test
-    description: Run `flutter test` for packages that have tests.
+    run: melos exec --dir-exists="test" -- flutter test --exclude-tags golden
+    description: Run unit/widget tests (excludes golden tests; see `golden`).
+
+  golden:
+    run: melos exec --dir-exists="test/golden" -- flutter test --tags golden
+    description: Run golden (screenshot) tests.
+
+  update-goldens:
+    run: melos exec --dir-exists="test/golden" -- flutter test --tags golden --update-goldens
+    description: Regenerate golden screenshots. Run in the same env as CI.
 
   coverage:
-    run: melos exec --dir-exists="test" -- flutter test --coverage
+    run: melos exec --dir-exists="test" -- flutter test --exclude-tags golden --coverage
     description: Run tests with coverage; writes coverage/lcov.info per package.
+
+  e2e:
+    run: melos exec --dir-exists="integration_test" -- flutter test integration_test
+    description: Run integration_test end-to-end flows headlessly.
 
   format:
     run: melos exec -- dart format .
