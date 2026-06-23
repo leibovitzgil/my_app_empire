@@ -5,6 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:notifications/src/ui/soft_prompt_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// A read-only snapshot of the OS notification permission, exposed without
+/// triggering a system prompt.
+enum NotificationPermissionStatus {
+  /// Authorized or provisional — notifications may be delivered.
+  authorized,
+
+  /// Explicitly denied; the OS will not show another system prompt.
+  denied,
+
+  /// Not yet requested — a prompt can still be shown.
+  notDetermined,
+}
+
 class NotificationsManager {
   NotificationsManager(this._firebaseMessaging, this._prefs);
   static const String _kSoftPromptDeclinedKey =
@@ -34,15 +47,12 @@ class NotificationsManager {
     BuildContext? context,
     bool useSoftPrompt = true,
   }) async {
-    // 1. Check current status
-    final settings = await _firebaseMessaging.getNotificationSettings();
+    // 1. Check current status (side-effect-free).
+    final status = await permissionStatus();
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional) {
-      return true;
-    }
+    if (status == NotificationPermissionStatus.authorized) return true;
 
-    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+    if (status == NotificationPermissionStatus.denied) {
       // Already denied. Cannot ask again via system prompt.
       return false;
     }
@@ -81,6 +91,28 @@ class NotificationsManager {
 
     return newSettings.authorizationStatus == AuthorizationStatus.authorized ||
         newSettings.authorizationStatus == AuthorizationStatus.provisional;
+  }
+
+  /// Reads the current OS notification permission without prompting the user.
+  ///
+  /// Unlike [requestPermission], this is side-effect-free: it never shows the
+  /// soft prompt or the system dialog and never writes cooldown state, so it is
+  /// safe to call on screen mount or app resume to reconcile UI state.
+  Future<NotificationPermissionStatus> permissionStatus() async {
+    final settings = await _firebaseMessaging.getNotificationSettings();
+    return _toStatus(settings.authorizationStatus);
+  }
+
+  static NotificationPermissionStatus _toStatus(AuthorizationStatus status) {
+    switch (status) {
+      case AuthorizationStatus.authorized:
+      case AuthorizationStatus.provisional:
+        return NotificationPermissionStatus.authorized;
+      case AuthorizationStatus.denied:
+        return NotificationPermissionStatus.denied;
+      case AuthorizationStatus.notDetermined:
+        return NotificationPermissionStatus.notDetermined;
+    }
   }
 
   /// Returns the FCM token for this device.
