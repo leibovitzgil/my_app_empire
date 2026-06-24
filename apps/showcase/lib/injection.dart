@@ -2,10 +2,12 @@
 // are written as standalone statements rather than a cascade.
 // ignore_for_file: cascade_invocations
 import 'package:feature_auth/feature_auth.dart';
+import 'package:feature_settings/feature_settings.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:showcase/data/mock_auth_repository.dart';
+import 'package:showcase/data/simulated_notification_permission_gateway.dart';
 
 /// The app's service locator.
 final GetIt getIt = GetIt.instance;
@@ -19,6 +21,12 @@ Future<void> configureDependencies() async {
   getIt.registerLazySingleton<AuthRepository>(MockAuthRepository.new);
   getIt.registerLazySingleton<MonetizationService>(
     SimulatedMonetizationService.new,
+  );
+  getIt.registerLazySingleton<SettingsRepository>(
+    () => LocalSettingsRepository(getIt<LocalStorageService>()),
+  );
+  getIt.registerLazySingleton<NotificationPermissionGateway>(
+    SimulatedNotificationPermissionGateway.new,
   );
   // generated:register — `create_feature/create_package --wire showcase` adds
   // registrations above this line. Do not remove this marker.

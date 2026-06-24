@@ -59,5 +59,58 @@ void main() {
       final result = await notificationsManager.requestPermission();
       expect(result, isFalse);
     });
+
+    group('permissionStatus', () {
+      void stubStatus(AuthorizationStatus status) {
+        when(mockSettings.authorizationStatus).thenReturn(status);
+        when(
+          mockFirebaseMessaging.getNotificationSettings(),
+        ).thenAnswer((_) async => mockSettings);
+      }
+
+      test('maps authorized -> authorized', () async {
+        stubStatus(AuthorizationStatus.authorized);
+        expect(
+          await notificationsManager.permissionStatus(),
+          NotificationPermissionStatus.authorized,
+        );
+      });
+
+      test('maps provisional -> authorized', () async {
+        stubStatus(AuthorizationStatus.provisional);
+        expect(
+          await notificationsManager.permissionStatus(),
+          NotificationPermissionStatus.authorized,
+        );
+      });
+
+      test('maps denied -> denied', () async {
+        stubStatus(AuthorizationStatus.denied);
+        expect(
+          await notificationsManager.permissionStatus(),
+          NotificationPermissionStatus.denied,
+        );
+      });
+
+      test('maps notDetermined -> notDetermined', () async {
+        stubStatus(AuthorizationStatus.notDetermined);
+        expect(
+          await notificationsManager.permissionStatus(),
+          NotificationPermissionStatus.notDetermined,
+        );
+      });
+
+      test('never prompts (no requestPermission call)', () async {
+        stubStatus(AuthorizationStatus.notDetermined);
+        await notificationsManager.permissionStatus();
+        verifyNever(
+          mockFirebaseMessaging.requestPermission(
+            alert: anyNamed('alert'),
+            badge: anyNamed('badge'),
+            sound: anyNamed('sound'),
+          ),
+        );
+      });
+    });
   });
 }

@@ -9,12 +9,16 @@ environment:
 dependencies:
   core_ui:
     path: ../../packages/core/core_ui
+  core_utils:
+    path: ../../packages/core/core_utils
   feature_auth:
     path: ../../packages/features/feature_auth
   feature_onboarding:
     path: ../../packages/features/feature_onboarding
   feature_paywall:
     path: ../../packages/features/feature_paywall
+  feature_settings:
+    path: ../../packages/features/feature_settings
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
@@ -23,6 +27,8 @@ dependencies:
     path: ../../packages/core/local_storage
   monetization:
     path: ../../packages/core/monetization
+  notifications:
+    path: ../../packages/services/notifications
 
 dev_dependencies:
   flutter_test:

@@ -80,6 +80,13 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
+  core_utils:
+    dependency: "direct main"
+    description:
+      path: "../../packages/core/core_utils"
+      relative: true
+    source: path
+    version: "0.0.1"
   crypto:
     dependency: transitive
     description:
@@ -122,6 +129,13 @@ packages:
     dependency: "direct main"
     description:
       path: "../../packages/features/feature_paywall"
+      relative: true
+    source: path
+    version: "0.0.1"
+  feature_settings:
+    dependency: "direct main"
+    description:
+      path: "../../packages/features/feature_settings"
       relative: true
     source: path
     version: "0.0.1"
@@ -189,6 +203,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.9.0"
+  firebase_messaging:
+    dependency: transitive
+    description:
+      name: firebase_messaging
+      sha256: ce21a510e5a9aed67a0404476981e19ec0361a0301eeba547dc93dc2e7dec99a
+      url: "https://pub.dev"
+    source: hosted
+    version: "16.4.1"
+  firebase_messaging_platform_interface:
+    dependency: transitive
+    description:
+      name: firebase_messaging_platform_interface
+      sha256: e10f6d521e7ed663d0ea2f4ec7de4c6729f8c2ce25d32faf6d6b4219da8515c2
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.9.0"
+  firebase_messaging_web:
+    dependency: transitive
+    description:
+      name: firebase_messaging_web
+      sha256: "7ab45dfaf8efcd1a769baa9b8debbd0da281f5d3fc07274296b564396a980292"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.1"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -283,6 +321,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  intl:
+    dependency: transitive
+    description:
+      name: intl
+      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.20.2"
   jni:
     dependency: transitive
     description:
@@ -377,6 +423,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  notifications:
+    dependency: "direct main"
+    description:
+      path: "../../packages/services/notifications"
+      relative: true
+    source: path
+    version: "0.0.1"
   objective_c:
     dependency: transitive
     description:

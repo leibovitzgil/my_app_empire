@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_paywall/feature_paywall.dart';
+import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:monetization/monetization.dart';
@@ -27,10 +28,35 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  void _openSettings(BuildContext context) {
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BlocProvider(
+            create: (_) => SettingsBloc(
+              repository: getIt<SettingsRepository>(),
+              gateway: getIt<NotificationPermissionGateway>(),
+            )..add(const SettingsReconcileRequested()),
+            child: const SettingsScreen(),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Home')),
+      appBar: AppBar(
+        title: const Text('Home'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => _openSettings(context),
+          ),
+        ],
+      ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
