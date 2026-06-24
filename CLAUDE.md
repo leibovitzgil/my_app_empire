@@ -158,6 +158,15 @@ flesh out the repository/bloc, and wire it into an app (path dependency + DI).
   green. `create_feature`/`create_package` accept `--wire <app>` to also add the
   dependency and register the implementation in that app's get_it injection
   (at the `// generated:register` marker).
+- **Subagents** (`.claude/agents/`): a feature-development pipeline of
+  specialized agents — `product-manager` (spec + acceptance criteria) →
+  `ux-designer` (flows + screen states on `core_ui`) → `architect` (package
+  boundaries, contracts, bloc/DI plan) → `flutter-builder` (implements the
+  slice) → `qa-engineer` (bloc/widget/golden/e2e tests + green gate) →
+  `code-reviewer` (convention/correctness review). Delegate a feature through
+  them in order for consistent, green results; for a small change invoke just
+  the relevant one. Design/review agents are read-only; only the builder and QA
+  write code.
 - **Skills** (`.claude/skills/`): `new-app`, `new-feature`, `workspace-check`,
   `run-app`, `golden`, `flutter-e2e`, and `widget-preview` encode these
   workflows as slash-commands.
