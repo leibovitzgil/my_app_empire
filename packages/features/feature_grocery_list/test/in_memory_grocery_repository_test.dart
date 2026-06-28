@@ -205,5 +205,10 @@ void main() {
       await repo.setStatus(milk.id, ItemStatus.done, by: me);
       expect((await snapshot()).attentionCount, 0);
     });
+
+    test('mutating an unknown id returns a failure, never throws', () async {
+      final result = await repo.cycleStatus('does-not-exist', by: me);
+      expect(result.isSuccess, isFalse);
+    });
   });
 }

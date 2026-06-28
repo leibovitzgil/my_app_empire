@@ -25,6 +25,7 @@ void main() {
       when(repo.watchShoppers).thenAnswer((_) => controller.stream);
       when(() => repo.enter(any())).thenAnswer((_) async {});
       when(() => repo.leave(any())).thenAnswer((_) async {});
+      when(() => repo.heartbeat(any())).thenAnswer((_) async {});
     });
 
     tearDown(() => controller.close());
@@ -73,6 +74,21 @@ void main() {
         isA<PresenceState>().having((s) => s.isActive, 'isActive', true),
         isA<PresenceState>().having((s) => s.isActive, 'isActive', false),
       ],
+    );
+
+    blocTest<PresenceBloc, PresenceState>(
+      'heartbeats periodically while in shopping mode (F3)',
+      build: () => PresenceBloc(
+        repository: repo,
+        currentUser: me,
+        heartbeatInterval: const Duration(milliseconds: 30),
+      ),
+      act: (bloc) async {
+        bloc.add(const ShoppingEntered());
+        await Future<void>.delayed(const Duration(milliseconds: 130));
+      },
+      verify: (_) =>
+          verify(() => repo.heartbeat(me.id)).called(greaterThanOrEqualTo(2)),
     );
   });
 }

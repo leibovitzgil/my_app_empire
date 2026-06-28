@@ -107,7 +107,8 @@ class ItemRow extends StatelessWidget {
             color: item.status == ItemStatus.inCart
                 ? scheme.primaryContainer.withValues(alpha: 0.25)
                 : null,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            constraints: const BoxConstraints(minHeight: 56),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 ExcludeSemantics(
@@ -149,11 +150,24 @@ class ItemRow extends StatelessWidget {
                       if (reaction != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            '👍 $reaction',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.primary,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.thumb_up_alt,
+                                size: 13,
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  reaction,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                     ],

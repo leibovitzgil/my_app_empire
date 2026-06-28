@@ -15,7 +15,11 @@ void main() {
     late MockGroceryRepository repo;
     late StreamController<GroceryList> controller;
 
-    setUpAll(() => registerFallbackValue(me));
+    setUpAll(() {
+      registerFallbackValue(me);
+      registerFallbackValue(ItemStatus.needed);
+      registerFallbackValue(ItemFlag.urgent);
+    });
 
     setUp(() {
       repo = MockGroceryRepository();
@@ -26,6 +30,12 @@ void main() {
       ).thenAnswer((_) async => Success<GroceryItem>(seed.items.first));
       when(
         () => repo.cycleStatus(any(), by: any(named: 'by')),
+      ).thenAnswer((_) async => const Success<void>(null));
+      when(
+        () => repo.deleteItem(any(), by: any(named: 'by')),
+      ).thenAnswer((_) async => const Success<void>(null));
+      when(
+        () => repo.setFlag(any(), any(), by: any(named: 'by')),
       ).thenAnswer((_) async => const Success<void>(null));
     });
 
@@ -71,6 +81,57 @@ void main() {
       expect: () => [
         isA<ListState>().having((s) => s.flagsOnly, 'flagsOnly', true),
       ],
+    );
+
+    blocTest<ListBloc, ListState>(
+      'emits error when the list stream errors',
+      build: () => ListBloc(repository: repo, currentUser: me),
+      act: (_) => controller.addError(Exception('boom')),
+      expect: () => [
+        isA<ListState>().having((s) => s.status, 'status', ListStatus.error),
+      ],
+    );
+
+    blocTest<ListBloc, ListState>(
+      'surfaces a transient actionError when a mutation fails (F7 seam)',
+      build: () {
+        when(
+          () => repo.cycleStatus(any(), by: any(named: 'by')),
+        ).thenAnswer((_) async => ResultFailure<void>(Exception('nope')));
+        return ListBloc(repository: repo, currentUser: me);
+      },
+      act: (bloc) => bloc.add(const StatusCycled('x')),
+      expect: () => [
+        isA<ListState>().having((s) => s.actionError, 'actionError', isNotNull),
+      ],
+    );
+
+    blocTest<ListBloc, ListState>(
+      'ListRetryRequested resets to loading and re-subscribes',
+      build: () => ListBloc(repository: repo, currentUser: me),
+      act: (bloc) => bloc.add(const ListRetryRequested()),
+      expect: () => [
+        isA<ListState>().having((s) => s.status, 'status', ListStatus.loading),
+      ],
+      verify: (_) => verify(repo.watchList).called(greaterThanOrEqualTo(2)),
+    );
+
+    blocTest<ListBloc, ListState>(
+      'ItemDeleted forwards to repository.deleteItem (F6)',
+      build: () => ListBloc(repository: repo, currentUser: me),
+      act: (bloc) => bloc.add(const ItemDeleted('seed_milk')),
+      verify: (_) =>
+          verify(() => repo.deleteItem('seed_milk', by: me)).called(1),
+    );
+
+    blocTest<ListBloc, ListState>(
+      'ItemFlagged forwards to repository.setFlag (F4)',
+      build: () => ListBloc(repository: repo, currentUser: me),
+      act: (bloc) =>
+          bloc.add(const ItemFlagged('seed_milk', ItemFlag.outOfStock)),
+      verify: (_) => verify(
+        () => repo.setFlag('seed_milk', ItemFlag.outOfStock, by: me),
+      ).called(1),
     );
   });
 }

@@ -149,6 +149,21 @@ has no `onDisconnect`, which is why Firebase's own presence guidance uses RTDB
 for connection state; a pure-Firestore presence impl would fall back to the
 heartbeat + `lastSeen` + TTL approach the in-memory repo demonstrates.)
 
+### Local emulators
+
+`firebase.json` configures the Emulator Suite (Firestore :8080, RTDB :9000) with
+permissive dev rules. Run the app against them:
+
+```bash
+firebase emulators:start --only firestore,database --project demo-tandem &
+flutter run -t lib/main_emulator.dart
+```
+
+The `onDisconnect` flow is verified against the live RTDB emulator by
+`tool/emulator_ondisconnect_test.mjs`: it writes presence, drops the socket, and
+asserts the **server** removed the node with no client cleanup — proving the
+exact mechanism `FirebasePresenceRepository` uses.
+
 ## Tests
 
 ```bash

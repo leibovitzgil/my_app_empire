@@ -60,9 +60,9 @@ class _DeletedRow extends StatelessWidget {
       subtitle: Text(
         'Deleted by $who · ${GroceryFormat.relativeTime(item.updatedAt)}',
       ),
-      trailing: IconButton(
-        icon: const Icon(Icons.restore),
-        tooltip: 'Restore',
+      trailing: TextButton.icon(
+        icon: const Icon(Icons.restore, size: 18),
+        label: const Text('Restore'),
         onPressed: () {
           context.read<ListBloc>().add(ItemRestored(item.id));
           ScaffoldMessenger.of(context)
@@ -93,6 +93,18 @@ class _EmptyDeleted extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text('Nothing deleted recently', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Items you or your co-shoppers remove show up here, so nothing '
+              'is lost by accident.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         ],
       ),
     );

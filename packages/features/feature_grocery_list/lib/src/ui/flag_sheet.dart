@@ -12,6 +12,7 @@ Future<void> showFlagSheet({
   required ValueChanged<ItemFlag> onFlag,
   required VoidCallback onClear,
   required VoidCallback onReact,
+  required VoidCallback onDelete,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -24,53 +25,72 @@ Future<void> showFlagSheet({
           item.flagBy!.id != currentUser.id;
 
       return SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(item.name, style: theme.textTheme.titleMedium),
-              ),
-            ),
-            for (final flag in ItemFlag.values)
-              ListTile(
-                leading: Icon(
-                  GroceryFormat.flagIcon(flag),
-                  color: GroceryFormat.flagColor(flag, theme.colorScheme),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(item.name, style: theme.textTheme.titleMedium),
                 ),
-                title: Text(GroceryFormat.flagLabel(flag)),
-                trailing: item.flag == flag ? const Icon(Icons.check) : null,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onFlag(flag);
-                },
               ),
-            if (flaggedByOther)
-              ListTile(
-                leading: const Icon(Icons.thumb_up_alt_outlined),
-                title: const Text('On it'),
-                subtitle: Text('Reply to ${item.flagBy!.name}'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onReact();
-                },
-              ),
-            if (item.flag != null)
+              for (final flag in ItemFlag.values)
+                ListTile(
+                  leading: Icon(
+                    GroceryFormat.flagIcon(flag),
+                    color: GroceryFormat.flagColor(flag, theme.colorScheme),
+                  ),
+                  title: Text(GroceryFormat.flagLabel(flag)),
+                  trailing: item.flag == flag ? const Icon(Icons.check) : null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onFlag(flag);
+                  },
+                ),
+              if (flaggedByOther)
+                ListTile(
+                  leading: const Icon(Icons.thumb_up_alt_outlined),
+                  title: const Text('On it'),
+                  subtitle: Text('Reply to ${item.flagBy!.name}'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onReact();
+                  },
+                ),
+              if (item.flag != null)
+                ListTile(
+                  leading: Icon(
+                    Icons.flag_outlined,
+                    color: theme.colorScheme.error,
+                  ),
+                  title: const Text('Clear flag'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onClear();
+                  },
+                ),
+              const Divider(height: 1),
               ListTile(
                 leading: Icon(
-                  Icons.flag_outlined,
+                  Icons.delete_outline,
                   color: theme.colorScheme.error,
                 ),
-                title: const Text('Clear flag'),
+                title: const Text('Delete item'),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
-                  onClear();
+                  onDelete();
                 },
               ),
-            const SizedBox(height: 8),
-          ],
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       );
     },

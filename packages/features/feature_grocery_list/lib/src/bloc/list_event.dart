@@ -119,3 +119,8 @@ final class DoneCleared extends ListEvent {
 final class FlagsOnlyToggled extends ListEvent {
   const FlagsOnlyToggled();
 }
+
+/// Re-subscribe to the list stream after a hard load error.
+final class ListRetryRequested extends ListEvent {
+  const ListRetryRequested();
+}

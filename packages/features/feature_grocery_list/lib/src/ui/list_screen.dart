@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_ui/core_ui.dart';
 import 'package:feature_grocery_list/src/bloc/list_bloc.dart';
 import 'package:feature_grocery_list/src/bloc/presence_bloc.dart';
 import 'package:feature_grocery_list/src/data/static_item_catalog.dart';
@@ -71,7 +72,18 @@ class ListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ListBloc, ListState>(
+    return BlocConsumer<ListBloc, ListState>(
+      listenWhen: (previous, current) =>
+          current.actionError != null &&
+          current.actionError != previous.actionError,
+      listener: (context, state) {
+        final message = state.actionError;
+        if (message != null) {
+          ScaffoldMessenger.of(context)
+            ..clearSnackBars()
+            ..showSnackBar(SnackBar(content: Text(message)));
+        }
+      },
       builder: (context, state) {
         final list = state.list;
         return Scaffold(
@@ -205,6 +217,7 @@ class _ListContent extends StatelessWidget {
         onFlag: (flag) => bloc.add(ItemFlagged(item.id, flag)),
         onClear: () => bloc.add(FlagCleared(item.id)),
         onReact: () => bloc.add(ReactedOnIt(item.id)),
+        onDelete: () => _deleteWithUndo(context, bloc, item),
       ),
     );
   }
@@ -319,6 +332,12 @@ class _ErrorView extends StatelessWidget {
                 style: theme.textTheme.bodySmall,
               ),
             ],
+            const SizedBox(height: 16),
+            PrimaryButton(
+              label: 'Try again',
+              onPressed: () =>
+                  context.read<ListBloc>().add(const ListRetryRequested()),
+            ),
           ],
         ),
       ),

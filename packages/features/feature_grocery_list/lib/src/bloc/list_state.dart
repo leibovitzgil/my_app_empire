@@ -20,6 +20,7 @@ final class ListState extends Equatable {
     this.list,
     this.flagsOnly = false,
     this.error,
+    this.actionError,
   });
 
   /// Initial loading state.
@@ -41,7 +42,12 @@ final class ListState extends Equatable {
   /// Error message when [status] is [ListStatus.error].
   final String? error;
 
-  /// Returns a ready state for [list], preserving the current filter.
+  /// Transient message for a failed mutation (surfaced as a snackbar, then
+  /// cleared by the next stream snapshot). Distinct from the hard [error].
+  final String? actionError;
+
+  /// Returns a ready state for [list], preserving the current filter and
+  /// clearing any transient [actionError].
   ListState toReady(GroceryList list) =>
       ListState._(status: ListStatus.ready, list: list, flagsOnly: flagsOnly);
 
@@ -53,6 +59,15 @@ final class ListState extends Equatable {
     error: error,
   );
 
+  /// Returns a copy carrying a transient [message] for a failed mutation.
+  ListState withActionError(String message) => ListState._(
+    status: status,
+    list: list,
+    flagsOnly: flagsOnly,
+    error: error,
+    actionError: message,
+  );
+
   @override
-  List<Object?> get props => [status, list, flagsOnly, error];
+  List<Object?> get props => [status, list, flagsOnly, error, actionError];
 }
