@@ -1,21 +1,23 @@
 import 'package:core_ui/src/widgets/labeled_divider.dart';
 import 'package:core_ui/src/widgets/primary_button.dart';
-import 'package:core_ui/src/widgets/social_sign_in_button.dart';
 import 'package:flutter/material.dart';
 
 /// A bloc-agnostic, brandable sign-in scaffold.
 ///
 /// This is the reusable presentation for a login screen: an optional [logo]
-/// and [title] for branding, email + password fields, and — when the matching
-/// callbacks are provided — "Continue with Google"/"Continue with Apple"
-/// buttons. It owns no auth logic; callers wire the callbacks to their auth
-/// layer (e.g. a feature's bloc) and pass [errorText]/[isBusy] from state.
+/// and [title] for branding, email + password fields, and any [socialButtons]
+/// the caller supplies (e.g. a Google button and the official Apple button).
+/// It owns no auth logic; callers wire the callbacks to their auth layer (e.g.
+/// a feature's bloc) and pass [errorText]/[isBusy] from state.
+///
+/// Social buttons are passed in rather than built here so each provider's
+/// brand-compliant widget lives with the auth layer that owns its dependency
+/// (notably Apple's required "Sign in with Apple" button).
 class SignInView extends StatefulWidget {
   /// Creates a [SignInView].
   const SignInView({
     required this.onEmailSignIn,
-    this.onGoogleSignIn,
-    this.onAppleSignIn,
+    this.socialButtons = const <Widget>[],
     this.logo,
     this.title,
     this.errorText,
@@ -28,13 +30,9 @@ class SignInView extends StatefulWidget {
   /// tapped.
   final void Function(String email, String password) onEmailSignIn;
 
-  /// Called when "Continue with Google" is tapped. When null the button is
-  /// hidden.
-  final VoidCallback? onGoogleSignIn;
-
-  /// Called when "Continue with Apple" is tapped. When null the button is
-  /// hidden.
-  final VoidCallback? onAppleSignIn;
+  /// Alternative sign-in buttons shown below an "or" divider. When empty, no
+  /// divider or social section is rendered.
+  final List<Widget> socialButtons;
 
   /// Optional branding shown above the form, e.g. an `AppLogoMark`.
   final Widget? logo;
@@ -73,9 +71,7 @@ class _SignInViewState extends State<SignInView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasGoogle = widget.onGoogleSignIn != null;
-    final hasApple = widget.onAppleSignIn != null;
-    final showSocial = hasGoogle || hasApple;
+    final social = widget.socialButtons;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -123,17 +119,14 @@ class _SignInViewState extends State<SignInView> {
                     onPressed: widget.isBusy ? null : _submitEmail,
                     isLoading: widget.isBusy,
                   ),
-                  if (showSocial) ...[
+                  if (social.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     const LabeledDivider(label: 'or'),
                     const SizedBox(height: 20),
-                    if (hasGoogle)
-                      SocialSignInButton.google(
-                        onPressed: widget.onGoogleSignIn,
-                      ),
-                    if (hasGoogle && hasApple) const SizedBox(height: 12),
-                    if (hasApple)
-                      SocialSignInButton.apple(onPressed: widget.onAppleSignIn),
+                    for (var i = 0; i < social.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 12),
+                      social[i],
+                    ],
                   ],
                 ],
               ),

@@ -32,12 +32,14 @@ void main() {
     await tester.tap(find.text('Get started'));
     await tester.pumpAndSettle();
 
-    // 2. Login.
-    expect(find.text('Login'), findsOneWidget);
+    // 2. Login (shared SignInView with Showcase branding + social options).
+    expect(find.text('Continue with Google'), findsOneWidget);
     await _shot(binding, 'login');
     await tester.enterText(find.byType(TextField).first, 'a@b.com');
     await tester.enterText(find.byType(TextField).last, 'password');
-    await tester.tap(find.text('Login with Email'));
+    final loginButton = find.text('Log in');
+    await tester.ensureVisible(loginButton);
+    await tester.tap(loginButton);
     await tester.pumpAndSettle();
 
     // 3. Home, then open the paywall.

@@ -30,17 +30,9 @@ Widget socialGooglePreview() {
   return SocialSignInButton.google(onPressed: () {});
 }
 
-@Preview(name: 'SocialSignInButton • Apple')
-Widget socialApplePreview() {
-  return SocialSignInButton.apple(onPressed: () {});
-}
-
-@Preview(name: 'Brand logos')
-Widget brandLogosPreview() {
-  return const Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [GoogleLogo(size: 40), AppleLogo(size: 40)],
-  );
+@Preview(name: 'GoogleLogo')
+Widget googleLogoPreview() {
+  return const GoogleLogo(size: 40);
 }
 
 @Preview(name: 'AppLogoMark')
@@ -83,7 +75,6 @@ Widget signInViewPreview() {
     title: 'Tandem',
     logo: const AppLogoMark(icon: Icons.shopping_cart_checkout),
     onEmailSignIn: (_, _) {},
-    onGoogleSignIn: () {},
-    onAppleSignIn: () {},
+    socialButtons: [SocialSignInButton.google(onPressed: () {})],
   );
 }

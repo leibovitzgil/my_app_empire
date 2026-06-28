@@ -32,7 +32,7 @@ void main() {
       expect(password, 'pw');
     });
 
-    testWidgets('shows social buttons only when callbacks are provided', (
+    testWidgets('renders no divider/social section when none provided', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -40,35 +40,35 @@ void main() {
           home: SignInView(onEmailSignIn: (_, _) {}),
         ),
       );
+      await tester.pumpAndSettle();
 
+      expect(find.byType(LabeledDivider), findsNothing);
       expect(find.text('Continue with Google'), findsNothing);
-      expect(find.text('Continue with Apple'), findsNothing);
+    });
 
+    testWidgets('lays out and wires provided social buttons', (tester) async {
       var google = 0;
-      var apple = 0;
       await tester.pumpWidget(
         MaterialApp(
           home: SignInView(
             onEmailSignIn: (_, _) {},
-            onGoogleSignIn: () => google++,
-            onAppleSignIn: () => apple++,
+            socialButtons: [
+              SocialSignInButton.google(onPressed: () => google++),
+            ],
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
+      expect(find.byType(LabeledDivider), findsOneWidget);
       final googleBtn = find.text('Continue with Google');
-      final appleBtn = find.text('Continue with Apple');
       expect(googleBtn, findsOneWidget);
-      expect(appleBtn, findsOneWidget);
 
       await tester.ensureVisible(googleBtn);
       await tester.tap(googleBtn);
-      await tester.ensureVisible(appleBtn);
-      await tester.tap(appleBtn);
       await tester.pumpAndSettle();
 
       expect(google, 1);
-      expect(apple, 1);
     });
 
     testWidgets('renders errorText', (tester) async {

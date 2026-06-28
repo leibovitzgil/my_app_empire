@@ -1,9 +1,15 @@
 import 'package:core_ui/src/widgets/brand_logos.dart';
 import 'package:flutter/material.dart';
 
-/// An outlined "Continue with X" button for social sign-in (Google, Apple, …).
+/// An outlined "Continue with X" button for social sign-in.
+///
 /// Matches `PrimaryButton`'s height and corner radius so auth screens stay
-/// visually consistent.
+/// visually consistent. The [SocialSignInButton.google] variant carries the
+/// official Google logo on the white background Google's branding requires.
+///
+/// There is intentionally no Apple variant here: Apple's guidelines mandate
+/// their own "Sign in with Apple" button, which `feature_auth` provides via the
+/// `sign_in_with_apple` package rather than a recreated mark.
 class SocialSignInButton extends StatelessWidget {
   /// Creates a [SocialSignInButton].
   const SocialSignInButton({
@@ -11,10 +17,13 @@ class SocialSignInButton extends StatelessWidget {
     required this.label,
     this.leading,
     this.icon,
+    this.backgroundColor,
+    this.foregroundColor,
     super.key,
   });
 
-  /// A Google sign-in button carrying the official multi-colour Google logo.
+  /// A Google sign-in button: the official multi-colour "G" on a white button,
+  /// per Google's Sign in with Google branding guidelines.
   const SocialSignInButton.google({
     required VoidCallback? onPressed,
     String label = 'Continue with Google',
@@ -23,19 +32,8 @@ class SocialSignInButton extends StatelessWidget {
          onPressed: onPressed,
          label: label,
          leading: const GoogleLogo(),
-         key: key,
-       );
-
-  /// An Apple sign-in button carrying the official Apple logo, which adapts to
-  /// the button's brightness.
-  const SocialSignInButton.apple({
-    required VoidCallback? onPressed,
-    String label = 'Continue with Apple',
-    Key? key,
-  }) : this(
-         onPressed: onPressed,
-         label: label,
-         leading: const AppleLogo(),
+         backgroundColor: const Color(0xFFFFFFFF),
+         foregroundColor: const Color(0xFF3C4043),
          key: key,
        );
 
@@ -51,6 +49,12 @@ class SocialSignInButton extends StatelessWidget {
   /// A Material icon shown when [leading] is null.
   final IconData? icon;
 
+  /// Optional button fill. Defaults to the theme (transparent outlined button).
+  final Color? backgroundColor;
+
+  /// Optional label/icon colour. Defaults to the theme.
+  final Color? foregroundColor;
+
   @override
   Widget build(BuildContext context) {
     final lead = leading ?? (icon != null ? Icon(icon, size: 20) : null);
@@ -60,6 +64,8 @@ class SocialSignInButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
