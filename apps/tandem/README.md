@@ -95,13 +95,59 @@ not `injectable` codegen — so there's no `build_runner` step. One shared
 shared instance is what makes simulated real-time sync work):
 
 ```dart
+// useFirebase: false (default)
 final grocery = InMemoryGroceryRepository();
 getIt.registerSingleton<GroceryRepository>(grocery);
 getIt.registerSingleton<PresenceRepository>(grocery);
 ```
 
-To swap to a real backend, bind the Firestore/Supabase implementation here
-instead — nothing else changes.
+The real backend is wired behind the same call — see below.
+
+## Firebase backend
+
+The factory ships real implementations of both contracts; the app picks
+in-memory vs Firebase at the DI layer (exactly like `feature_auth`'s mock vs
+`FirebaseAuthRepository`). **No bloc, event, state, or UI changes** — only the
+binding in `injection.dart`.
+
+### Enable it
+
+```bash
+cd apps/tandem
+flutterfire configure          # generates firebase_options.dart for your project
+# In the Firebase console: create a Firestore database AND enable Realtime Database
+flutter run --dart-define=USE_FIREBASE=true
+```
+
+`main` calls `Firebase.initializeApp()` and `configureDependencies(useFirebase:
+true)`, which binds `FirestoreGroceryRepository` + `FirebasePresenceRepository`.
+
+### The list — Cloud Firestore (`FirestoreGroceryRepository`)
+
+Items live at `households/{listId}/items/{itemId}`. Real-time reads are just a
+`snapshots()` listener — **the database does the fan-out, so the in-memory
+broadcast plumbing disappears entirely.** Read-modify-write mutations (status
+cycle, reactions) run in Firestore transactions so concurrent shoppers don't
+clobber each other; the rest are field updates. Deletes are tombstones
+(`isDeleted`), keeping the reversible-delete guarantee.
+
+### Presence — Realtime Database `onDisconnect()` (`FirebasePresenceRepository`)
+
+> **Why not just rely on the data stream?** Because a stream propagates
+> *writes* — and the hard part of presence is detecting a client that
+> **disconnects without writing** (app killed, phone dies, subway, crash). That
+> client never gets to write "I left", so a naive presence record would say
+> "shopping" forever. That stale state is exactly what the in-memory heartbeat +
+> TTL was compensating for.
+
+The fix is to lean on the database with a different primitive: RTDB
+`onDisconnect()`. On `enter`, we register a **server-side**
+`onDisconnect().remove()` on `presence/{listId}/{userId}`; the server detects
+the dropped socket and removes the node for us. So `heartbeat()` becomes a
+**no-op** — liveness is handled server-side, no client timers. (Cloud Firestore
+has no `onDisconnect`, which is why Firebase's own presence guidance uses RTDB
+for connection state; a pure-Firestore presence impl would fall back to the
+heartbeat + `lastSeen` + TTL approach the in-memory repo demonstrates.)
 
 ## Tests
 
@@ -111,7 +157,14 @@ melos run lint && melos run test         # from the repo root
 
 `feature_grocery_list/test/` covers the acceptance criteria: repository
 real-time semantics (two-subscriber sync, status cycle + attribution, flags +
-reactions, reversible delete/restore, clear-done, presence enter/leave + TTL),
-`ListBloc`/`PresenceBloc` behaviour (`bloc_test` + `mocktail`), `ItemRow` and
-`ListScreen` widget tests, and an `apps/tandem` end-to-end widget test that
-drives **onboarding → login → live list**.
+reactions, reversible delete/restore, clear-done, presence enter/leave + TTL +
+heartbeat), `ListBloc`/`PresenceBloc` behaviour (`bloc_test` + `mocktail`),
+`ItemRow` and `ListScreen` widget tests, and an `apps/tandem` end-to-end widget
+test that drives **onboarding → login → live list**.
+
+The Firebase layer is tested too: `FirestoreGroceryRepository` runs against
+`fake_cloud_firestore` (add/idempotency, transactional status cycle, flags +
+reactions, delete/restore, clear-done, live `snapshots()` updates), the mappers
+round-trip, and `FirebasePresenceRepository.parseShoppers` is unit-tested. The
+RTDB `onDisconnect()` behaviour itself needs the Firebase Emulator Suite to
+exercise end-to-end (no client-side fake simulates a dropped socket).

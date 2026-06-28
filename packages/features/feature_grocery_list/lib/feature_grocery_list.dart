@@ -1,5 +1,7 @@
 export 'src/bloc/list_bloc.dart';
 export 'src/bloc/presence_bloc.dart';
+export 'src/data/firebase_presence_repository.dart';
+export 'src/data/firestore_grocery_repository.dart';
 export 'src/data/grocery_seed.dart';
 export 'src/data/in_memory_grocery_repository.dart';
 export 'src/data/static_item_catalog.dart';

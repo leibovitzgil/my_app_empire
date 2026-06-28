@@ -115,10 +115,13 @@ later requires **zero** changes to blocs, events, states, or UI.
 **Out of scope now:** recipes/meal planning, pantry/barcode, price/budget
 tracking, voice/smartwatch, multi-list, a real backend, full CRDT.
 
-**Roadmap:** swap the in-memory stream repo for Firestore/Supabase Realtime
-behind the existing contract → durable offline outbox (F7) → invite/join deep
-links (F8) → value-moment paywall (F9) → multiple lists, recurring staples,
-recipes, and budget tracking.
+**Roadmap:** ~~swap the in-memory stream repo for a real backend~~ ✅ **done** —
+a Cloud Firestore implementation (list) + Realtime Database `onDisconnect()`
+implementation (presence) ship behind the existing contracts; apps pick
+in-memory vs Firebase at the DI layer (see
+[`apps/tandem/README.md`](../apps/tandem/README.md#firebase-backend)). Next:
+durable offline outbox (F7) → invite/join deep links (F8) → value-moment paywall
+(F9) → multiple lists, recurring staples, recipes, and budget tracking.
 
 ---
 
