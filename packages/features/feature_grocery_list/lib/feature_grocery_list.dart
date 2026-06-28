@@ -1,0 +1,11 @@
+export 'src/bloc/list_bloc.dart';
+export 'src/bloc/presence_bloc.dart';
+export 'src/data/grocery_seed.dart';
+export 'src/data/in_memory_grocery_repository.dart';
+export 'src/data/static_item_catalog.dart';
+export 'src/domain/grocery_models.dart';
+export 'src/domain/grocery_repository.dart';
+export 'src/domain/item_catalog.dart';
+export 'src/domain/presence_repository.dart';
+export 'src/ui/list_screen.dart';
+export 'src/ui/recently_deleted_screen.dart';
