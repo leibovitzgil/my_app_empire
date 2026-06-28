@@ -148,5 +148,62 @@ void main() {
       ttlRepo.pruneStalePresence();
       expect(await ttlRepo.watchShoppers().first, isEmpty);
     });
+
+    test('heartbeat keeps a shopper alive past the TTL (F3)', () async {
+      var now = DateTime(2026, 6, 28, 12);
+      final hbRepo = InMemoryGroceryRepository(demo: false, clock: () => now);
+      addTearDown(hbRepo.dispose);
+
+      await hbRepo.enter(GrocerySeed.dana);
+      now = now.add(const Duration(seconds: 20));
+      await hbRepo.heartbeat(GrocerySeed.dana.id); // refresh before TTL
+      now = now.add(const Duration(seconds: 20)); // 20s since heartbeat (< TTL)
+      hbRepo.pruneStalePresence();
+      expect(await hbRepo.watchShoppers().first, isNotEmpty);
+
+      now = now.add(const Duration(seconds: 31)); // now stale, no heartbeat
+      hbRepo.pruneStalePresence();
+      expect(await hbRepo.watchShoppers().first, isEmpty);
+    });
+
+    test(
+      'setStatus sets an explicit status and re-attributes (F2 un-do)',
+      () async {
+        final coffee = itemNamed(await snapshot(), 'Coffee'); // seeded as done
+        expect(coffee.status, ItemStatus.done);
+
+        await repo.setStatus(coffee.id, ItemStatus.needed, by: me);
+        final updated = itemNamed(await snapshot(), 'Coffee');
+        expect(updated.status, ItemStatus.needed);
+        expect(updated.statusBy, me);
+      },
+    );
+
+    test(
+      'clearDone is undoable by restoring each item (F6 bulk undo)',
+      () async {
+        final doneIds = (await snapshot()).done.map((i) => i.id).toList();
+        expect(doneIds, isNotEmpty);
+
+        await repo.clearDone(by: me);
+        for (final id in doneIds) {
+          await repo.restoreItem(id);
+        }
+
+        final snap = await snapshot();
+        for (final id in doneIds) {
+          expect(snap.items.firstWhere((i) => i.id == id).isDeleted, isFalse);
+        }
+      },
+    );
+
+    test('a flagged item set to done no longer needs attention (F4)', () async {
+      final milk = itemNamed(await snapshot(), 'Milk');
+      await repo.setFlag(milk.id, ItemFlag.urgent, by: me);
+      expect((await snapshot()).attentionCount, 1);
+
+      await repo.setStatus(milk.id, ItemStatus.done, by: me);
+      expect((await snapshot()).attentionCount, 0);
+    });
   });
 }

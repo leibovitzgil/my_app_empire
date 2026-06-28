@@ -53,6 +53,15 @@ void main() {
     );
 
     blocTest<PresenceBloc, PresenceState>(
+      'ShoppingLeft leaves the current user',
+      build: () => PresenceBloc(repository: repo, currentUser: me),
+      act: (bloc) => bloc.add(const ShoppingLeft()),
+      // close() also leaves, so assert at-least-once rather than exactly once.
+      verify: (_) =>
+          verify(() => repo.leave(me.id)).called(greaterThanOrEqualTo(1)),
+    );
+
+    blocTest<PresenceBloc, PresenceState>(
       'an empty shopper set clears presence — no stale state (F3)',
       build: () => PresenceBloc(repository: repo, currentUser: me),
       act: (bloc) {

@@ -13,6 +13,12 @@ part 'list_state.dart';
 /// events; user actions are forwarded to the repository, whose new snapshot
 /// then updates state — a single source of truth that stays correct when the
 /// real backend lands.
+///
+/// Mutations return a `Result` but their failure case is not yet surfaced as
+/// error UI: the in-memory repo's only failure (an empty name) is guarded at
+/// the call site, and per-row sync/error feedback lands with the offline-outbox
+/// work (F7). The contract returns `Result` today so that wiring is a UI change
+/// only, not a repository change.
 class ListBloc extends Bloc<ListEvent, ListState> {
   /// Creates a [ListBloc].
   ListBloc({

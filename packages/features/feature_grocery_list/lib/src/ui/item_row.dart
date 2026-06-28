@@ -52,7 +52,13 @@ class ItemRow extends StatelessWidget {
   }
 
   String get _semanticLabel {
-    final parts = <String>[item.name, GroceryFormat.statusVerb(item.status)];
+    final who = item.status == ItemStatus.needed
+        ? item.addedBy.name
+        : item.statusBy.name;
+    final verb = item.status == ItemStatus.needed
+        ? 'added by'
+        : '${GroceryFormat.statusVerb(item.status).toLowerCase()} by';
+    final parts = <String>['${item.name}, $verb $who'];
     final flag = item.flag;
     if (flag != null) parts.add('flagged ${GroceryFormat.flagLabel(flag)}');
     return parts.join(', ');
@@ -77,6 +83,8 @@ class ItemRow extends StatelessWidget {
     return Semantics(
       button: true,
       label: _semanticLabel,
+      // Expose delete to assistive tech, since the row is otherwise swipe-only.
+      onDismiss: onDelete,
       child: Dismissible(
         key: ValueKey<String>('dismiss_${item.id}'),
         direction: DismissDirection.endToStart,

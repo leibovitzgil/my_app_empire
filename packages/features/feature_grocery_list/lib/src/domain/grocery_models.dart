@@ -252,8 +252,10 @@ class GroceryList extends Equatable {
     return tombstoned;
   }
 
-  /// How many live items currently carry a flag.
-  int get attentionCount => items.where((i) => i.isFlagged).length;
+  /// How many *active* items currently carry a flag. Scoped to [active] (not
+  /// done, not deleted) so it stays consistent with the flags-only filter — a
+  /// flag on a done item is considered resolved.
+  int get attentionCount => active.where((i) => i.flag != null).length;
 
   /// Returns a copy with replaced [items].
   GroceryList copyWith({List<GroceryItem>? items}) =>
