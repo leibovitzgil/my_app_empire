@@ -16,6 +16,18 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> signInWithGoogle() async {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    _controller.add('google_user_123');
+  }
+
+  @override
+  Future<void> signInWithApple() async {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    _controller.add('apple_user_123');
+  }
+
+  @override
   Future<void> logout() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
     _controller.add(null);

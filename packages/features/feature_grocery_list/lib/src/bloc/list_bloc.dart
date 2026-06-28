@@ -64,8 +64,8 @@ class ListBloc extends Bloc<ListEvent, ListState> {
     _subscribe();
   }
 
-  // Surfaces a failed mutation as a transient action error (snackbar in the UI),
-  // without disturbing the optimistic stream-driven list.
+  // Surfaces a failed mutation as a transient action error (snackbar in the
+  // UI), without disturbing the optimistic stream-driven list.
   void _surfaceFailure(Result<Object?> result, Emitter<ListState> emit) {
     if (!result.isSuccess) {
       emit(state.withActionError("Couldn't sync — please try again"));

@@ -30,49 +30,98 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _onGooglePressed() =>
+      context.read<AuthBloc>().add(AuthGoogleSignInRequested());
+
+  void _onApplePressed() =>
+      context.read<AuthBloc>().add(AuthAppleSignInRequested());
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-            ),
-            const SizedBox(height: 24),
-            BlocBuilder<AuthBloc, AuthState>(
-              builder: (context, state) {
-                final error = state.error;
-                if (state.status == AuthStatus.failure && error != null) {
-                  return Text(
-                    error,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            const SizedBox(height: 8),
-            PrimaryButton(
-              label: 'Login with Email',
-              onPressed: _onLoginPressed,
-            ),
-          ],
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Password'),
+              ),
+              const SizedBox(height: 24),
+              BlocBuilder<AuthBloc, AuthState>(
+                builder: (context, state) {
+                  final error = state.error;
+                  if (state.status == AuthStatus.failure && error != null) {
+                    return Text(
+                      error,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              const SizedBox(height: 8),
+              PrimaryButton(
+                label: 'Login with Email',
+                onPressed: _onLoginPressed,
+              ),
+              const SizedBox(height: 20),
+              const _OrDivider(),
+              const SizedBox(height: 20),
+              SocialSignInButton(
+                label: 'Continue with Google',
+                leading: const Text(
+                  'G',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Color(0xFF4285F4),
+                  ),
+                ),
+                onPressed: _onGooglePressed,
+              ),
+              const SizedBox(height: 12),
+              SocialSignInButton(
+                label: 'Continue with Apple',
+                icon: Icons.apple,
+                onPressed: _onApplePressed,
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// A horizontal "or" separator: a divider on each side of an "or" label.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text('or', style: TextStyle(color: color)),
+        ),
+        const Expanded(child: Divider()),
+      ],
     );
   }
 }

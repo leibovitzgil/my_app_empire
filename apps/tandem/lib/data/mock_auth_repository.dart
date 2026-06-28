@@ -16,6 +16,16 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> signInWithGoogle() async {
+    _controller.add('tandem-google-user');
+  }
+
+  @override
+  Future<void> signInWithApple() async {
+    _controller.add('tandem-apple-user');
+  }
+
+  @override
   Future<void> logout() async {
     _controller.add(null);
   }

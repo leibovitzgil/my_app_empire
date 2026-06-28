@@ -26,3 +26,9 @@ final class AuthLoginRequested extends AuthEvent {
   @override
   List<Object?> get props => [email, password];
 }
+
+/// The user tapped "Continue with Google".
+final class AuthGoogleSignInRequested extends AuthEvent {}
+
+/// The user tapped "Continue with Apple".
+final class AuthAppleSignInRequested extends AuthEvent {}

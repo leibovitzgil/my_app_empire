@@ -24,3 +24,28 @@ Widget primaryButtonLoadingPreview() {
 Widget primaryButtonDisabledPreview() {
   return const PrimaryButton(label: 'Continue', onPressed: null);
 }
+
+@Preview(name: 'SocialSignInButton • Google')
+Widget socialGooglePreview() {
+  return SocialSignInButton(
+    label: 'Continue with Google',
+    leading: const Text(
+      'G',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 18,
+        color: Color(0xFF4285F4),
+      ),
+    ),
+    onPressed: () {},
+  );
+}
+
+@Preview(name: 'SocialSignInButton • Apple')
+Widget socialApplePreview() {
+  return SocialSignInButton(
+    label: 'Continue with Apple',
+    icon: Icons.apple,
+    onPressed: () {},
+  );
+}
