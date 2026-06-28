@@ -17,6 +17,16 @@ class LoginEmittingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> signInWithGoogle() async {
+    _controller.add('google_user_id');
+  }
+
+  @override
+  Future<void> signInWithApple() async {
+    _controller.add('apple_user_id');
+  }
+
+  @override
   Future<void> logout() async {
     _controller.add(null);
   }
@@ -32,6 +42,35 @@ class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> login(String email, String password) async {}
+
+  @override
+  Future<void> signInWithGoogle() async {}
+
+  @override
+  Future<void> signInWithApple() async {}
+
+  @override
+  Future<void> logout() async {}
+}
+
+/// Records which sign-in method was invoked and fails the flow, so we can
+/// assert the bloc surfaces provider errors as [AuthState.failure].
+class ThrowingAuthRepository implements AuthRepository {
+  @override
+  Stream<String?> get user => const Stream.empty();
+
+  @override
+  Future<void> login(String email, String password) async {}
+
+  @override
+  Future<void> signInWithGoogle() async {
+    throw Exception('google failed');
+  }
+
+  @override
+  Future<void> signInWithApple() async {
+    throw Exception('apple failed');
+  }
 
   @override
   Future<void> logout() async {}
@@ -71,6 +110,46 @@ void main() {
       build: () => AuthBloc(authRepository: LoginEmittingAuthRepository()),
       act: (bloc) => bloc.add(const AuthLoginRequested('a@b.com', 'password')),
       expect: () => [const AuthState.authenticated('user_id')],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits [authenticated] after AuthGoogleSignInRequested succeeds',
+      build: () => AuthBloc(authRepository: LoginEmittingAuthRepository()),
+      act: (bloc) => bloc.add(AuthGoogleSignInRequested()),
+      expect: () => [const AuthState.authenticated('google_user_id')],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits [authenticated] after AuthAppleSignInRequested succeeds',
+      build: () => AuthBloc(authRepository: LoginEmittingAuthRepository()),
+      act: (bloc) => bloc.add(AuthAppleSignInRequested()),
+      expect: () => [const AuthState.authenticated('apple_user_id')],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits [failure] when AuthGoogleSignInRequested throws',
+      build: () => AuthBloc(authRepository: ThrowingAuthRepository()),
+      act: (bloc) => bloc.add(AuthGoogleSignInRequested()),
+      expect: () => [
+        isA<AuthState>().having(
+          (s) => s.status,
+          'status',
+          AuthStatus.failure,
+        ),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits [failure] when AuthAppleSignInRequested throws',
+      build: () => AuthBloc(authRepository: ThrowingAuthRepository()),
+      act: (bloc) => bloc.add(AuthAppleSignInRequested()),
+      expect: () => [
+        isA<AuthState>().having(
+          (s) => s.status,
+          'status',
+          AuthStatus.failure,
+        ),
+      ],
     );
   });
 }

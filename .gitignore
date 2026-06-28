@@ -25,3 +25,8 @@ coverage/
 
 # App-level lockfiles are committed for reproducibility; package lockfiles are not.
 packages/**/pubspec.lock
+
+# Firebase emulator runtime logs
+*-debug.log
+firebase-export-*/
+.firebase/

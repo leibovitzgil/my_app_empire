@@ -29,7 +29,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     // Past onboarding -> auth gate shows the login screen.
-    expect(find.text('Login'), findsOneWidget);
+    expect(find.text('Continue with Google'), findsOneWidget);
   });
 
   // The same funnel as integration_test/app_flow_test.dart, but headless so it
@@ -52,7 +52,9 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, 'a@b.com');
     await tester.enterText(find.byType(TextField).last, 'password');
-    await tester.tap(find.text('Login with Email'));
+    final loginButton = find.text('Log in');
+    await tester.ensureVisible(loginButton);
+    await tester.tap(loginButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome! You are signed in.'), findsOneWidget);

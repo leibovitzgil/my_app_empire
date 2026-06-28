@@ -1,5 +1,6 @@
 import 'package:feature_auth/src/domain/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository({firebase_auth.FirebaseAuth? firebaseAuth})
@@ -20,6 +21,26 @@ class FirebaseAuthRepository implements AuthRepository {
       email: email,
       password: password,
     );
+  }
+
+  @override
+  Future<void> signInWithGoogle() {
+    return _signInWithProvider(firebase_auth.GoogleAuthProvider());
+  }
+
+  @override
+  Future<void> signInWithApple() {
+    return _signInWithProvider(firebase_auth.AppleAuthProvider());
+  }
+
+  /// Runs an OAuth provider flow, using the popup flow on web and the native
+  /// provider flow on mobile.
+  Future<void> _signInWithProvider(firebase_auth.AuthProvider provider) async {
+    if (kIsWeb) {
+      await _firebaseAuth.signInWithPopup(provider);
+    } else {
+      await _firebaseAuth.signInWithProvider(provider);
+    }
   }
 
   @override

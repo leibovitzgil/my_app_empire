@@ -24,3 +24,57 @@ Widget primaryButtonLoadingPreview() {
 Widget primaryButtonDisabledPreview() {
   return const PrimaryButton(label: 'Continue', onPressed: null);
 }
+
+@Preview(name: 'SocialSignInButton • Google')
+Widget socialGooglePreview() {
+  return SocialSignInButton.google(onPressed: () {});
+}
+
+@Preview(name: 'GoogleLogo')
+Widget googleLogoPreview() {
+  return const GoogleLogo(size: 40);
+}
+
+@Preview(name: 'AppLogoMark')
+Widget appLogoMarkPreview() {
+  return const AppLogoMark(icon: Icons.shopping_cart_checkout);
+}
+
+@Preview(name: 'LabeledDivider')
+Widget labeledDividerPreview() {
+  return const LabeledDivider(label: 'or');
+}
+
+@Preview(name: 'InitialsAvatar')
+Widget initialsAvatarPreview() {
+  return const InitialsAvatar(initials: 'GL', color: Colors.indigo);
+}
+
+@Preview(name: 'EmptyStateView')
+Widget emptyStateViewPreview() {
+  return const EmptyStateView(
+    icon: Icons.shopping_basket_outlined,
+    title: 'Your list is empty',
+    message: 'Add the first item below',
+  );
+}
+
+@Preview(name: 'ErrorRetryView')
+Widget errorRetryViewPreview() {
+  return ErrorRetryView(
+    icon: Icons.wifi_off,
+    title: "Couldn't load the list",
+    message: 'Check your connection and try again.',
+    onRetry: () {},
+  );
+}
+
+@Preview(name: 'SignInView')
+Widget signInViewPreview() {
+  return SignInView(
+    title: 'Tandem',
+    logo: const AppLogoMark(icon: Icons.shopping_cart_checkout),
+    onEmailSignIn: (_, _) {},
+    socialButtons: [SocialSignInButton.google(onPressed: () {})],
+  );
+}

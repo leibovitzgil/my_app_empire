@@ -1,0 +1,30 @@
+name: feature_grocery_list
+description: "Shared real-time grocery list with three-state status, inline attribution, live shopper presence, conversational flags and reversible deletes."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  bloc: ^9.2.1
+  cloud_firestore: ^6.0.0
+  core_ui:
+    path: ../../core/core_ui
+  core_utils:
+    path: ../../core/core_utils
+  equatable: ^2.0.5
+  firebase_core: ^4.11.0
+  firebase_database: ^12.0.0
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+
+dev_dependencies:
+  bloc_test: ^10.0.0
+  fake_cloud_firestore: ^4.0.0
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.0
+  very_good_analysis: ^10.3.0

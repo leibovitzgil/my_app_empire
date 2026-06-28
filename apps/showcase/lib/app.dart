@@ -72,6 +72,12 @@ class _RootFlowState extends State<_RootFlow> {
   }
 }
 
+/// Showcase's branding for the shared sign-in screen.
+const _loginScreen = LoginScreen(
+  title: 'Showcase',
+  logo: AppLogoMark(icon: Icons.rocket_launch),
+);
+
 class _AuthGate extends StatelessWidget {
   const _AuthGate();
 
@@ -81,8 +87,8 @@ class _AuthGate extends StatelessWidget {
       builder: (context, state) {
         return switch (state.status) {
           AuthStatus.authenticated => const HomeScreen(),
-          AuthStatus.unauthenticated => const LoginScreen(),
-          AuthStatus.failure => const LoginScreen(),
+          AuthStatus.unauthenticated => _loginScreen,
+          AuthStatus.failure => _loginScreen,
         };
       },
     );

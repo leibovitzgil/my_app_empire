@@ -2,77 +2,53 @@ import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/src/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+/// The auth screen, wired to [AuthBloc].
+///
+/// Presentation lives in core_ui's [SignInView]; this widget adapts bloc state
+/// to it, dispatches events, and supplies the brand-compliant social buttons:
+/// the core Google button and Apple's own [SignInWithAppleButton] (which ships
+/// Apple's official artwork, as their guidelines require). Apps pass their own
+/// [logo]/[title] so the same screen can front any app.
+class LoginScreen extends StatelessWidget {
+  /// Creates a [LoginScreen], optionally branded with a [logo] and [title].
+  const LoginScreen({this.logo, this.title, super.key});
 
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
+  /// Optional branding shown above the form, e.g. an [AppLogoMark].
+  final Widget? logo;
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  void _onLoginPressed() {
-    context.read<AuthBloc>().add(
-      AuthLoginRequested(
-        _emailController.text,
-        _passwordController.text,
-      ),
-    );
-  }
+  /// Optional headline, e.g. the app name.
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, state) {
+        final bloc = context.read<AuthBloc>();
+        // Apple's guidelines: dark UI -> white button; light UI -> black.
+        final appleStyle = Theme.of(context).brightness == Brightness.dark
+            ? SignInWithAppleButtonStyle.white
+            : SignInWithAppleButtonStyle.black;
+        return SignInView(
+          logo: logo,
+          title: title,
+          errorText: state.status == AuthStatus.failure ? state.error : null,
+          onEmailSignIn: (email, password) =>
+              bloc.add(AuthLoginRequested(email, password)),
+          socialButtons: [
+            SocialSignInButton.google(
+              onPressed: () => bloc.add(AuthGoogleSignInRequested()),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-            ),
-            const SizedBox(height: 24),
-            BlocBuilder<AuthBloc, AuthState>(
-              builder: (context, state) {
-                final error = state.error;
-                if (state.status == AuthStatus.failure && error != null) {
-                  return Text(
-                    error,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            const SizedBox(height: 8),
-            PrimaryButton(
-              label: 'Login with Email',
-              onPressed: _onLoginPressed,
+            SignInWithAppleButton(
+              onPressed: () => bloc.add(AuthAppleSignInRequested()),
+              text: 'Continue with Apple',
+              height: 48,
+              style: appleStyle,
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
