@@ -1,3 +1,4 @@
+import 'package:core_ui/core_ui.dart';
 import 'package:feature_grocery_list/src/domain/grocery_models.dart';
 import 'package:feature_grocery_list/src/ui/grocery_format.dart';
 import 'package:flutter/material.dart';
@@ -57,7 +58,14 @@ class PresenceBanner extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 4),
                   child: Tooltip(
                     message: shopper.collaborator.name,
-                    child: _MiniAvatar(who: shopper.collaborator),
+                    child: InitialsAvatar(
+                      initials: shopper.collaborator.initials,
+                      color: GroceryFormat.collaboratorColor(
+                        shopper.collaborator,
+                      ),
+                      radius: 12,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
               const SizedBox(width: 6),
@@ -83,28 +91,6 @@ class _LiveDot extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
-
-class _MiniAvatar extends StatelessWidget {
-  const _MiniAvatar({required this.who});
-
-  final Collaborator who;
-
-  @override
-  Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 12,
-      backgroundColor: GroceryFormat.collaboratorColor(who),
-      child: Text(
-        who.initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 }

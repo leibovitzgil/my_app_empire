@@ -99,7 +99,13 @@ class ListScreen extends StatelessWidget {
               ListStatus.loading => const Center(
                 child: CircularProgressIndicator(),
               ),
-              ListStatus.error => _ErrorView(message: state.error),
+              ListStatus.error => ErrorRetryView(
+                icon: Icons.wifi_off,
+                title: "Couldn't load the list",
+                message: state.error,
+                onRetry: () =>
+                    context.read<ListBloc>().add(const ListRetryRequested()),
+              ),
               ListStatus.ready => _ReadyBody(
                 state: state,
                 catalog: catalog ?? StaticItemCatalog(),
@@ -158,7 +164,17 @@ class _ListContent extends StatelessWidget {
     final done = list.done;
 
     if (active.isEmpty && (done.isEmpty || state.flagsOnly)) {
-      return _EmptyView(flagsOnly: state.flagsOnly);
+      return EmptyStateView(
+        icon: state.flagsOnly
+            ? Icons.flag_outlined
+            : Icons.shopping_basket_outlined,
+        title: state.flagsOnly
+            ? 'Nothing needs attention'
+            : 'Your list is empty',
+        message: state.flagsOnly
+            ? 'Long-press an item to flag it'
+            : 'Add the first item below',
+      );
     }
 
     final grouped = <ItemCategory, List<GroceryItem>>{};
@@ -264,82 +280,6 @@ class _CategoryHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.flagsOnly});
-
-  final bool flagsOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            flagsOnly ? Icons.flag_outlined : Icons.shopping_basket_outlined,
-            size: 72,
-            color: scheme.primary.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            flagsOnly ? 'Nothing needs attention' : 'Your list is empty',
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            flagsOnly
-                ? 'Long-press an item to flag it'
-                : 'Add the first item below',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message});
-
-  final String? message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_off, size: 48),
-            const SizedBox(height: 12),
-            Text("Couldn't load the list", style: theme.textTheme.titleMedium),
-            if (message != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                message!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: 'Try again',
-              onPressed: () =>
-                  context.read<ListBloc>().add(const ListRetryRequested()),
-            ),
-          ],
-        ),
       ),
     );
   }

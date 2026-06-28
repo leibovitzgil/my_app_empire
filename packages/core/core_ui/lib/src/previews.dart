@@ -27,25 +27,63 @@ Widget primaryButtonDisabledPreview() {
 
 @Preview(name: 'SocialSignInButton • Google')
 Widget socialGooglePreview() {
-  return SocialSignInButton(
-    label: 'Continue with Google',
-    leading: const Text(
-      'G',
-      style: TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 18,
-        color: Color(0xFF4285F4),
-      ),
-    ),
-    onPressed: () {},
-  );
+  return SocialSignInButton.google(onPressed: () {});
 }
 
 @Preview(name: 'SocialSignInButton • Apple')
 Widget socialApplePreview() {
-  return SocialSignInButton(
-    label: 'Continue with Apple',
-    icon: Icons.apple,
-    onPressed: () {},
+  return SocialSignInButton.apple(onPressed: () {});
+}
+
+@Preview(name: 'Brand logos')
+Widget brandLogosPreview() {
+  return const Row(
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [GoogleLogo(size: 40), AppleLogo(size: 40)],
+  );
+}
+
+@Preview(name: 'AppLogoMark')
+Widget appLogoMarkPreview() {
+  return const AppLogoMark(icon: Icons.shopping_cart_checkout);
+}
+
+@Preview(name: 'LabeledDivider')
+Widget labeledDividerPreview() {
+  return const LabeledDivider(label: 'or');
+}
+
+@Preview(name: 'InitialsAvatar')
+Widget initialsAvatarPreview() {
+  return const InitialsAvatar(initials: 'GL', color: Colors.indigo);
+}
+
+@Preview(name: 'EmptyStateView')
+Widget emptyStateViewPreview() {
+  return const EmptyStateView(
+    icon: Icons.shopping_basket_outlined,
+    title: 'Your list is empty',
+    message: 'Add the first item below',
+  );
+}
+
+@Preview(name: 'ErrorRetryView')
+Widget errorRetryViewPreview() {
+  return ErrorRetryView(
+    icon: Icons.wifi_off,
+    title: "Couldn't load the list",
+    message: 'Check your connection and try again.',
+    onRetry: () {},
+  );
+}
+
+@Preview(name: 'SignInView')
+Widget signInViewPreview() {
+  return SignInView(
+    title: 'Tandem',
+    logo: const AppLogoMark(icon: Icons.shopping_cart_checkout),
+    onEmailSignIn: (_, _) {},
+    onGoogleSignIn: () {},
+    onAppleSignIn: () {},
   );
 }

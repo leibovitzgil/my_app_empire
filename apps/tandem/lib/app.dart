@@ -78,6 +78,12 @@ class _RootFlowState extends State<_RootFlow> {
   }
 }
 
+/// Tandem's branding for the shared sign-in screen.
+const _loginScreen = LoginScreen(
+  title: 'Tandem',
+  logo: AppLogoMark(icon: Icons.shopping_cart_checkout),
+);
+
 class _AuthGate extends StatelessWidget {
   const _AuthGate();
 
@@ -91,8 +97,8 @@ class _AuthGate extends StatelessWidget {
             presence: getIt<PresenceRepository>(),
             currentUser: GrocerySeed.you,
           ),
-          AuthStatus.unauthenticated => const LoginScreen(),
-          AuthStatus.failure => const LoginScreen(),
+          AuthStatus.unauthenticated => _loginScreen,
+          AuthStatus.failure => _loginScreen,
         };
       },
     );

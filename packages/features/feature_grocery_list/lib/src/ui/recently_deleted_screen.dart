@@ -1,3 +1,4 @@
+import 'package:core_ui/core_ui.dart';
 import 'package:feature_grocery_list/src/bloc/list_bloc.dart';
 import 'package:feature_grocery_list/src/domain/grocery_models.dart';
 import 'package:feature_grocery_list/src/ui/grocery_format.dart';
@@ -19,7 +20,18 @@ class RecentlyDeletedScreen extends StatelessWidget {
         builder: (context, state) {
           final deleted = state.list?.deleted ?? const <GroceryItem>[];
           if (deleted.isEmpty) {
-            return const _EmptyDeleted();
+            return EmptyStateView(
+              icon: Icons.delete_outline,
+              iconSize: 64,
+              iconColor: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.3),
+              title: 'Nothing deleted recently',
+              message:
+                  'Items you or your co-shoppers remove show up here, so '
+                  'nothing is lost by accident.',
+              messagePadding: const EdgeInsets.symmetric(horizontal: 40),
+            );
           }
           return ListView(
             children: [
@@ -71,41 +83,6 @@ class _DeletedRow extends StatelessWidget {
               SnackBar(content: Text('${item.name} restored')),
             );
         },
-      ),
-    );
-  }
-}
-
-class _EmptyDeleted extends StatelessWidget {
-  const _EmptyDeleted();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.delete_outline,
-            size: 64,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: 12),
-          Text('Nothing deleted recently', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Items you or your co-shoppers remove show up here, so nothing '
-              'is lost by accident.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

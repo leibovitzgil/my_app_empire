@@ -1,3 +1,4 @@
+import 'package:core_ui/core_ui.dart';
 import 'package:feature_grocery_list/src/domain/grocery_models.dart';
 import 'package:feature_grocery_list/src/ui/grocery_format.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,9 @@ class ItemRow extends StatelessWidget {
 
   /// Called when the row is swiped away (delete).
   final VoidCallback onDelete;
+
+  Collaborator get _avatarPerson =>
+      item.status == ItemStatus.needed ? item.addedBy : item.statusBy;
 
   String get _attribution {
     if (item.status == ItemStatus.needed) {
@@ -174,10 +178,9 @@ class ItemRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _Avatar(
-                  who: item.status == ItemStatus.needed
-                      ? item.addedBy
-                      : item.statusBy,
+                InitialsAvatar(
+                  initials: _avatarPerson.initials,
+                  color: GroceryFormat.collaboratorColor(_avatarPerson),
                 ),
               ],
             ),
@@ -216,28 +219,6 @@ class _FlagChip extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.who});
-
-  final Collaborator who;
-
-  @override
-  Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 14,
-      backgroundColor: GroceryFormat.collaboratorColor(who),
-      child: Text(
-        who.initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }
