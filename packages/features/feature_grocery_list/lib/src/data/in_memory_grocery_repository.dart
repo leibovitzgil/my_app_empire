@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:core_utils/core_utils.dart';
 import 'package:feature_grocery_list/src/data/grocery_seed.dart';
+import 'package:feature_grocery_list/src/data/invite_identity.dart';
 import 'package:feature_grocery_list/src/data/static_item_catalog.dart';
 import 'package:feature_grocery_list/src/domain/grocery_models.dart';
 import 'package:feature_grocery_list/src/domain/grocery_repository.dart';
 import 'package:feature_grocery_list/src/domain/item_catalog.dart';
+import 'package:feature_grocery_list/src/domain/membership_repository.dart';
 import 'package:feature_grocery_list/src/domain/presence_repository.dart';
 
 /// An in-memory [GroceryRepository] + [PresenceRepository] that simulates
@@ -21,7 +23,7 @@ import 'package:feature_grocery_list/src/domain/presence_repository.dart';
 /// The whole class is the swap-to-Firestore seam: a real backend would
 /// implement the same two contracts and nothing above the data layer changes.
 class InMemoryGroceryRepository
-    implements GroceryRepository, PresenceRepository {
+    implements GroceryRepository, PresenceRepository, MembershipRepository {
   /// Creates an [InMemoryGroceryRepository].
   ///
   /// [demo] enables the simulated collaborator. [clock] and [catalog] are
@@ -34,6 +36,7 @@ class InMemoryGroceryRepository
        _now = clock ?? DateTime.now,
        _catalog = catalog ?? StaticItemCatalog() {
     _list = GrocerySeed.initialList(_now());
+    _seedMembers();
   }
 
   /// How long a shopper stays visible after their last heartbeat.
@@ -51,6 +54,11 @@ class InMemoryGroceryRepository
   final Map<String, DateTime> _lastSeen = <String, DateTime>{};
   final StreamController<List<Shopper>> _presenceController =
       StreamController<List<Shopper>>.broadcast();
+
+  final Map<String, ListMember> _members = <String, ListMember>{};
+  final StreamController<List<ListMember>> _membersController =
+      StreamController<List<ListMember>>.broadcast();
+  final List<Timer> _inviteTimers = <Timer>[];
 
   final List<Timer> _simTimers = <Timer>[];
   Timer? _ttlTimer;
@@ -153,6 +161,109 @@ class InMemoryGroceryRepository
     _emitPresence();
   }
 
+  // --- MembershipRepository --------------------------------------------------
+
+  @override
+  Stream<List<ListMember>> watchMembers() async* {
+    yield _membersList();
+    yield* _membersController.stream;
+  }
+
+  @override
+  Future<Result<ListMember>> inviteByEmail(
+    String email, {
+    MemberRole role = MemberRole.editor,
+  }) => Result.guard<ListMember>(() async => _inviteCore(email, role));
+
+  @override
+  Future<Result<void>> removeMember(String collaboratorId) =>
+      Result.guard<void>(() async => _removeMemberCore(collaboratorId));
+
+  @override
+  String inviteLink() => 'https://tandem.app/join/${GrocerySeed.listId}';
+
+  /// Seeds the starter household: you (owner) plus the two demo collaborators,
+  /// so the share sheet opens onto a real roster — and the simulated Dana is a
+  /// member, not a stranger.
+  void _seedMembers() {
+    final now = _now();
+    _members[GrocerySeed.you.id] = ListMember(
+      collaborator: GrocerySeed.you,
+      role: MemberRole.owner,
+      status: MemberStatus.active,
+      since: now.subtract(const Duration(days: 30)),
+    );
+    _members[GrocerySeed.dana.id] = ListMember(
+      collaborator: GrocerySeed.dana,
+      role: MemberRole.editor,
+      status: MemberStatus.active,
+      since: now.subtract(const Duration(days: 14)),
+    );
+    _members[GrocerySeed.sam.id] = ListMember(
+      collaborator: GrocerySeed.sam,
+      role: MemberRole.editor,
+      status: MemberStatus.active,
+      since: now.subtract(const Duration(days: 7)),
+    );
+  }
+
+  List<ListMember> _membersList() {
+    return _members.values.toList()..sort((a, b) => a.since.compareTo(b.since));
+  }
+
+  ListMember _inviteCore(String email, MemberRole role) {
+    if (!isValidEmail(email)) {
+      throw const MembershipException('Enter a valid email address');
+    }
+    final who = collaboratorForEmail(email);
+    final existing = _members[who.id];
+    if (existing != null) return existing;
+    final member = ListMember(
+      collaborator: who,
+      role: role,
+      status: MemberStatus.invited,
+      since: _now(),
+    );
+    _members[member.collaborator.id] = member;
+    _emitMembers();
+    _maybeSimulateAccept(member);
+    return member;
+  }
+
+  void _removeMemberCore(String collaboratorId) {
+    final member = _members[collaboratorId];
+    if (member == null) return;
+    if (member.isOwner) {
+      throw const MembershipException("The owner can't be removed");
+    }
+    _members.remove(collaboratorId);
+    _emitMembers();
+  }
+
+  void _emitMembers() {
+    if (!_membersController.isClosed) {
+      _membersController.add(_membersList());
+    }
+  }
+
+  // In the demo, a freshly invited person "accepts" after a short beat so the
+  // pending -> active transition is visible live (mirrors the Dana simulation).
+  // Off in tests (demo: false), so no timers leak and invites stay pending.
+  void _maybeSimulateAccept(ListMember invited) {
+    if (!_demo) return;
+    _inviteTimers.add(
+      Timer(const Duration(milliseconds: 2500), () {
+        final current = _members[invited.collaborator.id];
+        if (current == null || current.status != MemberStatus.invited) return;
+        _members[current.collaborator.id] = current.copyWith(
+          status: MemberStatus.active,
+          since: _now(),
+        );
+        _emitMembers();
+      }),
+    );
+  }
+
   /// Cancels timers and closes streams. Call from tests' tearDown; the app's
   /// get_it singleton lives for the process lifetime.
   Future<void> dispose() async {
@@ -160,9 +271,14 @@ class InMemoryGroceryRepository
       t.cancel();
     }
     _simTimers.clear();
+    for (final t in _inviteTimers) {
+      t.cancel();
+    }
+    _inviteTimers.clear();
     _ttlTimer?.cancel();
     await _listController.close();
     await _presenceController.close();
+    await _membersController.close();
   }
 
   // --- mutation core (sync, no Result) ---------------------------------------

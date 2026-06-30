@@ -62,6 +62,33 @@ GroceryItem itemFromMap(String id, Map<String, dynamic> data) {
   );
 }
 
+Map<String, dynamic> memberToMap(ListMember member) => <String, dynamic>{
+  'collaborator': collaboratorToMap(member.collaborator),
+  'role': member.role.name,
+  'status': member.status.name,
+  'since': Timestamp.fromDate(member.since),
+};
+
+ListMember memberFromMap(Map<String, dynamic> data) => ListMember(
+  collaborator: collaboratorFromMap(_asMap(data['collaborator'])),
+  role: roleFromName(data['role'] as String?),
+  status: memberStatusFromName(data['status'] as String?),
+  since: _dateFrom(data['since']),
+);
+
+/// Parses a [MemberRole] by name, defaulting to [MemberRole.editor].
+MemberRole roleFromName(String? name) => MemberRole.values.firstWhere(
+  (r) => r.name == name,
+  orElse: () => MemberRole.editor,
+);
+
+/// Parses a [MemberStatus] by name, defaulting to [MemberStatus.active].
+MemberStatus memberStatusFromName(String? name) =>
+    MemberStatus.values.firstWhere(
+      (s) => s.name == name,
+      orElse: () => MemberStatus.active,
+    );
+
 /// Parses an [ItemStatus] by name, defaulting to [ItemStatus.needed].
 ItemStatus statusFromName(String? name) => ItemStatus.values.firstWhere(
   (s) => s.name == name,

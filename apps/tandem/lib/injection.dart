@@ -28,12 +28,15 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   getIt.registerLazySingleton<AuthRepository>(MockAuthRepository.new);
 
   if (useFirebase) {
-    getIt.registerLazySingleton<GroceryRepository>(
-      () => FirestoreGroceryRepository(
-        firestore: FirebaseFirestore.instance,
-        listId: GrocerySeed.listId,
-      ),
+    // FirestoreGroceryRepository implements both the list and membership
+    // contracts (items + members live under the same household doc), so one
+    // instance is bound against both.
+    final grocery = FirestoreGroceryRepository(
+      firestore: FirebaseFirestore.instance,
+      listId: GrocerySeed.listId,
     );
+    getIt.registerSingleton<GroceryRepository>(grocery);
+    getIt.registerSingleton<MembershipRepository>(grocery);
     getIt.registerLazySingleton<PresenceRepository>(
       () => FirebasePresenceRepository(
         database: FirebaseDatabase.instance,
@@ -41,12 +44,13 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       ),
     );
   } else {
-    // One shared instance backs both contracts, so a write on any subscriber's
-    // stream is seen by all — this is what makes the simulated real-time sync
-    // (and the swap to Firebase) work.
+    // One shared instance backs all three contracts, so a write on any
+    // subscriber's stream is seen by all — this is what makes the simulated
+    // real-time sync (and the swap to Firebase) work.
     final grocery = InMemoryGroceryRepository();
     getIt.registerSingleton<GroceryRepository>(grocery);
     getIt.registerSingleton<PresenceRepository>(grocery);
+    getIt.registerSingleton<MembershipRepository>(grocery);
   }
   // generated:register — `create_feature/create_package --wire tandem` adds
   // registrations above this line. Do not remove this marker.

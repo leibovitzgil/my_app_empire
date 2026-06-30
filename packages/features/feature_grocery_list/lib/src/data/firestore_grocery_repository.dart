@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:feature_grocery_list/src/data/firestore_mappers.dart';
+import 'package:feature_grocery_list/src/data/invite_identity.dart';
 import 'package:feature_grocery_list/src/data/static_item_catalog.dart';
 import 'package:feature_grocery_list/src/domain/grocery_models.dart';
 import 'package:feature_grocery_list/src/domain/grocery_repository.dart';
 import 'package:feature_grocery_list/src/domain/item_catalog.dart';
+import 'package:feature_grocery_list/src/domain/membership_repository.dart';
 
 /// A [GroceryRepository] backed by Cloud Firestore. Real-time reads are just a
 /// `snapshots()` listener — the database does the fan-out, so there is no
@@ -12,10 +14,12 @@ import 'package:feature_grocery_list/src/domain/item_catalog.dart';
 /// reactions) run in transactions so concurrent shoppers don't clobber each
 /// other; the rest are field updates.
 ///
-/// Items live at `households/{listId}/items/{itemId}`. Bind this in an app's DI
-/// in place of `InMemoryGroceryRepository`; nothing above the data layer
-/// changes (the bloc depends only on [GroceryRepository]).
-class FirestoreGroceryRepository implements GroceryRepository {
+/// Items live at `households/{listId}/items/{itemId}` and members at
+/// `households/{listId}/members/{collaboratorId}`. Bind this in an app's DI in
+/// place of `InMemoryGroceryRepository`; nothing above the data layer changes
+/// (the blocs depend only on [GroceryRepository] / [MembershipRepository]).
+class FirestoreGroceryRepository
+    implements GroceryRepository, MembershipRepository {
   /// Creates a [FirestoreGroceryRepository].
   FirestoreGroceryRepository({
     required FirebaseFirestore firestore,
@@ -37,6 +41,9 @@ class FirestoreGroceryRepository implements GroceryRepository {
 
   CollectionReference<Map<String, dynamic>> get _items =>
       _firestore.collection('households').doc(_listId).collection('items');
+
+  CollectionReference<Map<String, dynamic>> get _members =>
+      _firestore.collection('households').doc(_listId).collection('members');
 
   @override
   Stream<GroceryList> watchList() {
@@ -197,6 +204,63 @@ class FirestoreGroceryRepository implements GroceryRepository {
       await batch.commit();
     });
   }
+
+  // --- MembershipRepository --------------------------------------------------
+
+  @override
+  Stream<List<ListMember>> watchMembers() {
+    return _members
+        .orderBy('since')
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => memberFromMap(doc.data())).toList(),
+        );
+  }
+
+  @override
+  Future<Result<ListMember>> inviteByEmail(
+    String email, {
+    MemberRole role = MemberRole.editor,
+  }) {
+    return Result.guard<ListMember>(() async {
+      if (!isValidEmail(email)) {
+        throw const MembershipException('Enter a valid email address');
+      }
+      final who = collaboratorForEmail(email);
+      final ref = _members.doc(who.id);
+      final existing = await ref.get();
+      final data = existing.data();
+      if (existing.exists && data != null) {
+        return memberFromMap(data);
+      }
+      final member = ListMember(
+        collaborator: who,
+        role: role,
+        status: MemberStatus.invited,
+        since: _now(),
+      );
+      await ref.set(memberToMap(member));
+      return member;
+    });
+  }
+
+  @override
+  Future<Result<void>> removeMember(String collaboratorId) {
+    return Result.guard<void>(() async {
+      final ref = _members.doc(collaboratorId);
+      final snapshot = await ref.get();
+      final data = snapshot.data();
+      if (!snapshot.exists || data == null) return;
+      if (memberFromMap(data).isOwner) {
+        throw const MembershipException("The owner can't be removed");
+      }
+      await ref.delete();
+    });
+  }
+
+  @override
+  String inviteLink() => 'https://tandem.app/join/$_listId';
 
   Map<String, dynamic> _statusUpdate(ItemStatus status, Collaborator by) {
     final now = Timestamp.fromDate(_now());

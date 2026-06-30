@@ -95,6 +95,7 @@ class _AuthGate extends StatelessWidget {
           AuthStatus.authenticated => GroceryListPage(
             repository: getIt<GroceryRepository>(),
             presence: getIt<PresenceRepository>(),
+            membership: getIt<MembershipRepository>(),
             currentUser: GrocerySeed.you,
           ),
           AuthStatus.unauthenticated => _loginScreen,

@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_grocery_list/src/bloc/list_bloc.dart';
+import 'package:feature_grocery_list/src/bloc/members_bloc.dart';
 import 'package:feature_grocery_list/src/bloc/presence_bloc.dart';
 import 'package:feature_grocery_list/src/data/static_item_catalog.dart';
 import 'package:feature_grocery_list/src/domain/grocery_models.dart';
 import 'package:feature_grocery_list/src/domain/grocery_repository.dart';
 import 'package:feature_grocery_list/src/domain/item_catalog.dart';
+import 'package:feature_grocery_list/src/domain/membership_repository.dart';
 import 'package:feature_grocery_list/src/domain/presence_repository.dart';
 import 'package:feature_grocery_list/src/ui/attention_summary.dart';
 import 'package:feature_grocery_list/src/ui/flag_sheet.dart';
@@ -14,6 +16,7 @@ import 'package:feature_grocery_list/src/ui/grocery_format.dart';
 import 'package:feature_grocery_list/src/ui/item_row.dart';
 import 'package:feature_grocery_list/src/ui/presence_banner.dart';
 import 'package:feature_grocery_list/src/ui/recently_deleted_screen.dart';
+import 'package:feature_grocery_list/src/ui/share_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -26,6 +29,7 @@ class GroceryListPage extends StatelessWidget {
   const GroceryListPage({
     required this.repository,
     required this.presence,
+    required this.membership,
     required this.currentUser,
     this.catalog,
     super.key,
@@ -36,6 +40,9 @@ class GroceryListPage extends StatelessWidget {
 
   /// The presence data source.
   final PresenceRepository presence;
+
+  /// The membership (sharing) data source.
+  final MembershipRepository membership;
 
   /// The current device user.
   final Collaborator currentUser;
@@ -54,6 +61,10 @@ class GroceryListPage extends StatelessWidget {
         BlocProvider<PresenceBloc>(
           create: (_) =>
               PresenceBloc(repository: presence, currentUser: currentUser),
+        ),
+        BlocProvider<MembersBloc>(
+          create: (_) =>
+              MembersBloc(repository: membership, currentUser: currentUser),
         ),
       ],
       child: ListScreen(catalog: catalog),
@@ -309,16 +320,21 @@ class _OverflowMenu extends StatelessWidget {
             );
           case 'clear_done':
             _clearDoneWithUndo(context, bloc, list);
-          case 'invite':
-            _copyInvite(context, list);
+          case 'share':
+            unawaited(
+              showShareSheet(
+                context: context,
+                bloc: context.read<MembersBloc>(),
+              ),
+            );
         }
       },
       itemBuilder: (context) => const [
         PopupMenuItem<String>(
-          value: 'invite',
+          value: 'share',
           child: ListTile(
             leading: Icon(Icons.person_add_alt),
-            title: Text('Invite member'),
+            title: Text('Share list'),
           ),
         ),
         PopupMenuItem<String>(
@@ -362,16 +378,6 @@ class _OverflowMenu extends StatelessWidget {
             },
           ),
         ),
-      );
-  }
-
-  void _copyInvite(BuildContext context, GroceryList list) {
-    final link = 'https://tandem.app/join/${list.id}';
-    unawaited(Clipboard.setData(ClipboardData(text: link)));
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(content: Text('Invite link copied to clipboard')),
       );
   }
 }

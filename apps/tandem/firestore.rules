@@ -1,12 +1,46 @@
 rules_version = '2';
 
-// NOTE: permissive rules for local development / the emulator. Lock these down
-// before any production deploy (e.g. require auth and restrict to household
-// members).
+// Tandem grocery lists live under households/{listId}. "Sharing" means: only
+// members of a household may read or write it. The membership roster the app
+// maintains at households/{listId}/members/{collaboratorId} is the source of
+// truth for access — the same data the share sheet renders.
+//
+// NOTE: the active rules below are permissive for local development / the
+// emulator (lib/main_emulator.dart runs unauthenticated). Before any real
+// deploy, swap in the commented production block: it restricts every household
+// — its items AND its member roster — to that household's members, keyed by the
+// signed-in uid. (This is the canonical Firestore "users and groups" pattern.)
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
       allow read, write: if true;
     }
   }
+
+  // --- Production: restrict each household to its members ---------------------
+  // function isMember(listId) {
+  //   return request.auth != null && exists(
+  //     /databases/$(database)/documents/households/$(listId)/members/$(request.auth.uid)
+  //   );
+  // }
+  // function isOwner(listId) {
+  //   return isMember(listId) && get(
+  //     /databases/$(database)/documents/households/$(listId)/members/$(request.auth.uid)
+  //   ).data.role == 'owner';
+  // }
+  // match /households/{listId} {
+  //   allow read, write: if isMember(listId);
+  //
+  //   match /items/{itemId} {
+  //     allow read, write: if isMember(listId);
+  //   }
+  //
+  //   match /members/{memberId} {
+  //     // Any member can see the roster and invite others...
+  //     allow read, create: if isMember(listId);
+  //     // ...but only an owner (or the member themselves) can remove a member.
+  //     allow delete: if isMember(listId) &&
+  //       (memberId == request.auth.uid || isOwner(listId));
+  //   }
+  // }
 }
