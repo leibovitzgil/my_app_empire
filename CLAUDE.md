@@ -168,8 +168,12 @@ flesh out the repository/bloc, and wire it into an app (path dependency + DI).
   the relevant one. Design/review agents are read-only; only the builder and QA
   write code.
 - **Skills** (`.claude/skills/`): `new-app`, `new-feature`, `workspace-check`,
-  `run-app`, `golden`, `flutter-e2e`, and `widget-preview` encode these
-  workflows as slash-commands.
+  `run-app`, `golden`, `flutter-e2e`, `widget-preview`, and `screenshot` encode
+  these workflows as slash-commands. `screenshot` builds an app for web and
+  drives it with the pre-installed Playwright Chromium to capture real,
+  readable screenshots of a live flow in this headless container — use it for
+  visual feedback or to review your own UI work, versus `golden`'s exact but
+  unreadable-text widget diffs.
 - **Reference app** (`apps/showcase`): a runnable composition (mock/simulated
   backends, no Firebase) — the golden example for wiring capabilities together.
 - **Dart MCP server** (`.mcp.json`): wires the official `dart mcp-server` into
@@ -201,6 +205,11 @@ right:
 - **Web engine** (`tool/web_e2e.sh`): drives the built web app in headless
   Chrome with screenshots. Wired but has prerequisites — see
   [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+- **Live screenshots** (skill: `screenshot`): builds any app for web and drives
+  it with the pre-installed Playwright Chromium — a lower-prerequisite
+  alternative to `tool/web_e2e.sh` for capturing real, human-readable
+  screenshots of a live flow (not just widget-level golden diffs) for visual
+  review by a human or the agent itself.
 - **Pre-commit hook** (`.githooks/pre-commit`): runs format-check + lint. Enable
   with `melos run install-hooks`; bypass once with `git commit --no-verify`.
 - **SessionStart hook** (`.claude/hooks/session-start.sh`): installs Flutter and

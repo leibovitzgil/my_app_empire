@@ -24,6 +24,7 @@ void main() {
           home: GroceryListPage(
             repository: repo,
             presence: repo,
+            membership: repo,
             currentUser: me,
           ),
         ),

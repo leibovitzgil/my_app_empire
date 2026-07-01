@@ -24,7 +24,8 @@ void main() {
       ..registerSingleton<LocalStorageService>(storage)
       ..registerLazySingleton<AuthRepository>(MockAuthRepository.new)
       ..registerSingleton<GroceryRepository>(grocery)
-      ..registerSingleton<PresenceRepository>(grocery);
+      ..registerSingleton<PresenceRepository>(grocery)
+      ..registerSingleton<MembershipRepository>(grocery);
 
     await tester.pumpWidget(const TandemApp());
     await tester.pumpAndSettle();

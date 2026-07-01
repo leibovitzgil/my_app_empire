@@ -45,11 +45,14 @@ The product lives in `packages/features/feature_grocery_list`, mirroring the
 - **Entities** (`grocery_models.dart`): `Collaborator`, `GroceryItem`
   (`status`, `statusBy`/`statusAt` attribution, `flag`/`flagBy`, `reactions`,
   `isDeleted` tombstone), `GroceryList` (active/done/deleted/attention helpers),
-  `Shopper`, and the `ItemStatus` / `ItemFlag` / `ItemCategory` enums. All
-  immutable `Equatable` value types with `copyWith`.
+  `Shopper`, `ListMember` (`role` owner/editor, `status` active/invited,
+  `since`), and the `ItemStatus` / `ItemFlag` / `ItemCategory` / `MemberRole` /
+  `MemberStatus` enums. All immutable `Equatable` value types with `copyWith`.
 - **Contracts**: `GroceryRepository` (a `Stream<GroceryList>` for real-time reads
   + `Result<T>`-returning mutations), `PresenceRepository` (live shoppers),
-  `ItemCatalog` (suggestions + categorization). The blocs depend only on these.
+  `MembershipRepository` (the share roster — watch members, invite by email,
+  remove, invite link), `ItemCatalog` (suggestions + categorization). The blocs
+  depend only on these.
 
 ### Real-time data (`data/`)
 
@@ -78,14 +81,33 @@ shoppers are pruned so the banner never goes stale.
   status cycle/undo, flag/clear, react, delete/restore, clear-done, and the
   attention filter.
 - **`PresenceBloc`** is kept separate so heartbeat churn never rebuilds the list.
+- **`MembersBloc`** drives the share roster the same way (subscribes to
+  `watchMembers()`), forwarding invite/remove actions and surfacing a transient
+  success/error message. Kept separate so the (infrequent) membership stream
+  never rebuilds the list either.
+
+### Sharing (membership)
+
+A list isn't shared by "whoever has the link" — it has an explicit **member
+roster**. Each `ListMember` is a `Collaborator` plus a `role` (owner/editor) and
+a `status` (active/invited). The **Share list** sheet (overflow → *Share list*,
+`share_sheet.dart`) renders the roster, adds a person **by email** (which
+creates a `invited` member — synthesised into a stable identity by
+`invite_identity.dart`), removes members (the owner is protected), and copies an
+invite link. In the in-memory demo an invited person "accepts" after a beat so
+the *pending → active* transition is visible live, just like the Dana presence
+sim. On Firebase, members live at `households/{listId}/members/{collaboratorId}`
+and `firestore.rules` carries the (commented) members-gated production ruleset
+that restricts each household — items and roster — to its members.
 
 ### UI (`ui/`)
 
 Feature-local widgets (too domain-specific for `core_ui`): `ItemRow` (status icon
 + name + attribution chip + flag chip + reaction row; tap to advance, long-press
 to flag, swipe to delete), `PresenceBanner`, `AttentionSummary`,
-`flag_sheet`, `ListScreen`, and `RecentlyDeletedScreen`. `GroceryListPage` wires
-the two blocs for the app.
+`flag_sheet`, `ShareSheet` (the member roster + invite-by-email),
+`ListScreen`, and `RecentlyDeletedScreen`. `GroceryListPage` wires the three
+blocs (`ListBloc` + `PresenceBloc` + `MembersBloc`) for the app.
 
 ## Dependency injection
 

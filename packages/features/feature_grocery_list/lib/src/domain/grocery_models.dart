@@ -280,3 +280,68 @@ class Shopper extends Equatable {
   @override
   List<Object?> get props => [collaborator];
 }
+
+/// What a member is allowed to do on a shared list.
+enum MemberRole {
+  /// Created the list; can manage members and cannot be removed.
+  owner,
+
+  /// Can view and edit the list and its items.
+  editor,
+}
+
+/// Whether a member has joined the list or is still a pending invite.
+enum MemberStatus {
+  /// Has accepted and is collaborating.
+  active,
+
+  /// Invited but has not joined yet.
+  invited,
+}
+
+/// A person's membership of a shared list: who they are, what they can do, and
+/// whether they've joined yet. This is the roster the share sheet renders, and
+/// the access list a backend would enforce. Kept separate from [Shopper]
+/// (live presence) — membership is durable, presence is ephemeral.
+class ListMember extends Equatable {
+  /// Creates a [ListMember].
+  const ListMember({
+    required this.collaborator,
+    required this.role,
+    required this.status,
+    required this.since,
+  });
+
+  /// The person.
+  final Collaborator collaborator;
+
+  /// What they can do.
+  final MemberRole role;
+
+  /// Whether they've joined or are still pending.
+  final MemberStatus status;
+
+  /// When they joined (active) or were invited (invited).
+  final DateTime since;
+
+  /// Whether this member owns the list (cannot be removed).
+  bool get isOwner => role == MemberRole.owner;
+
+  /// Whether this member is an invite that hasn't been accepted yet.
+  bool get isPending => status == MemberStatus.invited;
+
+  /// Returns a copy with the given overrides (identity never changes).
+  ListMember copyWith({
+    MemberRole? role,
+    MemberStatus? status,
+    DateTime? since,
+  }) => ListMember(
+    collaborator: collaborator,
+    role: role ?? this.role,
+    status: status ?? this.status,
+    since: since ?? this.since,
+  );
+
+  @override
+  List<Object?> get props => [collaborator, role, status, since];
+}
