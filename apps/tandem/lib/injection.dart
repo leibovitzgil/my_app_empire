@@ -10,6 +10,7 @@ import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:tandem/data/mock_auth_repository.dart';
 import 'package:tandem/data/tandem_deep_link_parser.dart';
+import 'package:user_roles/user_roles.dart';
 
 /// The app's service locator.
 final GetIt getIt = GetIt.instance;
@@ -45,6 +46,12 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
         listId: GrocerySeed.listId,
       ),
     );
+    getIt.registerLazySingleton<UserRoleRepository>(
+      () => FirestoreUserRoleRepository(
+        firestore: FirebaseFirestore.instance,
+        userIdStream: getIt<AuthRepository>().user,
+      ),
+    );
   } else {
     // One shared instance backs all three contracts, so a write on any
     // subscriber's stream is seen by all — this is what makes the simulated
@@ -53,6 +60,12 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt.registerSingleton<GroceryRepository>(grocery);
     getIt.registerSingleton<PresenceRepository>(grocery);
     getIt.registerSingleton<MembershipRepository>(grocery);
+    getIt.registerLazySingleton<UserRoleRepository>(
+      () => LocalUserRoleRepository(
+        storage: getIt<LocalStorageService>(),
+        userIdStream: getIt<AuthRepository>().user,
+      ),
+    );
   }
   getIt.registerLazySingleton<DeepLinkService>(
     () => AppLinksDeepLinkService(parser: tandemDeepLinkParser),

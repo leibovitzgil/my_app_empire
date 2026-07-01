@@ -28,6 +28,8 @@ dependencies:
   get_it: ^9.2.1
   local_storage:
     path: ../../packages/core/local_storage
+  user_roles:
+    path: ../../packages/core/user_roles
 
 dev_dependencies:
   flutter_test:

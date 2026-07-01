@@ -10,6 +10,7 @@ import 'package:monetization/monetization.dart';
 import 'package:showcase/data/mock_auth_repository.dart';
 import 'package:showcase/data/showcase_deep_link_parser.dart';
 import 'package:showcase/data/simulated_notification_permission_gateway.dart';
+import 'package:user_roles/user_roles.dart';
 
 /// The app's service locator.
 final GetIt getIt = GetIt.instance;
@@ -21,6 +22,12 @@ Future<void> configureDependencies() async {
   final storage = await LocalStorageService.init();
   getIt.registerSingleton<LocalStorageService>(storage);
   getIt.registerLazySingleton<AuthRepository>(MockAuthRepository.new);
+  getIt.registerLazySingleton<UserRoleRepository>(
+    () => LocalUserRoleRepository(
+      storage: getIt<LocalStorageService>(),
+      userIdStream: getIt<AuthRepository>().user,
+    ),
+  );
   getIt.registerLazySingleton<MonetizationService>(
     SimulatedMonetizationService.new,
   );

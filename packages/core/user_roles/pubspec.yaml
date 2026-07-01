@@ -1,0 +1,25 @@
+name: user_roles
+description: App-wide role-based access control (RBAC).
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  cloud_firestore: ^6.0.0
+  core_utils:
+    path: ../core_utils
+  equatable: ^2.0.5
+  flutter:
+    sdk: flutter
+  local_storage:
+    path: ../local_storage
+
+dev_dependencies:
+  fake_cloud_firestore: ^4.0.0
+  flutter_test:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+  very_good_analysis: ^10.3.0
