@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:app_template/injection.dart';
+import 'package:app_template/routing/go_router_refresh_stream.dart';
 import 'package:core_ui/core_ui.dart';
+import 'package:core_utils/core_utils.dart';
+import 'package:deep_linking/deep_linking.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -17,40 +22,91 @@ class App extends StatelessWidget {
   }
 }
 
-class AppView extends StatelessWidget {
+class AppView extends StatefulWidget {
   const AppView({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // A minimal router that picks the screen from auth state. `context.watch`
-    // rebuilds this builder when AuthBloc emits, so no GoRouterRefreshStream is
-    // needed for this simple single-route setup.
-    final router = GoRouter(
+  State<AppView> createState() => _AppViewState();
+}
+
+class _AppViewState extends State<AppView> {
+  final DeepLinkService _deepLinks = getIt<DeepLinkService>();
+  late final GoRouterRefreshStream _refreshStream;
+  late final GoRouter _router;
+  DeepLinkIntent? _pendingIntent;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStream = GoRouterRefreshStream(_deepLinks.onIntent);
+    _router = GoRouter(
+      refreshListenable: _refreshStream,
+      redirect: _redirect,
       routes: [
+        GoRoute(path: '/', builder: (context, state) => const _RootScreen()),
         GoRoute(
-          path: '/',
-          builder: (context, state) {
-            // A simple check here just for demonstration.
-            // Real apps use redirect logic.
-            final authState = context.watch<AuthBloc>().state;
-            if (authState.status == AuthStatus.authenticated) {
-              return const HomeScreen();
-            } else {
-              return const LoginScreen(
-                title: 'App Template',
-                logo: AppLogoMark(icon: Icons.flutter_dash),
-              );
-            }
-          },
+          path: '/home',
+          builder: (context, state) => const HomeScreen(),
         ),
       ],
     );
+    _deepLinks.onIntent.listen((result) {
+      if (result case Success<DeepLinkIntent>(:final value)) {
+        setState(() => _pendingIntent = value);
+      }
+    });
+    unawaited(_seedInitialIntent());
+  }
 
+  Future<void> _seedInitialIntent() async {
+    final result = await _deepLinks.getInitialIntent();
+    if (result case Success<DeepLinkIntent>(:final value)) {
+      setState(() => _pendingIntent = value);
+    }
+  }
+
+  // The factory's reference redirect-wiring pattern for deep links.
+  String? _redirect(BuildContext context, GoRouterState state) {
+    final pending = _pendingIntent;
+    if (pending != null && pending.location != state.matchedLocation) {
+      _pendingIntent = null;
+      return pending.location;
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    _refreshStream.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      routerConfig: router,
+      routerConfig: _router,
     );
+  }
+}
+
+class _RootScreen extends StatelessWidget {
+  const _RootScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    // A simple check here just for demonstration.
+    // Real apps use redirect logic.
+    final authState = context.watch<AuthBloc>().state;
+    if (authState.status == AuthStatus.authenticated) {
+      return const HomeScreen();
+    } else {
+      return const LoginScreen(
+        title: 'App Template',
+        logo: AppLogoMark(icon: Icons.flutter_dash),
+      );
+    }
   }
 }
 

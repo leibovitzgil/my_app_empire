@@ -9,6 +9,10 @@ environment:
 dependencies:
   core_ui:
     path: ../../packages/core/core_ui
+  core_utils:
+    path: ../../packages/core/core_utils
+  deep_linking:
+    path: ../../packages/services/deep_linking
   feature_auth:
     path: ../../packages/features/feature_auth
   flutter:
