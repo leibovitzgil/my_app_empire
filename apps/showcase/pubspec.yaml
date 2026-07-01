@@ -31,6 +31,8 @@ dependencies:
     path: ../../packages/core/monetization
   notifications:
     path: ../../packages/services/notifications
+  user_roles:
+    path: ../../packages/core/user_roles
 
 dev_dependencies:
   flutter_test:

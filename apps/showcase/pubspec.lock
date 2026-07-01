@@ -786,6 +786,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  user_roles:
+    dependency: "direct main"
+    description:
+      path: "../../packages/core/user_roles"
+      relative: true
+    source: path
+    version: "0.0.1"
   vector_graphics:
     dependency: transitive
     description:

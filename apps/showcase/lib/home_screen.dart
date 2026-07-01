@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:monetization/monetization.dart';
 import 'package:showcase/injection.dart';
+import 'package:user_roles/user_roles.dart';
 
 /// The signed-in home screen, with an entry point into the paywall.
 class HomeScreen extends StatelessWidget {
@@ -72,6 +73,14 @@ class HomeScreen extends StatelessWidget {
               onPressed: () =>
                   context.read<AuthBloc>().add(AuthLogoutRequested()),
               child: const Text('Sign out'),
+            ),
+            PermissionGate(
+              repository: getIt<UserRoleRepository>(),
+              permission: Permissions.viewAdminPanel,
+              child: const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Chip(label: Text('Admin panel unlocked')),
+              ),
             ),
           ],
         ),
