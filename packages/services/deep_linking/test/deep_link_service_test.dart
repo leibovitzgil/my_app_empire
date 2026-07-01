@@ -48,6 +48,57 @@ void main() {
         isA<UnrecognizedLinkException>(),
       );
     });
+
+    test('a well-formed URI with no matching route is a ResultFailure, '
+        'never a thrown exception', () {
+      expect(
+        () => service.parse(Uri.parse('https://example.com/nowhere')),
+        returnsNormally,
+      );
+    });
+
+    test('propagates a parser that throws as an UnrecognizedLinkException '
+        'ResultFailure instead of letting it escape', () {
+      final throwingService = AppLinksDeepLinkService(
+        parser: (uri) => throw StateError('boom'),
+      );
+      addTearDown(throwingService.dispose);
+
+      final result = throwingService.parse(Uri.parse('https://example.com'));
+
+      expect(result, isA<ResultFailure<DeepLinkIntent>>());
+      expect(
+        (result as ResultFailure<DeepLinkIntent>).error,
+        isA<UnrecognizedLinkException>(),
+      );
+    });
+
+    test('path matching is case-sensitive (app-parser responsibility)', () {
+      final result = service.parse(Uri.parse('https://example.com/HOME'));
+
+      expect(result, isA<ResultFailure<DeepLinkIntent>>());
+    });
+
+    test('a fragment does not interfere with path matching', () {
+      final result = service.parse(
+        Uri.parse('https://example.com/home#section'),
+      );
+
+      expect(result, isA<Success<DeepLinkIntent>>());
+    });
+
+    test('an empty query string does not interfere with path matching', () {
+      final result = service.parse(Uri.parse('https://example.com/home?'));
+
+      expect(result, isA<Success<DeepLinkIntent>>());
+    });
+
+    test('the scheme is treated case-insensitively by Uri parsing itself', () {
+      final uri = Uri.parse('HTTPS://example.com/home');
+
+      expect(uri.scheme, 'https');
+      expect(service.parse(uri), isA<Success<DeepLinkIntent>>());
+    });
   });
 
   group('parseRaw', () {
@@ -116,6 +167,24 @@ void main() {
 
       expect(a == b, isFalse);
       expect(a == c, isFalse);
+    });
+
+    test('parameters is unmodifiable', () {
+      const intent = DeepLinkIntent(
+        location: '/home',
+        parameters: {'id': '1'},
+      );
+
+      expect(
+        () => intent.parameters['id'] = 'mutated',
+        throwsUnsupportedError,
+      );
+    });
+
+    test('empty query params default to an empty, not null, map', () {
+      const intent = DeepLinkIntent(location: '/home');
+
+      expect(intent.parameters, isEmpty);
     });
   });
 }

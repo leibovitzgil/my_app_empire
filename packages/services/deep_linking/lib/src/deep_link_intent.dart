@@ -9,14 +9,21 @@ import 'package:flutter/foundation.dart';
 class DeepLinkIntent {
   const DeepLinkIntent({
     required this.location,
-    this.parameters = const {},
-  });
+    Map<String, String> parameters = const {},
+  }) : _parameters = parameters;
 
   /// The destination the app should navigate to.
   final String location;
 
+  final Map<String, String> _parameters;
+
   /// Extra parameters extracted from the link (query params, path segments).
-  final Map<String, String> parameters;
+  ///
+  /// Always unmodifiable: exposed as a defensive, unmodifiable view over
+  /// whatever map the caller passed in, so neither external mutation of the
+  /// source map nor direct mutation of [parameters] can violate this class's
+  /// [immutable] contract.
+  Map<String, String> get parameters => Map.unmodifiable(_parameters);
 
   @override
   bool operator ==(Object other) {

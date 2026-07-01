@@ -15,6 +15,7 @@ dependencies:
     sdk: flutter
 
 dev_dependencies:
+  app_links_platform_interface: ^2.0.3
   flutter_test:
     sdk: flutter
   very_good_analysis: ^10.3.0

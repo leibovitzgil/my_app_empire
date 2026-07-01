@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:app_template/injection.dart';
-import 'package:app_template/routing/go_router_refresh_stream.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
@@ -31,16 +30,14 @@ class AppView extends StatefulWidget {
 
 class _AppViewState extends State<AppView> {
   final DeepLinkService _deepLinks = getIt<DeepLinkService>();
-  late final GoRouterRefreshStream _refreshStream;
+  late final StreamSubscription<Result<DeepLinkIntent>> _intentSubscription;
   late final GoRouter _router;
   DeepLinkIntent? _pendingIntent;
 
   @override
   void initState() {
     super.initState();
-    _refreshStream = GoRouterRefreshStream(_deepLinks.onIntent);
     _router = GoRouter(
-      refreshListenable: _refreshStream,
       redirect: _redirect,
       routes: [
         GoRoute(path: '/', builder: (context, state) => const _RootScreen()),
@@ -50,9 +47,17 @@ class _AppViewState extends State<AppView> {
         ),
       ],
     );
-    _deepLinks.onIntent.listen((result) {
+    // A single subscription drives both updating `_pendingIntent` and
+    // triggering go_router to re-run `_redirect`, in that order. Splitting
+    // this into two independent subscriptions (e.g. a `GoRouterRefreshStream`
+    // wired as `refreshListenable` alongside this listener) is racy: for a
+    // broadcast stream, listeners fire in subscription order, so the
+    // refresh-triggered redirect check could run before `_pendingIntent` is
+    // actually set, silently dropping the very first navigation.
+    _intentSubscription = _deepLinks.onIntent.listen((result) {
       if (result case Success<DeepLinkIntent>(:final value)) {
         setState(() => _pendingIntent = value);
+        _router.refresh();
       }
     });
     unawaited(_seedInitialIntent());
@@ -62,6 +67,7 @@ class _AppViewState extends State<AppView> {
     final result = await _deepLinks.getInitialIntent();
     if (result case Success<DeepLinkIntent>(:final value)) {
       setState(() => _pendingIntent = value);
+      _router.refresh();
     }
   }
 
@@ -77,7 +83,7 @@ class _AppViewState extends State<AppView> {
 
   @override
   void dispose() {
-    _refreshStream.dispose();
+    unawaited(_intentSubscription.cancel());
     super.dispose();
   }
 
