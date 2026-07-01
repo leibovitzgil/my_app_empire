@@ -2,12 +2,14 @@
 // are written as standalone statements rather than a cascade.
 // ignore_for_file: cascade_invocations
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:deep_linking/deep_linking.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_grocery_list/feature_grocery_list.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:tandem/data/mock_auth_repository.dart';
+import 'package:tandem/data/tandem_deep_link_parser.dart';
 
 /// The app's service locator.
 final GetIt getIt = GetIt.instance;
@@ -52,6 +54,9 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt.registerSingleton<PresenceRepository>(grocery);
     getIt.registerSingleton<MembershipRepository>(grocery);
   }
+  getIt.registerLazySingleton<DeepLinkService>(
+    () => AppLinksDeepLinkService(parser: tandemDeepLinkParser),
+  );
   // generated:register — `create_feature/create_package --wire tandem` adds
   // registrations above this line. Do not remove this marker.
 }

@@ -1,3 +1,4 @@
+import 'package:deep_linking/deep_linking.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_grocery_list/feature_grocery_list.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tandem/app.dart';
 import 'package:tandem/data/mock_auth_repository.dart';
 import 'package:tandem/injection.dart';
+
+import 'fake_deep_link_service.dart';
 
 void main() {
   tearDown(() async => getIt.reset());
@@ -19,13 +22,16 @@ void main() {
       clock: () => DateTime(2026, 6, 28, 12),
     );
     addTearDown(grocery.dispose);
+    final fakeDeepLinks = FakeDeepLinkService();
+    addTearDown(fakeDeepLinks.dispose);
 
     getIt
       ..registerSingleton<LocalStorageService>(storage)
       ..registerLazySingleton<AuthRepository>(MockAuthRepository.new)
       ..registerSingleton<GroceryRepository>(grocery)
       ..registerSingleton<PresenceRepository>(grocery)
-      ..registerSingleton<MembershipRepository>(grocery);
+      ..registerSingleton<MembershipRepository>(grocery)
+      ..registerLazySingleton<DeepLinkService>(() => fakeDeepLinks);
 
     await tester.pumpWidget(const TandemApp());
     await tester.pumpAndSettle();

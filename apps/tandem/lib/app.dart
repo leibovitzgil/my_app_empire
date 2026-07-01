@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:core_ui/core_ui.dart';
+import 'package:core_utils/core_utils.dart';
+import 'package:deep_linking/deep_linking.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_grocery_list/feature_grocery_list.dart';
 import 'package:feature_onboarding/feature_onboarding.dart';
@@ -59,6 +63,43 @@ class _RootFlowState extends State<_RootFlow> {
   late bool _onboarded =
       getIt<LocalStorageService>().getBool(OnboardingBloc.completedKey) ??
       false;
+  final DeepLinkService _deepLinks = getIt<DeepLinkService>();
+  late final StreamSubscription<Result<DeepLinkIntent>> _intentSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _intentSubscription = _deepLinks.onIntent.listen(_handleIntentResult);
+    unawaited(_seedInitialIntent());
+  }
+
+  Future<void> _seedInitialIntent() async {
+    final result = await _deepLinks.getInitialIntent();
+    if (result case Success<DeepLinkIntent>()) {
+      _handleIntentResult(result);
+    }
+  }
+
+  void _handleIntentResult(Result<DeepLinkIntent> result) {
+    // Arriving via a recognized deep link (e.g. a household invite link)
+    // means the person already has context, so the marketing onboarding
+    // carousel should be skipped, exactly like a returning user.
+    if (result case Success<DeepLinkIntent>() when !_onboarded) {
+      unawaited(
+        getIt<LocalStorageService>().setBool(
+          OnboardingBloc.completedKey,
+          true,
+        ),
+      );
+      setState(() => _onboarded = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_intentSubscription.cancel());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
