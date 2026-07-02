@@ -21,6 +21,8 @@ dependencies:
     path: ../../packages/features/feature_paywall
   feature_settings:
     path: ../../packages/features/feature_settings
+  feedback_form:
+    path: ../../packages/core/feedback_form
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1

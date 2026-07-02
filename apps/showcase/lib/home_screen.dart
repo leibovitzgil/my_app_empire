@@ -4,6 +4,7 @@ import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_paywall/feature_paywall.dart';
 import 'package:feature_settings/feature_settings.dart';
+import 'package:feedback_form/feedback_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:monetization/monetization.dart';
@@ -25,6 +26,15 @@ class HomeScreen extends StatelessWidget {
             child: const PaywallScreen(),
           ),
         ),
+      ),
+    );
+  }
+
+  void _openFeedback(BuildContext context) {
+    unawaited(
+      showFeedbackDialog(
+        context,
+        repository: getIt<FeedbackRepository>(),
       ),
     );
   }
@@ -69,6 +79,10 @@ class HomeScreen extends StatelessWidget {
               onPressed: () => _openPaywall(context),
             ),
             const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => _openFeedback(context),
+              child: const Text('Send Feedback'),
+            ),
             TextButton(
               onPressed: () =>
                   context.read<AuthBloc>().add(AuthLogoutRequested()),
