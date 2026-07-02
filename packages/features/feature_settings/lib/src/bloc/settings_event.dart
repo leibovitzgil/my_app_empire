@@ -28,3 +28,8 @@ final class SettingsPushToggled extends SettingsEvent {
 final class SettingsOpenSystemSettingsRequested extends SettingsEvent {
   const SettingsOpenSystemSettingsRequested();
 }
+
+/// The user asked to restore previous purchases.
+final class SettingsRestorePurchasesRequested extends SettingsEvent {
+  const SettingsRestorePurchasesRequested();
+}

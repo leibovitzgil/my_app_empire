@@ -148,5 +148,100 @@ void main() {
       expect(find.text('Something went wrong.'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
+
+    // Restore-purchases tile is always present, per App Store guideline 3.1.1.
+    testWidgets('renders the Restore purchases tile', (tester) async {
+      await pump(tester, const SettingsState.loaded(pushEnabled: false));
+
+      expect(find.text('Restore purchases'), findsOneWidget);
+      expect(find.byIcon(Icons.restore), findsOneWidget);
+    });
+
+    testWidgets(
+      'tapping Restore purchases dispatches '
+      'SettingsRestorePurchasesRequested',
+      (tester) async {
+        await pump(tester, const SettingsState.loaded(pushEnabled: false));
+
+        await tester.tap(find.text('Restore purchases'));
+        await tester.pump();
+
+        verify(
+          () => bloc.add(const SettingsRestorePurchasesRequested()),
+        ).called(1);
+      },
+    );
+
+    testWidgets(
+      'restoring: shows a progress indicator and disables the tile',
+      (tester) async {
+        await pump(
+          tester,
+          const SettingsState.loaded(
+            pushEnabled: false,
+            restoreStatus: SettingsRestoreStatus.restoring,
+          ),
+        );
+
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        final tile = tester.widget<ListTile>(
+          find.widgetWithText(ListTile, 'Restore purchases'),
+        );
+        expect(tile.onTap, isNull);
+      },
+    );
+
+    testWidgets('restore success shows a confirmation snackbar', (
+      tester,
+    ) async {
+      whenListen(
+        bloc,
+        Stream<SettingsState>.fromIterable([
+          const SettingsState.loaded(
+            pushEnabled: false,
+            restoreStatus: SettingsRestoreStatus.success,
+          ),
+        ]),
+        initialState: const SettingsState.loaded(pushEnabled: false),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: _theme,
+          home: BlocProvider<SettingsBloc>.value(
+            value: bloc,
+            child: const SettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Purchases restored.'), findsOneWidget);
+    });
+
+    testWidgets('restore failure shows the error snackbar', (tester) async {
+      whenListen(
+        bloc,
+        Stream<SettingsState>.fromIterable([
+          const SettingsState.loaded(
+            pushEnabled: false,
+            restoreStatus: SettingsRestoreStatus.failure,
+            restoreError: 'Nothing to restore.',
+          ),
+        ]),
+        initialState: const SettingsState.loaded(pushEnabled: false),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: _theme,
+          home: BlocProvider<SettingsBloc>.value(
+            value: bloc,
+            child: const SettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Nothing to restore.'), findsOneWidget);
+    });
   });
 }

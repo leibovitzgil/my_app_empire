@@ -17,6 +17,8 @@ dependencies:
   flutter_bloc: ^9.1.1
   local_storage:
     path: ../../core/local_storage
+  monetization:
+    path: ../../core/monetization
 
 dev_dependencies:
   bloc_test: ^10.0.0

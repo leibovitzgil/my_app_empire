@@ -3,6 +3,7 @@ import 'package:core_utils/core_utils.dart';
 import 'package:equatable/equatable.dart';
 import 'package:feature_settings/src/domain/notification_permission_gateway.dart';
 import 'package:feature_settings/src/domain/settings_repository.dart';
+import 'package:monetization/monetization.dart';
 
 part 'settings_event.dart';
 part 'settings_state.dart';
@@ -14,16 +15,20 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   SettingsBloc({
     required SettingsRepository repository,
     required NotificationPermissionGateway gateway,
+    required MonetizationService monetizationService,
   }) : _repository = repository,
        _gateway = gateway,
+       _monetization = monetizationService,
        super(const SettingsState.loading()) {
     on<SettingsReconcileRequested>(_onReconcile);
     on<SettingsPushToggled>(_onToggled);
     on<SettingsOpenSystemSettingsRequested>(_onOpenSystemSettings);
+    on<SettingsRestorePurchasesRequested>(_onRestorePurchases);
   }
 
   final SettingsRepository _repository;
   final NotificationPermissionGateway _gateway;
+  final MonetizationService _monetization;
 
   Future<void> _onReconcile(
     SettingsReconcileRequested event,
@@ -111,6 +116,24 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     final result = await _gateway.openSystemSettings();
     if (result is ResultFailure<void>) {
       emit(_fail(result, fallback: state.pushEnabled));
+    }
+  }
+
+  Future<void> _onRestorePurchases(
+    SettingsRestorePurchasesRequested event,
+    Emitter<SettingsState> emit,
+  ) async {
+    emit(state._withRestoreStatus(SettingsRestoreStatus.restoring));
+    final info = await _monetization.restorePurchases();
+    if (info != null) {
+      emit(state._withRestoreStatus(SettingsRestoreStatus.success));
+    } else {
+      emit(
+        state._withRestoreStatus(
+          SettingsRestoreStatus.failure,
+          restoreError: 'Nothing to restore.',
+        ),
+      );
     }
   }
 

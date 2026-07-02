@@ -34,47 +34,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: BlocListener<SettingsBloc, SettingsState>(
-        listenWhen: (previous, current) => previous.status != current.status,
-        listener: (context, state) {
-          final messenger = ScaffoldMessenger.of(context);
-          switch (state.status) {
-            case SettingsStatus.failure:
-              messenger
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(state.error ?? 'Something went wrong.'),
-                    action: SnackBarAction(
-                      label: 'Retry',
-                      onPressed: () => context.read<SettingsBloc>().add(
-                        const SettingsReconcileRequested(),
+      body: MultiBlocListener(
+        listeners: [
+          BlocListener<SettingsBloc, SettingsState>(
+            listenWhen: (previous, current) =>
+                previous.status != current.status,
+            listener: (context, state) {
+              final messenger = ScaffoldMessenger.of(context);
+              switch (state.status) {
+                case SettingsStatus.failure:
+                  messenger
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text(state.error ?? 'Something went wrong.'),
+                        action: SnackBarAction(
+                          label: 'Retry',
+                          onPressed: () => context.read<SettingsBloc>().add(
+                            const SettingsReconcileRequested(),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-            case SettingsStatus.blocked:
-              messenger
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Notifications are blocked in system settings.',
-                    ),
-                  ),
-                );
-            case SettingsStatus.loading:
-            case SettingsStatus.loaded:
-            case SettingsStatus.pending:
-              break;
-          }
-        },
+                    );
+                case SettingsStatus.blocked:
+                  messenger
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Notifications are blocked in system settings.',
+                        ),
+                      ),
+                    );
+                case SettingsStatus.loading:
+                case SettingsStatus.loaded:
+                case SettingsStatus.pending:
+                  break;
+              }
+            },
+          ),
+          BlocListener<SettingsBloc, SettingsState>(
+            listenWhen: (previous, current) =>
+                previous.restoreStatus != current.restoreStatus,
+            listener: (context, state) {
+              final messenger = ScaffoldMessenger.of(context);
+              switch (state.restoreStatus) {
+                case SettingsRestoreStatus.success:
+                  messenger
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      const SnackBar(content: Text('Purchases restored.')),
+                    );
+                case SettingsRestoreStatus.failure:
+                  messenger
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          state.restoreError ?? 'Nothing to restore.',
+                        ),
+                      ),
+                    );
+                case SettingsRestoreStatus.idle:
+                case SettingsRestoreStatus.restoring:
+                  break;
+              }
+            },
+          ),
+        ],
         child: BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, state) {
             final interactive =
                 state.status == SettingsStatus.loaded ||
                 state.status == SettingsStatus.failure;
             final blocked = state.status == SettingsStatus.blocked;
+            final restoring =
+                state.restoreStatus == SettingsRestoreStatus.restoring;
             return ListView(
               children: [
                 SwitchListTile(
@@ -101,6 +136,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
+                ListTile(
+                  leading: const Icon(Icons.restore),
+                  title: const Text('Restore purchases'),
+                  trailing: restoring
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                  onTap: restoring
+                      ? null
+                      : () => context.read<SettingsBloc>().add(
+                          const SettingsRestorePurchasesRequested(),
+                        ),
+                ),
               ],
             );
           },

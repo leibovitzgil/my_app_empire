@@ -3,24 +3,34 @@ import 'package:core_utils/core_utils.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:monetization/monetization.dart';
 
 class MockSettingsRepository extends Mock implements SettingsRepository {}
 
 class MockNotificationPermissionGateway extends Mock
     implements NotificationPermissionGateway {}
 
+class MockMonetizationService extends Mock implements MonetizationService {}
+
+class MockCustomerInfo extends Mock implements CustomerInfo {}
+
 void main() {
   group('SettingsBloc', () {
     late SettingsRepository repository;
     late NotificationPermissionGateway gateway;
+    late MonetizationService monetization;
 
     setUp(() {
       repository = MockSettingsRepository();
       gateway = MockNotificationPermissionGateway();
+      monetization = MockMonetizationService();
     });
 
-    SettingsBloc build() =>
-        SettingsBloc(repository: repository, gateway: gateway);
+    SettingsBloc build() => SettingsBloc(
+      repository: repository,
+      gateway: gateway,
+      monetizationService: monetization,
+    );
 
     test('initial state is loading', () {
       expect(build().state, const SettingsState.loading());
@@ -366,5 +376,59 @@ void main() {
         verify(gateway.openSystemSettings).called(1);
       },
     );
+
+    group('restore purchases', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits [restoring, success] when a purchase is restored',
+        build: () {
+          when(
+            monetization.restorePurchases,
+          ).thenAnswer((_) async => MockCustomerInfo());
+          return build();
+        },
+        act: (bloc) => bloc.add(const SettingsRestorePurchasesRequested()),
+        expect: () => [
+          isA<SettingsState>().having(
+            (s) => s.restoreStatus,
+            'restoreStatus',
+            SettingsRestoreStatus.restoring,
+          ),
+          isA<SettingsState>().having(
+            (s) => s.restoreStatus,
+            'restoreStatus',
+            SettingsRestoreStatus.success,
+          ),
+        ],
+      );
+
+      blocTest<SettingsBloc, SettingsState>(
+        'emits [restoring, failure] when there is nothing to restore',
+        build: () {
+          when(
+            monetization.restorePurchases,
+          ).thenAnswer((_) async => null);
+          return build();
+        },
+        act: (bloc) => bloc.add(const SettingsRestorePurchasesRequested()),
+        expect: () => [
+          isA<SettingsState>().having(
+            (s) => s.restoreStatus,
+            'restoreStatus',
+            SettingsRestoreStatus.restoring,
+          ),
+          isA<SettingsState>()
+              .having(
+                (s) => s.restoreStatus,
+                'restoreStatus',
+                SettingsRestoreStatus.failure,
+              )
+              .having(
+                (s) => s.restoreError,
+                'restoreError',
+                'Nothing to restore.',
+              ),
+        ],
+      );
+    });
   });
 }

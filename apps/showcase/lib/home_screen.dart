@@ -37,6 +37,7 @@ class HomeScreen extends StatelessWidget {
             create: (_) => SettingsBloc(
               repository: getIt<SettingsRepository>(),
               gateway: getIt<NotificationPermissionGateway>(),
+              monetizationService: getIt<MonetizationService>(),
             )..add(const SettingsReconcileRequested()),
             child: const SettingsScreen(),
           ),
