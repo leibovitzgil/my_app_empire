@@ -291,6 +291,36 @@ Widget confirmDialogDestructivePreview() {
   );
 }
 
+@Preview(name: 'AppBottomSheet • default')
+Widget appBottomSheetDefaultPreview() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) {
+            return PrimaryButton(
+              label: 'Show bottom sheet',
+              onPressed: () => unawaited(
+                AppBottomSheet.show<bool>(
+                  context,
+                  title: 'Confirm pickup',
+                  builder: (sheetContext) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    child: PrimaryButton(
+                      label: 'Confirm',
+                      onPressed: () => Navigator.of(sheetContext).pop(true),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
 @Preview(name: 'SignInView')
 Widget signInViewPreview() {
   return SignInView(

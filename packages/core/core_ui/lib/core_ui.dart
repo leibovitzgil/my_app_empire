@@ -1,6 +1,7 @@
 export 'src/theme/app_radii.dart';
 export 'src/theme/app_spacing.dart';
 export 'src/theme/app_theme.dart';
+export 'src/widgets/app_bottom_sheet.dart';
 export 'src/widgets/app_card.dart';
 export 'src/widgets/app_list_tile.dart';
 export 'src/widgets/app_logo_mark.dart';
