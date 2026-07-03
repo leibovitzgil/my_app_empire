@@ -5,8 +5,9 @@ import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-// A network-free theme (AppTheme pulls google_fonts, which fetches at runtime).
-final _theme = ThemeData(useMaterial3: true);
+// AppTheme.testTheme() is network-free (skips google_fonts) but still
+// exercises the real token-driven sub-themes.
+final ThemeData _theme = AppTheme.testTheme();
 
 void main() {
   group('core_ui goldens', () {
