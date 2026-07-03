@@ -1,3 +1,4 @@
+import 'package:core_ui/core_ui.dart';
 import 'package:feature_settings/src/bloc/settings_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -37,32 +38,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: BlocListener<SettingsBloc, SettingsState>(
         listenWhen: (previous, current) => previous.status != current.status,
         listener: (context, state) {
-          final messenger = ScaffoldMessenger.of(context);
           switch (state.status) {
             case SettingsStatus.failure:
-              messenger
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(state.error ?? 'Something went wrong.'),
-                    action: SnackBarAction(
-                      label: 'Retry',
-                      onPressed: () => context.read<SettingsBloc>().add(
-                        const SettingsReconcileRequested(),
-                      ),
-                    ),
-                  ),
-                );
+              AppSnackbar.error(
+                context,
+                state.error ?? 'Something went wrong.',
+                actionLabel: 'Retry',
+                onAction: () => context.read<SettingsBloc>().add(
+                  const SettingsReconcileRequested(),
+                ),
+              );
             case SettingsStatus.blocked:
-              messenger
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Notifications are blocked in system settings.',
-                    ),
-                  ),
-                );
+              AppSnackbar.info(
+                context,
+                'Notifications are blocked in system settings.',
+              );
             case SettingsStatus.loading:
             case SettingsStatus.loaded:
             case SettingsStatus.pending:
