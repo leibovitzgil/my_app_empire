@@ -53,6 +53,26 @@ Widget appTextButtonEnabledPreview() {
   return AppTextButton(label: 'Skip', onPressed: () {});
 }
 
+@Preview(name: 'AppTextField • default')
+Widget appTextFieldDefaultPreview() {
+  return const AppTextField(label: 'Email', hint: 'you@example.com');
+}
+
+@Preview(name: 'AppTextField • error')
+Widget appTextFieldErrorPreview() {
+  return const AppTextField(label: 'Email', errorText: 'Required');
+}
+
+@Preview(name: 'AppPasswordField • default')
+Widget appPasswordFieldDefaultPreview() {
+  return const AppPasswordField();
+}
+
+@Preview(name: 'AppSearchField • has text')
+Widget appSearchFieldHasTextPreview() {
+  return AppSearchField(controller: TextEditingController(text: 'milk'));
+}
+
 @Preview(name: 'SocialSignInButton • Google')
 Widget socialGooglePreview() {
   return SocialSignInButton.google(onPressed: () {});
