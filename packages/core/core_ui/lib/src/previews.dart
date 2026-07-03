@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
@@ -114,6 +116,119 @@ Widget errorRetryViewPreview() {
     title: "Couldn't load the list",
     message: 'Check your connection and try again.',
     onRetry: () {},
+  );
+}
+
+// AppSnackbar/confirmDialog trigger overlays that need a ScaffoldMessenger
+// and/or Navigator above them. Unlike the other previews in this file (which
+// render a bare widget and rely on the preview harness for ancestry), these
+// two wrap themselves in their own `MaterialApp` + `Scaffold` so the buttons
+// work regardless of what the harness provides.
+
+@Preview(name: 'AppSnackbar • success')
+Widget appSnackbarSuccessPreview() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) {
+            return PrimaryButton(
+              label: 'Show success snackbar',
+              onPressed: () =>
+                  AppSnackbar.success(context, 'Saved successfully'),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+@Preview(name: 'AppSnackbar • error')
+Widget appSnackbarErrorPreview() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) {
+            return PrimaryButton(
+              label: 'Show error snackbar',
+              onPressed: () =>
+                  AppSnackbar.error(context, 'Something went wrong'),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+@Preview(name: 'AppSnackbar • info')
+Widget appSnackbarInfoPreview() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) {
+            return PrimaryButton(
+              label: 'Show info snackbar',
+              onPressed: () => AppSnackbar.info(context, 'Heads up'),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+@Preview(name: 'confirmDialog • default')
+Widget confirmDialogDefaultPreview() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) {
+            return PrimaryButton(
+              label: 'Open confirm dialog',
+              onPressed: () => unawaited(
+                confirmDialog(
+                  context,
+                  title: 'Leave without saving?',
+                  message: 'Your changes will be lost.',
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+@Preview(name: 'confirmDialog • destructive')
+Widget confirmDialogDestructivePreview() {
+  return MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) {
+            return PrimaryButton(
+              label: 'Open destructive dialog',
+              isDestructive: true,
+              onPressed: () => unawaited(
+                confirmDialog(
+                  context,
+                  title: 'Delete account?',
+                  message: 'This cannot be undone.',
+                  confirmLabel: 'Delete',
+                  isDestructive: true,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
   );
 }
 
