@@ -1,10 +1,20 @@
+import 'package:core_ui/src/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// A centered empty-state placeholder: a large faded [icon] above a [title]
 /// and an optional secondary [message].
 ///
 /// A design-system primitive so empty lists, empty search results and the like
-/// look consistent. Features pass their own icon and copy.
+/// look consistent. Features pass their own icon and copy. Shares its text
+/// style scale with `LoadingView`/`ErrorRetryView` so all "screen state"
+/// widgets read as one family.
+///
+/// [iconSize] intentionally differs from `ErrorRetryView`'s (72 vs 48): a
+/// real call site (`feature_grocery_list`'s list screen) relies on this
+/// default, and another (`recently_deleted_screen`) already overrides it to
+/// 64 — there is no single value with a clean claim to "the" default, so
+/// this PR leaves both as-is rather than guessing a convergence that would
+/// silently change an existing screen's layout.
 class EmptyStateView extends StatelessWidget {
   /// Creates an [EmptyStateView].
   const EmptyStateView({
@@ -48,10 +58,10 @@ class EmptyStateView extends StatelessWidget {
             size: iconSize,
             color: iconColor ?? scheme.primary.withValues(alpha: 0.4),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
           Text(title, style: theme.textTheme.titleMedium),
           if (message != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Padding(
               padding: messagePadding,
               child: Text(

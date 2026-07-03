@@ -119,6 +119,26 @@ Widget errorRetryViewPreview() {
   );
 }
 
+@Preview(name: 'LoadingView • default')
+Widget loadingViewDefaultPreview() {
+  return const LoadingView();
+}
+
+@Preview(name: 'LoadingView • with label')
+Widget loadingViewWithLabelPreview() {
+  return const LoadingView(label: 'Loading your list…');
+}
+
+@Preview(name: 'SkeletonBox • default')
+Widget skeletonBoxDefaultPreview() {
+  return const SkeletonBox(width: 200);
+}
+
+@Preview(name: 'SkeletonList • default')
+Widget skeletonListDefaultPreview() {
+  return const SkeletonList();
+}
+
 // AppSnackbar/confirmDialog trigger overlays that need a ScaffoldMessenger
 // and/or Navigator above them. Unlike the other previews in this file (which
 // render a bare widget and rely on the preview harness for ancestry), these
