@@ -100,6 +100,45 @@ Widget initialsAvatarPreview() {
   return const InitialsAvatar(initials: 'GL', color: Colors.indigo);
 }
 
+@Preview(name: 'AppCard • default')
+Widget appCardDefaultPreview() {
+  return AppCard(
+    onTap: () {},
+    child: const Text('Card content'),
+  );
+}
+
+@Preview(name: 'AppCard • selected')
+Widget appCardSelectedPreview() {
+  return AppCard(
+    selected: true,
+    onTap: () {},
+    child: const Text('Card content'),
+  );
+}
+
+@Preview(name: 'AppListTile • default')
+Widget appListTileDefaultPreview() {
+  return AppListTile(
+    leading: const Icon(Icons.check_circle_outline),
+    title: const Text('Buy milk'),
+    subtitle: const Text('Added by Gil'),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () {},
+  );
+}
+
+@Preview(name: 'PersonTile • default')
+Widget personTileDefaultPreview() {
+  return PersonTile(
+    initials: 'GL',
+    color: Colors.indigo,
+    name: 'Gil Leibovich',
+    subtitle: 'gil@example.com',
+    onTap: () {},
+  );
+}
+
 @Preview(name: 'EmptyStateView')
 Widget emptyStateViewPreview() {
   return const EmptyStateView(
