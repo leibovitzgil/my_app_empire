@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-/// A primary button with loader support and a destructive variant.
+/// A low-emphasis text button with loader support and a destructive variant.
 ///
 /// Height, border radius and minimum tap target come from `AppTheme`'s
-/// `filledButtonTheme` — this widget never hardcodes them.
-class PrimaryButton extends StatelessWidget {
-  /// Creates a [PrimaryButton].
-  const PrimaryButton({
+/// `textButtonTheme` — this widget never hardcodes them.
+class AppTextButton extends StatelessWidget {
+  /// Creates an [AppTextButton].
+  const AppTextButton({
     required this.onPressed,
     required this.label,
     this.isLoading = false,
@@ -32,13 +32,10 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return FilledButton(
+    return TextButton(
       onPressed: isLoading ? null : onPressed,
       style: isDestructive
-          ? FilledButton.styleFrom(
-              backgroundColor: scheme.error,
-              foregroundColor: scheme.onError,
-            )
+          ? TextButton.styleFrom(foregroundColor: scheme.error)
           : null,
       child: isLoading
           ? const SizedBox(

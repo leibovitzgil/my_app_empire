@@ -25,6 +25,34 @@ Widget primaryButtonDisabledPreview() {
   return const PrimaryButton(label: 'Continue', onPressed: null);
 }
 
+@Preview(name: 'PrimaryButton • destructive')
+Widget primaryButtonDestructivePreview() {
+  return PrimaryButton(
+    label: 'Delete account',
+    onPressed: () {},
+    isDestructive: true,
+  );
+}
+
+@Preview(name: 'SecondaryButton • enabled')
+Widget secondaryButtonEnabledPreview() {
+  return SecondaryButton(label: 'Cancel', onPressed: () {});
+}
+
+@Preview(name: 'SecondaryButton • loading')
+Widget secondaryButtonLoadingPreview() {
+  return const SecondaryButton(
+    label: 'Cancel',
+    onPressed: null,
+    isLoading: true,
+  );
+}
+
+@Preview(name: 'AppTextButton • enabled')
+Widget appTextButtonEnabledPreview() {
+  return AppTextButton(label: 'Skip', onPressed: () {});
+}
+
 @Preview(name: 'SocialSignInButton • Google')
 Widget socialGooglePreview() {
   return SocialSignInButton.google(onPressed: () {});

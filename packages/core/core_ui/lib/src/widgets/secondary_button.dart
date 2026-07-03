@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-/// A primary button with loader support and a destructive variant.
+/// An outlined secondary button with loader support and a destructive variant.
 ///
 /// Height, border radius and minimum tap target come from `AppTheme`'s
-/// `filledButtonTheme` — this widget never hardcodes them.
-class PrimaryButton extends StatelessWidget {
-  /// Creates a [PrimaryButton].
-  const PrimaryButton({
+/// `outlinedButtonTheme` — this widget never hardcodes them.
+class SecondaryButton extends StatelessWidget {
+  /// Creates a [SecondaryButton].
+  const SecondaryButton({
     required this.onPressed,
     required this.label,
     this.isLoading = false,
@@ -32,12 +32,12 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return FilledButton(
+    return OutlinedButton(
       onPressed: isLoading ? null : onPressed,
       style: isDestructive
-          ? FilledButton.styleFrom(
-              backgroundColor: scheme.error,
-              foregroundColor: scheme.onError,
+          ? OutlinedButton.styleFrom(
+              foregroundColor: scheme.error,
+              side: BorderSide(color: scheme.error),
             )
           : null,
       child: isLoading

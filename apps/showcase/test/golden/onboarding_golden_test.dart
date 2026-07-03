@@ -1,6 +1,7 @@
 @Tags(['golden'])
 library;
 
+import 'package:core_ui/core_ui.dart';
 import 'package:feature_onboarding/feature_onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,7 +16,10 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(useMaterial3: true),
+        // AppTheme.testTheme() is network-free (skips google_fonts) but
+        // still exercises the real token-driven button/theme shape used in
+        // production, so PrimaryButton renders as it does in the real app.
+        theme: AppTheme.testTheme(),
         home: BlocProvider(
           create: (_) => OnboardingBloc(storage: storage),
           child: const OnboardingScreen(
