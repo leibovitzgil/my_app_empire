@@ -1,4 +1,4 @@
-import 'package:core_ui/src/theme/app_spacing.dart';
+import 'package:core_theme/core_theme.dart';
 import 'package:core_ui/src/widgets/app_password_field.dart';
 import 'package:core_ui/src/widgets/app_text_field.dart';
 import 'package:core_ui/src/widgets/labeled_divider.dart';

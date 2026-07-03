@@ -1,5 +1,4 @@
-import 'package:core_ui/src/theme/app_radii.dart';
-import 'package:core_ui/src/theme/app_spacing.dart';
+import 'package:core_theme/core_theme.dart';
 import 'package:flutter/material.dart';
 
 /// A themed container for grouping related content, optionally tappable.

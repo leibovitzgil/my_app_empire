@@ -1,5 +1,5 @@
-import 'package:core_ui/src/theme/app_radii.dart';
-import 'package:core_ui/src/theme/app_spacing.dart';
+import 'package:core_theme/src/app_radii.dart';
+import 'package:core_theme/src/app_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 

@@ -1,4 +1,4 @@
-import 'package:core_ui/src/theme/app_spacing.dart';
+import 'package:core_theme/core_theme.dart';
 import 'package:flutter/material.dart';
 
 /// A centered empty-state placeholder: a large faded [icon] above a [title]

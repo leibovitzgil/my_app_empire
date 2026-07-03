@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:core_ui/src/theme/app_spacing.dart';
+import 'package:core_theme/core_theme.dart';
 import 'package:flutter/material.dart';
 
 /// A modal bottom sheet helper with a real, screen-reader-operable close
