@@ -57,4 +57,22 @@ abstract class AnnotationRepository {
   /// Deletes the audio note identified by [noteId] from [pieceId]. Fails
   /// with an ownership-violation failure if the caller doesn't own it.
   Future<Result<void>> deleteAudioNote(String pieceId, String noteId);
+
+  /// Deletes every stroke and audio note on [pieceId], regardless of author
+  /// (e.g. when the piece itself is deleted). Not ownership-gated: callers
+  /// are expected to have already checked the caller may delete the piece.
+  Future<Result<void>> clearPiece(String pieceId);
+
+  /// Wholesale-replaces [authorId]'s ink layer and audio notes on [pieceId]
+  /// with [strokes] and [audioNotes], used to apply an imported review
+  /// bundle. Not ownership-gated by the caller's current user id — the
+  /// caller (`ReviewSyncService`) is trusted to have already resolved
+  /// [authorId] and staleness before calling this.
+  Future<Result<void>> replaceAuthorSlice(
+    String pieceId,
+    String authorId, {
+    required PieceRole role,
+    required List<InkStroke> strokes,
+    required List<AudioNote> audioNotes,
+  });
 }

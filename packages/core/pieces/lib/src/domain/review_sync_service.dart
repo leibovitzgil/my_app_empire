@@ -6,8 +6,13 @@ import 'package:pieces/src/domain/review_bundle.dart';
 /// shared by someone else back onto a local piece.
 abstract class ReviewSyncService {
   /// Serializes [pieceId]'s current annotations (and referenced audio
-  /// assets) into an [ExportedBundle] on disk.
-  Future<Result<ExportedBundle>> exportBundle(String pieceId);
+  /// assets) authored by [authorId] into an [ExportedBundle] on disk.
+  /// Defaults [authorId] to the caller's own id — a bundle only ever
+  /// contains one author's slice, never the other participant's.
+  Future<Result<ExportedBundle>> exportBundle(
+    String pieceId, {
+    String? authorId,
+  });
 
   /// Hands [bundle] off to the OS share sheet (or equivalent).
   Future<Result<void>> share(ExportedBundle bundle);
