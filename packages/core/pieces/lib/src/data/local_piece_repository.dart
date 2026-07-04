@@ -197,6 +197,24 @@ class LocalPieceRepository implements PieceRepository {
     },
   );
 
+  @override
+  Future<Result<Piece>> pairStudent(
+    String pieceId, {
+    required String studentId,
+  }) => Result.guard<Piece>(() async {
+    final piece = _require(pieceId);
+    if (piece.studentId != null && piece.studentId != studentId) {
+      throw StateError(
+        'This piece is already paired with a different student.',
+      );
+    }
+    if (piece.studentId == studentId) return piece;
+    final updated = piece.copyWith(studentId: studentId, updatedAt: _now());
+    _replace(updated);
+    await _emit();
+    return updated;
+  });
+
   // `Piece.copyWith` can't clear `studentId` back to null (it treats a null
   // argument as "keep the existing value"), so leaving requires rebuilding
   // the record directly rather than going through `copyWith`.

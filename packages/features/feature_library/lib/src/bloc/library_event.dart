@@ -7,6 +7,41 @@ sealed class LibraryEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-final class LibraryRequested extends LibraryEvent {
-  const LibraryRequested();
+/// Subscribes to [PieceRepository.watchPieces]. Safe to re-add (e.g. from a
+/// retry action): re-subscribes, cancelling any previous subscription first.
+final class LibraryStarted extends LibraryEvent {
+  const LibraryStarted();
+}
+
+/// Internal: the repository's stream emitted a new snapshot.
+final class LibraryPiecesUpdated extends LibraryEvent {
+  const LibraryPiecesUpdated(this.pieces);
+
+  final List<Piece> pieces;
+
+  @override
+  List<Object?> get props => [pieces];
+}
+
+/// Internal: the repository's stream emitted an error.
+final class LibraryFailed extends LibraryEvent {
+  const LibraryFailed(this.error);
+
+  final String error;
+
+  @override
+  List<Object?> get props => [error];
+}
+
+/// Marks [pieceId] as viewed this session, clearing its unread indicator.
+///
+/// Session-local only — see `LibraryState.isUnread` for why (no persisted
+/// last-viewed watermark exists yet).
+final class PieceViewed extends LibraryEvent {
+  const PieceViewed(this.pieceId);
+
+  final String pieceId;
+
+  @override
+  List<Object?> get props => [pieceId];
 }

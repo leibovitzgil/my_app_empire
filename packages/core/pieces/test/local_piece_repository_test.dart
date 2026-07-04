@@ -198,6 +198,60 @@ void main() {
       },
     );
 
+    test('pairStudent attaches a student to an unpaired piece', () async {
+      final imported = await repository.importPiece(
+        title: 'To pair',
+        sourcePath: sourcePdf.path,
+      );
+      final piece = (imported as Success<Piece>).value;
+
+      final result = await repository.pairStudent(
+        piece.id,
+        studentId: 'student-1',
+      );
+      expect(result, isA<Success<Piece>>());
+      expect((result as Success<Piece>).value.studentId, 'student-1');
+
+      final fetched = await repository.getPiece(piece.id);
+      expect((fetched as Success<Piece>).value.studentId, 'student-1');
+    });
+
+    test(
+      'pairStudent fails when the piece already has a different student',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'Already paired',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (imported as Success<Piece>).value;
+        await repository.pairStudent(piece.id, studentId: 'student-1');
+
+        final result = await repository.pairStudent(
+          piece.id,
+          studentId: 'student-2',
+        );
+
+        expect(result, isA<ResultFailure<Piece>>());
+      },
+    );
+
+    test('pairStudent is idempotent for the same student', () async {
+      final imported = await repository.importPiece(
+        title: 'Re-pair same student',
+        sourcePath: sourcePdf.path,
+      );
+      final piece = (imported as Success<Piece>).value;
+      await repository.pairStudent(piece.id, studentId: 'student-1');
+
+      final result = await repository.pairStudent(
+        piece.id,
+        studentId: 'student-1',
+      );
+
+      expect(result, isA<Success<Piece>>());
+      expect((result as Success<Piece>).value.studentId, 'student-1');
+    });
+
     test('the teacher cannot leave their own piece', () async {
       final imported = await repository.importPiece(
         title: 'Paired piece',
@@ -340,6 +394,12 @@ class _DeferredPieceRepository implements PieceRepository {
   @override
   Future<Result<void>> renamePiece(String pieceId, String title) =>
       _resolve().renamePiece(pieceId, title);
+
+  @override
+  Future<Result<Piece>> pairStudent(
+    String pieceId, {
+    required String studentId,
+  }) => _resolve().pairStudent(pieceId, studentId: studentId);
 
   @override
   Stream<List<Piece>> watchPieces() => _resolve().watchPieces();

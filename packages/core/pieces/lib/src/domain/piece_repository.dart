@@ -25,4 +25,17 @@ abstract class PieceRepository {
   /// Removes the current user's association with [pieceId] without
   /// deleting it for the other participant.
   Future<Result<void>> leavePiece(String pieceId);
+
+  /// Attaches [studentId] to [pieceId], completing a pairing/invite
+  /// acceptance. Idempotent if [studentId] is already the paired student;
+  /// fails if the piece is already paired with a *different* student.
+  ///
+  /// Owned by callers in `feature_pairing` — this package only exposes the
+  /// mutation itself, mirroring how `AnnotationRepository.replaceAuthorSlice`
+  /// exposes a privileged operation for `review_sync` to drive without this
+  /// package needing to know about sync or pairing semantics.
+  Future<Result<Piece>> pairStudent(
+    String pieceId, {
+    required String studentId,
+  });
 }

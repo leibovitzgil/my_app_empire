@@ -11,16 +11,30 @@ dependencies:
   bloc: ^9.2.1
   core_ui:
     path: ../../core/core_ui
+  core_utils:
+    path: ../../core/core_utils
+  deep_linking:
+    path: ../../services/deep_linking
   equatable: ^2.0.5
+  feature_paywall:
+    path: ../feature_paywall
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
+  local_storage:
+    path: ../../core/local_storage
+  monetization:
+    path: ../../core/monetization
   pieces:
     path: ../../core/pieces
+  share_plus: ^13.2.0
+  user_roles:
+    path: ../../core/user_roles
 
 dev_dependencies:
   bloc_test: ^10.0.0
   flutter_test:
     sdk: flutter
   mocktail: ^1.0.0
+  shared_preferences: ^2.2.2
   very_good_analysis: ^10.3.0

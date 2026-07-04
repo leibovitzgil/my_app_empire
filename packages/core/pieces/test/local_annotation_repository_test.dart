@@ -32,6 +32,12 @@ class _FakePieceRepository implements PieceRepository {
       throw UnimplementedError();
 
   @override
+  Future<Result<Piece>> pairStudent(
+    String pieceId, {
+    required String studentId,
+  }) => throw UnimplementedError();
+
+  @override
   Stream<List<Piece>> watchPieces() => throw UnimplementedError();
 }
 
