@@ -374,6 +374,160 @@ void main() {
     );
 
     test(
+      'importBundle preserves fractional stroke and audio-region '
+      'coordinates exactly through the export/import round trip',
+      () async {
+        const precisePoints = [
+          InkPoint(x: 0.123456, y: 0.654321),
+          InkPoint(x: 0.987654, y: 0.010203),
+        ];
+        const preciseRegion = Region(
+          pageIndex: 0,
+          left: 0.111111,
+          top: 0.222222,
+          width: 0.333333,
+          height: 0.098765,
+        );
+        senderAnnotations.seed(
+          piece.id,
+          PieceAnnotations(
+            pieceId: piece.id,
+            layers: const [
+              InkLayer(
+                ownerId: 'teacher-1',
+                role: PieceRole.teacher,
+                strokes: [
+                  InkStroke(
+                    id: 'precise-stroke',
+                    authorId: 'teacher-1',
+                    pageIndex: 0,
+                    colorId: 'red',
+                    points: precisePoints,
+                  ),
+                ],
+              ),
+            ],
+            audioNotes: [
+              AudioNote(
+                id: 'precise-note',
+                authorId: 'teacher-1',
+                audioAssetId: senderAssetId,
+                pageIndex: 0,
+                durationMs: 2500,
+                region: preciseRegion,
+                createdAt: DateTime(2024),
+              ),
+            ],
+          ),
+        );
+
+        final exportResult = await senderService.exportBundle(piece.id);
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+
+        final receiverAnnotations = _FakeAnnotationRepository();
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: receiverAnnotations,
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        await receiverService.importBundle(bundle.filePath);
+
+        final receiverState = await receiverAnnotations.watch(piece.id).first;
+        final importedStroke = receiverState.layers.single.strokes.single;
+        expect(importedStroke.points, precisePoints);
+        final importedNote = receiverState.audioNotes.single;
+        expect(importedNote.region, preciseRegion);
+      },
+    );
+
+    test(
+      "importBundle never touches the receiver's own existing layer or "
+      "audio notes when applying the other author's slice",
+      () async {
+        final exportResult = await senderService.exportBundle(piece.id);
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+
+        // The receiver (student) already has their own annotations before
+        // importing the teacher's bundle.
+        final receiverAnnotations = _FakeAnnotationRepository()
+          ..seed(
+            piece.id,
+            PieceAnnotations(
+              pieceId: piece.id,
+              layers: const [
+                InkLayer(
+                  ownerId: 'student-1',
+                  role: PieceRole.student,
+                  strokes: [
+                    InkStroke(
+                      id: 'students-own-stroke',
+                      authorId: 'student-1',
+                      pageIndex: 0,
+                      colorId: 'blue',
+                      points: [InkPoint(x: 0.5, y: 0.5)],
+                    ),
+                  ],
+                ),
+              ],
+              audioNotes: [
+                AudioNote(
+                  id: 'students-own-note',
+                  authorId: 'student-1',
+                  audioAssetId: 'student-asset-0',
+                  pageIndex: 0,
+                  durationMs: 1500,
+                  region: const Region(
+                    pageIndex: 0,
+                    left: 0.4,
+                    top: 0.4,
+                    width: 0.1,
+                    height: 0.1,
+                  ),
+                  createdAt: DateTime(2024),
+                ),
+              ],
+            ),
+          );
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: receiverAnnotations,
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        await receiverService.importBundle(bundle.filePath);
+
+        final receiverState = await receiverAnnotations.watch(piece.id).first;
+        // The student's own layer/notes are untouched, sitting alongside
+        // the freshly-imported teacher layer.
+        final studentLayer = receiverState.layers.firstWhere(
+          (l) => l.ownerId == 'student-1',
+        );
+        expect(studentLayer.strokes.map((s) => s.id), ['students-own-stroke']);
+        expect(
+          receiverState.audioNotes.map((n) => n.id),
+          contains('students-own-note'),
+        );
+        final teacherLayer = receiverState.layers.firstWhere(
+          (l) => l.ownerId == 'teacher-1',
+        );
+        expect(teacherLayer.strokes.map((s) => s.id).toSet(), {'s1', 's2'});
+      },
+    );
+
+    test(
       'importBundle drops a bundle whose exportedAt is not newer than the '
       'last-applied revision',
       () async {

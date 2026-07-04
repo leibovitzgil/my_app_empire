@@ -260,6 +260,51 @@ void main() {
       },
     );
 
+    blocTest<ScoreBloc, ScoreState>(
+      'layer toggles are independent: toggling one leaves the others '
+      'untouched',
+      build: buildBloc,
+      act: (bloc) =>
+          bloc.add(const LayerVisibilityToggled(LayerKind.audioPins)),
+      verify: (bloc) {
+        expect(bloc.state.audioPinsVisible, isFalse);
+        expect(bloc.state.teacherInkVisible, isTrue);
+        expect(bloc.state.studentInkVisible, isTrue);
+      },
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'a layer toggled is immediate: a single event, a single emission',
+      build: buildBloc,
+      act: (bloc) =>
+          bloc.add(const LayerVisibilityToggled(LayerKind.studentInk)),
+      expect: () => [
+        isA<ScoreState>()
+            .having((s) => s.studentInkVisible, 'studentInkVisible', isFalse)
+            .having((s) => s.teacherInkVisible, 'teacherInkVisible', isTrue)
+            .having((s) => s.audioPinsVisible, 'audioPinsVisible', isTrue),
+      ],
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'a layer toggled while clean-workspace is active updates its '
+      'underlying flag (masked, not lost), and turning clean-workspace off '
+      'reveals that change rather than whatever was visible before masking',
+      build: buildBloc,
+      act: (bloc) => bloc
+        ..add(const CleanWorkspaceToggled()) // mask: all start visible
+        ..add(const LayerVisibilityToggled(LayerKind.audioPins)) // toggled
+        // while masked
+        ..add(const CleanWorkspaceToggled()), // unmask
+      verify: (bloc) {
+        expect(bloc.state.cleanWorkspace, isFalse);
+        expect(bloc.state.audioPinsVisible, isFalse);
+        expect(bloc.state.effectiveAudioPinsVisible, isFalse);
+        expect(bloc.state.teacherInkVisible, isTrue);
+        expect(bloc.state.studentInkVisible, isTrue);
+      },
+    );
+
     group('drawing', () {
       // Different event types are processed concurrently by bloc (each
       // `on<E>` has its own subscription), so tests combining ScoreOpened

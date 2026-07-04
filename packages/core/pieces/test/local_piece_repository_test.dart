@@ -82,6 +82,25 @@ void main() {
       expect(piece.basePdfPath, isNot(sourcePdf.path));
     });
 
+    test(
+      "importPiece never modifies the original source file's bytes",
+      () async {
+        final originalBytes = sourcePdf.readAsBytesSync();
+
+        final result = await repository.importPiece(
+          title: 'Clair de Lune',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (result as Success<Piece>).value;
+
+        // The source file at its original path is untouched...
+        expect(sourcePdf.readAsBytesSync(), originalBytes);
+        // ...and the piece's own copy is a byte-for-byte duplicate, not a
+        // reference to the same file re-checksummed.
+        expect(File(piece.basePdfPath).readAsBytesSync(), originalBytes);
+      },
+    );
+
     test('getPiece fails for an unknown id', () async {
       final result = await repository.getPiece('missing');
       expect(result, isA<ResultFailure<Piece>>());
