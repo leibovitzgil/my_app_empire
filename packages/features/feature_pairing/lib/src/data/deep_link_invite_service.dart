@@ -96,6 +96,7 @@ class DeepLinkInviteService implements InviteService {
   Future<Result<InviteLink>> createInvite({
     required String teacherId,
     required String pieceId,
+    String? teacherName,
   }) => Result.guard<InviteLink>(() async {
     final piece = (await _pieceRepository.getPiece(pieceId)).orThrow();
     if (piece.teacherId != teacherId) {
@@ -125,6 +126,7 @@ class DeepLinkInviteService implements InviteService {
           token: token,
           pieceId: pieceId,
           teacherId: teacherId,
+          teacherName: teacherName,
           createdAtMillis: _now().millisecondsSinceEpoch,
         ),
       );
@@ -148,6 +150,7 @@ class DeepLinkInviteService implements InviteService {
           pieceId: piece.id,
           pieceTitle: piece.title,
           teacherId: invite.teacherId,
+          teacherName: piece.teacherName ?? invite.teacherName,
         );
       });
 
@@ -155,6 +158,7 @@ class DeepLinkInviteService implements InviteService {
   Future<Result<void>> acceptInvite(
     String token, {
     required String studentId,
+    String? studentName,
   }) => Result.guard<void>(() async {
     final invites = _load();
     final invite = _requireValid(invites, token);
@@ -188,6 +192,12 @@ class DeepLinkInviteService implements InviteService {
     (await _pieceRepository.pairStudent(
       invite.pieceId,
       studentId: studentId,
+      studentName: studentName,
+      // `pairStudent` only ever uses this to backfill a piece that has no
+      // `teacherName` yet (e.g. imported before that field existed) —
+      // `importPiece` is otherwise the source of truth, so it's always
+      // safe to pass the invite's captured name through unconditionally.
+      teacherName: invite.teacherName,
     )).orThrow();
     await _persist([
       for (final stored in invites)
@@ -204,6 +214,7 @@ class _StoredInvite {
     required this.pieceId,
     required this.teacherId,
     required this.createdAtMillis,
+    this.teacherName,
     this.consumed = false,
   });
 
@@ -211,6 +222,7 @@ class _StoredInvite {
     token: json['token'] as String,
     pieceId: json['pieceId'] as String,
     teacherId: json['teacherId'] as String,
+    teacherName: json['teacherName'] as String?,
     createdAtMillis: json['createdAtMillis'] as int,
     consumed: json['consumed'] as bool? ?? false,
   );
@@ -218,6 +230,7 @@ class _StoredInvite {
   final String token;
   final String pieceId;
   final String teacherId;
+  final String? teacherName;
   final int createdAtMillis;
   final bool consumed;
 
@@ -225,6 +238,7 @@ class _StoredInvite {
     token: token,
     pieceId: pieceId,
     teacherId: teacherId,
+    teacherName: teacherName,
     createdAtMillis: createdAtMillis,
     consumed: consumed ?? this.consumed,
   );
@@ -233,6 +247,7 @@ class _StoredInvite {
     'token': token,
     'pieceId': pieceId,
     'teacherId': teacherId,
+    'teacherName': teacherName,
     'createdAtMillis': createdAtMillis,
     'consumed': consumed,
   };

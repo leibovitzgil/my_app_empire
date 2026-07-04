@@ -4,6 +4,7 @@ import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_name.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/role_selection/role_selection_cubit.dart';
 import 'package:duet/ui/role_selection_screen.dart';
@@ -76,6 +77,7 @@ class _AppViewState extends State<AppView> {
             inviteService: getIt<InviteService>(),
             token: state.pathParameters['token']!,
             studentId: getIt<CurrentUser>().call(),
+            studentName: getIt<CurrentUserName>().call(),
             // Kept deliberately simple: land back on the (now-updated)
             // library rather than deep-navigating into the freshly-paired
             // piece, so a failed/edge-case navigation here can never strand
@@ -203,6 +205,7 @@ class HomeScreen extends StatelessWidget {
       currentRole: isTeacher ? PieceRole.teacher : PieceRole.student,
       onOpenScore: (piece) => _openScore(context, piece),
       onInvitePiece: (piece) => _openInvite(context, piece, currentUserId),
+      currentUserName: getIt<CurrentUserName>().call(),
     );
   }
 
@@ -225,6 +228,7 @@ class HomeScreen extends StatelessWidget {
         pieceRepository: getIt<PieceRepository>(),
         teacherId: teacherId,
         pieceId: piece.id,
+        teacherName: getIt<CurrentUserName>().call(),
       ),
     );
   }

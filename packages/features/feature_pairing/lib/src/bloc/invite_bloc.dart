@@ -23,6 +23,7 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
     required PieceRepository pieceRepository,
     required this.teacherId,
     required this.pieceId,
+    this.teacherName,
     this.freeTierStudentLimit = 1,
   }) : _inviteService = inviteService,
        _monetization = monetizationService,
@@ -37,6 +38,10 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
 
   /// The piece being invited for.
   final String pieceId;
+
+  /// The inviting teacher's display name, if known — passed through to
+  /// [InviteService.createInvite].
+  final String? teacherName;
 
   /// The free tier's paired-student cap.
   final int freeTierStudentLimit;
@@ -81,6 +86,7 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
     final result = await _inviteService.createInvite(
       teacherId: teacherId,
       pieceId: pieceId,
+      teacherName: teacherName,
     );
     switch (result) {
       case Success<InviteLink>(:final value):

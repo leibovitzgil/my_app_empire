@@ -16,6 +16,7 @@ class AcceptInvitePage extends StatelessWidget {
     required this.token,
     required this.studentId,
     required this.onAccepted,
+    this.studentName,
     super.key,
   });
 
@@ -30,6 +31,10 @@ class AcceptInvitePage extends StatelessWidget {
   /// The accepting (signed-in) student's id.
   final String studentId;
 
+  /// The accepting student's display name, if known — passed through to
+  /// [AcceptInviteCubit].
+  final String? studentName;
+
   /// Called once the invite is accepted, with the now-paired piece's id, so
   /// the app-glue layer can navigate into it (e.g. via `feature_library`'s
   /// Piece Detail or straight to `feature_score`'s viewer).
@@ -43,6 +48,7 @@ class AcceptInvitePage extends StatelessWidget {
           inviteService: inviteService,
           token: token,
           studentId: studentId,
+          studentName: studentName,
         );
         unawaited(cubit.load());
         return cubit;
@@ -123,7 +129,9 @@ class _ReadyBody extends StatelessWidget {
           PersonTile(
             initials: InviteFormat.initialsFor(details.teacherId),
             color: Color(InviteFormat.colorValueFor(details.teacherId)),
-            name: 'Teacher ${InviteFormat.initialsFor(details.teacherId)}',
+            name:
+                details.teacherName ??
+                'Teacher ${InviteFormat.initialsFor(details.teacherId)}',
           ),
           const SizedBox(height: AppSpacing.lg),
           PrimaryButton(

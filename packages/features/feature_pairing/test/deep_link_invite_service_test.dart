@@ -28,9 +28,15 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
+    String? studentName,
+    String? teacherName,
   }) async {
     final piece = pieces.firstWhere((p) => p.id == pieceId);
-    final updated = piece.copyWith(studentId: studentId);
+    final updated = piece.copyWith(
+      studentId: studentId,
+      studentName: studentName,
+      teacherName: teacherName,
+    );
     pieces = [
       for (final p in pieces)
         if (p.id == pieceId) updated else p,
@@ -46,6 +52,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
+    String? teacherName,
   }) => throw UnimplementedError();
 
   @override
@@ -62,6 +69,8 @@ class _FakePieceRepository implements PieceRepository {
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   }) => throw UnimplementedError();
 }
 
@@ -191,6 +200,56 @@ void main() {
       },
     );
 
+    test(
+      'resolveInvite surfaces the real teacherName captured at '
+      "createInvite time, when the piece doesn't already have one",
+      () async {
+        await service.createInvite(
+          teacherId: teacherId,
+          pieceId: 'p1',
+          teacherName: 'Jane Doe',
+        );
+
+        final result = await service.resolveInvite('token-0');
+
+        expect(
+          (result as Success<InviteDetails>).value.teacherName,
+          'Jane Doe',
+        );
+      },
+    );
+
+    test(
+      "resolveInvite prefers the piece's own teacherName over the invite's "
+      'captured one, when the piece already has one',
+      () async {
+        pieceRepository.pieces = [
+          Piece(
+            id: piece.id,
+            title: piece.title,
+            basePdfChecksum: piece.basePdfChecksum,
+            basePdfPath: piece.basePdfPath,
+            teacherId: piece.teacherId,
+            teacherName: 'Piece-level teacher name',
+            createdAt: piece.createdAt,
+            updatedAt: piece.updatedAt,
+          ),
+        ];
+        await service.createInvite(
+          teacherId: teacherId,
+          pieceId: 'p1',
+          teacherName: 'Invite-time teacher name',
+        );
+
+        final result = await service.resolveInvite('token-0');
+
+        expect(
+          (result as Success<InviteDetails>).value.teacherName,
+          'Piece-level teacher name',
+        );
+      },
+    );
+
     test('resolveInvite fails for an unknown token', () async {
       final result = await service.resolveInvite('does-not-exist');
       expect(result, isA<ResultFailure<InviteDetails>>());
@@ -214,6 +273,29 @@ void main() {
       );
       expect(secondAttempt, isA<ResultFailure<void>>());
     });
+
+    test(
+      "acceptInvite stores the accepting student's real studentName, and "
+      'backfills teacherName from the invite when the piece has none',
+      () async {
+        await service.createInvite(
+          teacherId: teacherId,
+          pieceId: 'p1',
+          teacherName: 'Jane Doe',
+        );
+
+        await service.acceptInvite(
+          'token-0',
+          studentId: studentId,
+          studentName: 'Sam Smith',
+        );
+
+        final fetched = await pieceRepository.getPiece('p1');
+        final paired = (fetched as Success<Piece>).value;
+        expect(paired.studentName, 'Sam Smith');
+        expect(paired.teacherName, 'Jane Doe');
+      },
+    );
 
     test('acceptInvite fails for an invalid token', () async {
       final result = await service.acceptInvite(

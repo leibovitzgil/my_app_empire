@@ -79,7 +79,11 @@ void main() {
           () => inviteService.resolveInvite(token),
         ).thenAnswer((_) async => const Success(details));
         when(
-          () => inviteService.acceptInvite(token, studentId: studentId),
+          () => inviteService.acceptInvite(
+            token,
+            studentId: studentId,
+            studentName: any(named: 'studentName'),
+          ),
         ).thenAnswer((_) async => const Success<void>(null));
         return buildCubit();
       },
@@ -109,7 +113,11 @@ void main() {
           () => inviteService.resolveInvite(token),
         ).thenAnswer((_) async => const Success(details));
         when(
-          () => inviteService.acceptInvite(token, studentId: studentId),
+          () => inviteService.acceptInvite(
+            token,
+            studentId: studentId,
+            studentName: any(named: 'studentName'),
+          ),
         ).thenAnswer(
           (_) async => const ResultFailure<void>(
             InviteException('This piece already has a student.'),

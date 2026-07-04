@@ -10,10 +10,14 @@ abstract class PieceRepository {
   /// Fetches a single piece by [pieceId].
   Future<Result<Piece>> getPiece(String pieceId);
 
-  /// Imports a new piece titled [title] from the PDF at [sourcePath].
+  /// Imports a new piece titled [title] from the PDF at [sourcePath], owned
+  /// by the current user. [teacherName] is the importing teacher's display
+  /// name, if the caller has one to offer (sourced from auth identity) —
+  /// nullable since not every identity source resolves a display name.
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
+    String? teacherName,
   });
 
   /// Renames [pieceId] to [title].
@@ -30,6 +34,13 @@ abstract class PieceRepository {
   /// acceptance. Idempotent if [studentId] is already the paired student;
   /// fails if the piece is already paired with a *different* student.
   ///
+  /// [studentName] is the accepting student's display name, if the caller
+  /// has one to offer — always applied, since this call's own subject is
+  /// the pairing student. [teacherName] is a *backfill*: it only ever fills
+  /// in a piece that doesn't already have one (e.g. one imported before
+  /// this field existed) and never overwrites an existing
+  /// [Piece.teacherName], even if passed a different value.
+  ///
   /// Owned by callers in `feature_pairing` — this package only exposes the
   /// mutation itself, mirroring how `AnnotationRepository.replaceAuthorSlice`
   /// exposes a privileged operation for `review_sync` to drive without this
@@ -37,6 +48,8 @@ abstract class PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
+    String? studentName,
+    String? teacherName,
   });
 
   /// Registers a piece received for the first time via a cross-device
@@ -53,11 +66,19 @@ abstract class PieceRepository {
   /// mirroring [importPiece]. Fails if [pieceId] already exists locally —
   /// callers should check via [getPiece] first and only call this for a
   /// genuinely new piece.
+  ///
+  /// [teacherName]/[studentName] carry whatever identity the transfer
+  /// mechanism knows at this point — typically only [teacherName] (the
+  /// export's author/teacher side, embedded in the sender's manifest), since
+  /// [studentName] is normally already known locally as the receiving
+  /// device's own current user.
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   });
 }

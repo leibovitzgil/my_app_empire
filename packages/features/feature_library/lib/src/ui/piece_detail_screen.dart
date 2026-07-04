@@ -118,6 +118,7 @@ class _ReadyBody extends StatelessWidget {
     final piece = state.piece!;
     final isTeacher = state.currentRole == PieceRole.teacher;
     final otherId = isTeacher ? piece.studentId : piece.teacherId;
+    final otherName = isTeacher ? piece.studentName : piece.teacherName;
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
@@ -136,9 +137,11 @@ class _ReadyBody extends StatelessWidget {
             PersonTile(
               initials: LibraryFormat.initialsFor(otherId),
               color: Color(LibraryFormat.colorValueFor(otherId)),
-              name: isTeacher
-                  ? 'Student ${LibraryFormat.initialsFor(otherId)}'
-                  : 'Teacher ${LibraryFormat.initialsFor(otherId)}',
+              name:
+                  otherName ??
+                  (isTeacher
+                      ? 'Student ${LibraryFormat.initialsFor(otherId)}'
+                      : 'Teacher ${LibraryFormat.initialsFor(otherId)}'),
             )
           else
             Text(

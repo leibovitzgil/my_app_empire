@@ -109,6 +109,7 @@ void main() {
           () => repository.importPiece(
             title: 'My title',
             sourcePath: sourcePath,
+            teacherName: any(named: 'teacherName'),
           ),
         ).thenAnswer((_) async => Success(piece));
         return buildBloc(filePicker: () async => null);
@@ -137,6 +138,7 @@ void main() {
           () => repository.importPiece(
             title: 'My title',
             sourcePath: sourcePath,
+            teacherName: any(named: 'teacherName'),
           ),
         ).thenAnswer(
           (_) async => ResultFailure(StateError('permission denied')),

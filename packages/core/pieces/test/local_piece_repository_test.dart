@@ -101,6 +101,28 @@ void main() {
       },
     );
 
+    test('importPiece stores the given teacherName', () async {
+      final result = await repository.importPiece(
+        title: 'Clair de Lune',
+        sourcePath: sourcePdf.path,
+        teacherName: 'Jane Doe',
+      );
+
+      expect(result, isA<Success<Piece>>());
+      final piece = (result as Success<Piece>).value;
+      expect(piece.teacherName, 'Jane Doe');
+      expect(piece.studentName, isNull);
+    });
+
+    test('importPiece leaves teacherName null when not given one', () async {
+      final result = await repository.importPiece(
+        title: 'Clair de Lune',
+        sourcePath: sourcePdf.path,
+      );
+
+      expect((result as Success<Piece>).value.teacherName, isNull);
+    });
+
     test('getPiece fails for an unknown id', () async {
       final result = await repository.getPiece('missing');
       expect(result, isA<ResultFailure<Piece>>());
@@ -226,6 +248,8 @@ void main() {
           title: 'Shared from another device',
           teacherId: 'remote-teacher',
           studentId: 'remote-student',
+          teacherName: 'Remote Teacher Name',
+          studentName: 'Remote Student Name',
           sourcePath: sourcePdf.path,
         );
 
@@ -235,6 +259,8 @@ void main() {
         expect(piece.title, 'Shared from another device');
         expect(piece.teacherId, 'remote-teacher');
         expect(piece.studentId, 'remote-student');
+        expect(piece.teacherName, 'Remote Teacher Name');
+        expect(piece.studentName, 'Remote Student Name');
         expect(piece.basePdfChecksum, 'checksum-of-source.pdf');
         expect(File(piece.basePdfPath).existsSync(), isTrue);
 
@@ -281,6 +307,50 @@ void main() {
       final fetched = await repository.getPiece(piece.id);
       expect((fetched as Success<Piece>).value.studentId, 'student-1');
     });
+
+    test('pairStudent stores the given studentName', () async {
+      final imported = await repository.importPiece(
+        title: 'To pair',
+        sourcePath: sourcePdf.path,
+      );
+      final piece = (imported as Success<Piece>).value;
+
+      final result = await repository.pairStudent(
+        piece.id,
+        studentId: 'student-1',
+        studentName: 'Sam Smith',
+      );
+
+      expect((result as Success<Piece>).value.studentName, 'Sam Smith');
+      final fetched = await repository.getPiece(piece.id);
+      expect((fetched as Success<Piece>).value.studentName, 'Sam Smith');
+    });
+
+    test(
+      'pairStudent backfills teacherName only when the piece has none yet',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'To pair',
+          sourcePath: sourcePdf.path,
+          teacherName: 'Original Teacher Name',
+        );
+        final piece = (imported as Success<Piece>).value;
+
+        final result = await repository.pairStudent(
+          piece.id,
+          studentId: 'student-1',
+          teacherName: 'A different name',
+        );
+
+        // The piece already had a teacherName from importPiece, so the
+        // backfill argument must not clobber it — `teacherName` only ever
+        // fills a gap, it never overwrites an existing value.
+        expect(
+          (result as Success<Piece>).value.teacherName,
+          'Original Teacher Name',
+        );
+      },
+    );
 
     test(
       'pairStudent fails when the piece already has a different student',
@@ -451,7 +521,12 @@ class _DeferredPieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-  }) => _resolve().importPiece(title: title, sourcePath: sourcePath);
+    String? teacherName,
+  }) => _resolve().importPiece(
+    title: title,
+    sourcePath: sourcePath,
+    teacherName: teacherName,
+  );
 
   @override
   Future<Result<void>> leavePiece(String pieceId) =>
@@ -465,7 +540,14 @@ class _DeferredPieceRepository implements PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
-  }) => _resolve().pairStudent(pieceId, studentId: studentId);
+    String? studentName,
+    String? teacherName,
+  }) => _resolve().pairStudent(
+    pieceId,
+    studentId: studentId,
+    studentName: studentName,
+    teacherName: teacherName,
+  );
 
   @override
   Future<Result<Piece>> registerImportedPiece({
@@ -474,12 +556,16 @@ class _DeferredPieceRepository implements PieceRepository {
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   }) => _resolve().registerImportedPiece(
     pieceId: pieceId,
     title: title,
     teacherId: teacherId,
     sourcePath: sourcePath,
     studentId: studentId,
+    teacherName: teacherName,
+    studentName: studentName,
   );
 
   @override

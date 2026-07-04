@@ -56,6 +56,31 @@ void main() {
       expect(find.text('Decline'), findsOneWidget);
     });
 
+    testWidgets(
+      'shows the real teacherName when the invite carries one, rather '
+      'than an initials-from-id placeholder',
+      (tester) async {
+        when(() => inviteService.resolveInvite(token)).thenAnswer(
+          (_) async => const Success(
+            InviteDetails(
+              pieceId: 'p1',
+              pieceTitle: 'Clair de Lune',
+              teacherId: 'teacher-1',
+              teacherName: 'Jane Doe',
+            ),
+          ),
+        );
+
+        await pumpScreen(tester);
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1));
+
+        expect(find.text('Jane Doe'), findsOneWidget);
+        expect(find.textContaining('Teacher '), findsNothing);
+      },
+    );
+
     testWidgets('shows an error state for an invalid token', (tester) async {
       when(() => inviteService.resolveInvite(token)).thenAnswer(
         (_) async => const ResultFailure<InviteDetails>(
@@ -81,7 +106,11 @@ void main() {
         () => inviteService.resolveInvite(token),
       ).thenAnswer((_) async => const Success(details));
       when(
-        () => inviteService.acceptInvite(token, studentId: studentId),
+        () => inviteService.acceptInvite(
+          token,
+          studentId: studentId,
+          studentName: any(named: 'studentName'),
+        ),
       ).thenAnswer((_) async => const Success<void>(null));
 
       String? acceptedPieceId;

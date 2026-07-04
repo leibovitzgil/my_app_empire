@@ -169,5 +169,65 @@ void main() {
       await tester.pump();
       expect(find.text('Clair de Lune'), findsOneWidget);
     });
+
+    testWidgets(
+      'teacher sees the real studentName on a paired piece, falling back '
+      'to an initials-from-id placeholder when unset',
+      (tester) async {
+        await pumpScreen(
+          tester,
+          role: PieceRole.teacher,
+          currentUserId: teacherId,
+        );
+        piecesController.add([
+          Piece(
+            id: 'p1',
+            title: 'Clair de Lune',
+            basePdfChecksum: 'checksum',
+            basePdfPath: '/tmp/p1.pdf',
+            teacherId: teacherId,
+            studentId: studentId,
+            studentName: 'Sam Smith',
+            createdAt: DateTime(2024),
+            updatedAt: DateTime(2024),
+          ),
+        ]);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('Sam Smith'), findsOneWidget);
+        expect(find.textContaining('Student '), findsNothing);
+      },
+    );
+
+    testWidgets(
+      "student sees the real teacherName in a piece's subtitle, falling "
+      'back to an initials-from-id placeholder when unset',
+      (tester) async {
+        await pumpScreen(
+          tester,
+          role: PieceRole.student,
+          currentUserId: studentId,
+        );
+        piecesController.add([
+          Piece(
+            id: 'p1',
+            title: 'Clair de Lune',
+            basePdfChecksum: 'checksum',
+            basePdfPath: '/tmp/p1.pdf',
+            teacherId: teacherId,
+            studentId: studentId,
+            teacherName: 'Jane Doe',
+            createdAt: DateTime(2024),
+            updatedAt: DateTime(2024),
+          ),
+        ]);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('Jane Doe'), findsOneWidget);
+        expect(find.textContaining('Teacher '), findsNothing);
+      },
+    );
   });
 }

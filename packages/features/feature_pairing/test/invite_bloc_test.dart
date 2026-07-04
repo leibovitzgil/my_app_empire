@@ -111,6 +111,7 @@ void main() {
           () => inviteService.createInvite(
             teacherId: teacherId,
             pieceId: pieceId,
+            teacherName: any(named: 'teacherName'),
           ),
         ).thenAnswer(
           (_) async => Success(
@@ -150,6 +151,7 @@ void main() {
           () => inviteService.createInvite(
             teacherId: teacherId,
             pieceId: pieceId,
+            teacherName: any(named: 'teacherName'),
           ),
         ).thenAnswer(
           (_) async => const ResultFailure<InviteLink>(InviteException('boom')),

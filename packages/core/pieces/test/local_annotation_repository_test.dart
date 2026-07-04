@@ -22,6 +22,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
+    String? teacherName,
   }) => throw UnimplementedError();
 
   @override
@@ -35,6 +36,8 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
+    String? studentName,
+    String? teacherName,
   }) => throw UnimplementedError();
 
   @override
@@ -44,6 +47,8 @@ class _FakePieceRepository implements PieceRepository {
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   }) => throw UnimplementedError();
 
   @override

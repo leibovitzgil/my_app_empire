@@ -16,6 +16,7 @@ class ImportPiecePage extends StatelessWidget {
     required this.pieceRepository,
     required this.renderService,
     this.filePicker,
+    this.teacherName,
     super.key,
   });
 
@@ -28,6 +29,9 @@ class ImportPiecePage extends StatelessWidget {
   /// See [ImportPieceBloc.new]'s `filePicker` parameter.
   final PdfFilePicker? filePicker;
 
+  /// See [ImportPieceBloc.teacherName].
+  final String? teacherName;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<ImportPieceBloc>(
@@ -35,6 +39,7 @@ class ImportPiecePage extends StatelessWidget {
         pieceRepository: pieceRepository,
         renderService: renderService,
         filePicker: filePicker,
+        teacherName: teacherName,
       ),
       child: const ImportPieceScreen(),
     );

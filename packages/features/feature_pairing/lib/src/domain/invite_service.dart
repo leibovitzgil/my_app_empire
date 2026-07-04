@@ -37,6 +37,7 @@ class InviteDetails extends Equatable {
     required this.pieceId,
     required this.pieceTitle,
     required this.teacherId,
+    this.teacherName,
   });
 
   /// The piece this invite grants access to.
@@ -48,8 +49,12 @@ class InviteDetails extends Equatable {
   /// The inviting teacher's id.
   final String teacherId;
 
+  /// The inviting teacher's display name, if known — falls back to an
+  /// initials-from-id placeholder in the UI when `null`.
+  final String? teacherName;
+
   @override
-  List<Object?> get props => [pieceId, pieceTitle, teacherId];
+  List<Object?> get props => [pieceId, pieceTitle, teacherId, teacherName];
 }
 
 /// Thrown (surfaced via a `Result` failure) by [InviteService] with a
@@ -79,9 +84,15 @@ abstract class InviteService {
   /// `isAtFreeTierStudentLimit`, which callers should check *before* even
   /// showing the invite sheet — this is a defense-in-depth backstop, not the
   /// primary gate).
+  ///
+  /// [teacherName] is the inviting teacher's display name, captured at
+  /// invite-creation time so it can flow through to [InviteDetails] (and,
+  /// if the piece doesn't already have one, backfill `Piece.teacherName` on
+  /// acceptance) even for a piece imported before that field existed.
   Future<Result<InviteLink>> createInvite({
     required String teacherId,
     required String pieceId,
+    String? teacherName,
   });
 
   /// Resolves [token] to the piece/teacher it invites the caller to join,
@@ -98,5 +109,12 @@ abstract class InviteService {
   /// pairing them to the invite's piece. Fails with an [InviteException] if
   /// [token] is unknown/expired/consumed, or if the piece is already paired
   /// with a different student.
-  Future<Result<void>> acceptInvite(String token, {required String studentId});
+  ///
+  /// [studentName] is the accepting student's own display name, sourced from
+  /// the accepting device's current-user identity.
+  Future<Result<void>> acceptInvite(
+    String token, {
+    required String studentId,
+    String? studentName,
+  });
 }

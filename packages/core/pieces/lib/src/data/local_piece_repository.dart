@@ -147,6 +147,7 @@ class LocalPieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
+    String? teacherName,
   }) => Result.guard<Piece>(() async {
     final id = _nextId();
     final copied = await _copyIntoPiecesStorage(id, sourcePath);
@@ -158,6 +159,7 @@ class LocalPieceRepository implements PieceRepository {
       basePdfChecksum: copied.checksum,
       basePdfPath: copied.destPath,
       teacherId: _currentUserId(),
+      teacherName: teacherName,
       createdAt: now,
       updatedAt: now,
     );
@@ -173,6 +175,8 @@ class LocalPieceRepository implements PieceRepository {
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   }) => Result.guard<Piece>(() async {
     if (_findOrNull(pieceId) != null) {
       throw StateError('Piece already exists locally: $pieceId');
@@ -186,7 +190,9 @@ class LocalPieceRepository implements PieceRepository {
       basePdfChecksum: copied.checksum,
       basePdfPath: copied.destPath,
       teacherId: teacherId,
+      teacherName: teacherName,
       studentId: studentId,
+      studentName: studentName,
       createdAt: now,
       updatedAt: now,
     );
@@ -242,6 +248,8 @@ class LocalPieceRepository implements PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
+    String? studentName,
+    String? teacherName,
   }) => Result.guard<Piece>(() async {
     final piece = _require(pieceId);
     if (piece.studentId != null && piece.studentId != studentId) {
@@ -249,8 +257,31 @@ class LocalPieceRepository implements PieceRepository {
         'This piece is already paired with a different student.',
       );
     }
-    if (piece.studentId == studentId) return piece;
-    final updated = piece.copyWith(studentId: studentId, updatedAt: _now());
+    // `teacherName` is a *backfill*: it only ever fills in a piece that
+    // doesn't already have one (e.g. one imported before this field
+    // existed) — an existing `Piece.teacherName` (set by `importPiece`) is
+    // never clobbered here, regardless of what's passed. `studentName`
+    // isn't backfill-only: this call's own subject is the pairing student,
+    // so a freshly-given name always wins over a stale/absent one.
+    final resolvedTeacherName = piece.teacherName ?? teacherName;
+    final resolvedStudentName = studentName ?? piece.studentName;
+    if (piece.studentId == studentId &&
+        piece.studentName == resolvedStudentName &&
+        piece.teacherName == resolvedTeacherName) {
+      return piece;
+    }
+    final updated = Piece(
+      id: piece.id,
+      title: piece.title,
+      basePdfChecksum: piece.basePdfChecksum,
+      basePdfPath: piece.basePdfPath,
+      teacherId: piece.teacherId,
+      teacherName: resolvedTeacherName,
+      studentId: studentId,
+      studentName: resolvedStudentName,
+      createdAt: piece.createdAt,
+      updatedAt: _now(),
+    );
     _replace(updated);
     await _emit();
     return updated;
@@ -258,13 +289,16 @@ class LocalPieceRepository implements PieceRepository {
 
   // `Piece.copyWith` can't clear `studentId` back to null (it treats a null
   // argument as "keep the existing value"), so leaving requires rebuilding
-  // the record directly rather than going through `copyWith`.
+  // the record directly rather than going through `copyWith` — this also
+  // clears `studentName` (the departed student's name is no longer
+  // meaningful) while preserving `teacherName`.
   Piece _withoutStudent(Piece piece) => Piece(
     id: piece.id,
     title: piece.title,
     basePdfChecksum: piece.basePdfChecksum,
     basePdfPath: piece.basePdfPath,
     teacherId: piece.teacherId,
+    teacherName: piece.teacherName,
     createdAt: piece.createdAt,
     updatedAt: _now(),
   );

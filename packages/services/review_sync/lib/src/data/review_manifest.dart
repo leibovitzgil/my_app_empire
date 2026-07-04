@@ -34,9 +34,11 @@ class ReviewManifest {
     required this.basePdfFilename,
     required this.strokes,
     required this.audioEntries,
+    this.authorName,
   });
 
-  /// Reverses [toJson].
+  /// Reverses [toJson]. `authorName` is read leniently (absent -> `null`) so
+  /// bundles exported before that field existed keep decoding cleanly.
   factory ReviewManifest.fromJson(Map<String, dynamic> json) {
     final basePdf = json['basePdf'] as Map<String, dynamic>?;
     return ReviewManifest(
@@ -44,6 +46,7 @@ class ReviewManifest {
       pieceId: json['pieceId'] as String,
       pieceTitle: json['pieceTitle'] as String,
       authorId: json['authorId'] as String,
+      authorName: json['authorName'] as String?,
       exportedAtMillis: json['exportedAtMillis'] as int,
       basePdfChecksum: basePdf?['checksum'] as String? ?? '',
       basePdfFilename: basePdf?['filename'] as String?,
@@ -69,6 +72,12 @@ class ReviewManifest {
 
   /// The id of the participant whose slice this bundle contains.
   final String authorId;
+
+  /// The author's display name at export time, if known locally on their
+  /// device — carried through so a receiver creating this piece for the
+  /// first time (see `FileShareReviewSyncService._importPieceFromBundle`)
+  /// can attach a real `Piece.teacherName` instead of leaving it null.
+  final String? authorName;
 
   /// When this bundle was exported, in epoch milliseconds. Doubles as the
   /// per-author monotonic revision: an import is dropped if this value is
@@ -96,6 +105,7 @@ class ReviewManifest {
     'pieceId': pieceId,
     'pieceTitle': pieceTitle,
     'authorId': authorId,
+    'authorName': authorName,
     'exportedAtMillis': exportedAtMillis,
     'basePdf': <String, dynamic>{
       'checksum': basePdfChecksum,

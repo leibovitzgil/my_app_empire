@@ -29,6 +29,7 @@ class LibraryPage extends StatelessWidget {
     required this.onOpenScore,
     this.onInvitePiece,
     this.filePicker,
+    this.currentUserName,
     super.key,
   });
 
@@ -63,6 +64,12 @@ class LibraryPage extends StatelessWidget {
   /// tests to avoid the platform channel.
   final PdfFilePicker? filePicker;
 
+  /// The signed-in teacher's display name, if known — sourced from auth
+  /// identity and attached to any piece created via the import flow (see
+  /// `ImportPieceBloc.teacherName`). `null` falls back to an
+  /// initials-from-id placeholder wherever this piece's teacher is shown.
+  final String? currentUserName;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<LibraryBloc>(
@@ -79,6 +86,7 @@ class LibraryPage extends StatelessWidget {
         onOpenScore: onOpenScore,
         onInvitePiece: onInvitePiece,
         filePicker: filePicker,
+        currentUserName: currentUserName,
       ),
     );
   }
@@ -96,6 +104,7 @@ class LibraryHomeScreen extends StatelessWidget {
     required this.onOpenScore,
     this.onInvitePiece,
     this.filePicker,
+    this.currentUserName,
     super.key,
   });
 
@@ -119,6 +128,9 @@ class LibraryHomeScreen extends StatelessWidget {
 
   /// See [LibraryPage.filePicker].
   final PdfFilePicker? filePicker;
+
+  /// See [LibraryPage.currentUserName].
+  final String? currentUserName;
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +217,7 @@ class LibraryHomeScreen extends StatelessWidget {
           pieceRepository: pieceRepository,
           renderService: renderService,
           filePicker: filePicker,
+          teacherName: currentUserName,
         ),
       ),
     );
@@ -316,13 +329,21 @@ class _StudentGroupState extends State<_StudentGroup> {
   @override
   Widget build(BuildContext context) {
     final hasUnread = widget.pieces.any(widget.state.isUnread);
+    // All of a student's pieces should carry the same `studentName` (it's
+    // set once, at pairing time), but fall back across the group in case an
+    // older/imported piece predates the field on just one of them.
+    final studentName = widget.pieces
+        .map((p) => p.studentName)
+        .firstWhere((name) => name != null, orElse: () => null);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PersonTile(
           initials: LibraryFormat.initialsFor(widget.studentId),
           color: Color(LibraryFormat.colorValueFor(widget.studentId)),
-          name: 'Student ${LibraryFormat.initialsFor(widget.studentId)}',
+          name:
+              studentName ??
+              'Student ${LibraryFormat.initialsFor(widget.studentId)}',
           subtitle:
               '${widget.pieces.length} shared '
               '${widget.pieces.length == 1 ? 'piece' : 'pieces'}',
@@ -432,7 +453,8 @@ class _StudentBody extends StatelessWidget {
           AppListTile(
             title: Text(piece.title),
             subtitle: Text(
-              'Teacher ${LibraryFormat.initialsFor(piece.teacherId)}',
+              piece.teacherName ??
+                  'Teacher ${LibraryFormat.initialsFor(piece.teacherId)}',
             ),
             trailing: state.isUnread(piece)
                 ? const Icon(Icons.circle, size: 8, color: Colors.red)

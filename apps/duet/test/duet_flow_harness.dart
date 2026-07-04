@@ -176,6 +176,7 @@ class FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
+    String? teacherName,
   }) async {
     final now = DateTime(2024);
     final piece = Piece(
@@ -184,6 +185,7 @@ class FakePieceRepository implements PieceRepository {
       basePdfChecksum: 'checksum-$sourcePath',
       basePdfPath: sourcePath,
       teacherId: teacherId,
+      teacherName: teacherName,
       createdAt: now,
       updatedAt: now,
     );
@@ -207,6 +209,8 @@ class FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
+    String? studentName,
+    String? teacherName,
   }) => throw UnimplementedError();
 
   @override
@@ -216,6 +220,8 @@ class FakePieceRepository implements PieceRepository {
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   }) => throw UnimplementedError();
 }
 

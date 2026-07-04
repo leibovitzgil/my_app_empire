@@ -18,6 +18,7 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
     required InviteService inviteService,
     required this.token,
     required this.studentId,
+    this.studentName,
   }) : _inviteService = inviteService,
        super(const AcceptInviteState.initial());
 
@@ -26,6 +27,10 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
 
   /// The accepting student's id.
   final String studentId;
+
+  /// The accepting student's display name, if known — passed through to
+  /// [InviteService.acceptInvite].
+  final String? studentName;
 
   final InviteService _inviteService;
 
@@ -52,6 +57,7 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
     final result = await _inviteService.acceptInvite(
       token,
       studentId: studentId,
+      studentName: studentName,
     );
     switch (result) {
       case Success<void>():

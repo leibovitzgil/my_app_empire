@@ -34,6 +34,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
+    String? teacherName,
   }) => throw UnimplementedError();
 
   @override
@@ -47,6 +48,8 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
+    String? studentName,
+    String? teacherName,
   }) => throw UnimplementedError();
 
   /// A simple, deterministic, content-based "checksum" (sum of byte
@@ -64,6 +67,8 @@ class _FakePieceRepository implements PieceRepository {
     required String teacherId,
     required String sourcePath,
     String? studentId,
+    String? teacherName,
+    String? studentName,
   }) async {
     if (pieces.any((p) => p.id == pieceId)) {
       return ResultFailure<Piece>(
@@ -77,7 +82,9 @@ class _FakePieceRepository implements PieceRepository {
       basePdfChecksum: await _checksumOf(sourcePath),
       basePdfPath: sourcePath,
       teacherId: teacherId,
+      teacherName: teacherName,
       studentId: studentId,
+      studentName: studentName,
       createdAt: now,
       updatedAt: now,
     );
@@ -791,6 +798,65 @@ void main() {
           {'s1', 's2'},
         );
         expect(receiverState.audioNotes.single.id, 'n1');
+      },
+    );
+
+    test(
+      "importBundle attaches the sender's real teacherName (captured in "
+      "the manifest at export time) and the receiver's own studentName to "
+      'a brand-new first-share Piece',
+      () async {
+        final pdfBytes = utf8.encode('%PDF-1.4 real bytes');
+        final expectedChecksum = pdfBytes
+            .fold<int>(0, (sum, byte) => sum + byte)
+            .toString();
+        final pdfPath = '${tempDir.path}/base.pdf';
+        File(pdfPath).writeAsBytesSync(pdfBytes);
+        final pieceWithPdf = Piece(
+          id: piece.id,
+          title: piece.title,
+          basePdfChecksum: expectedChecksum,
+          basePdfPath: pdfPath,
+          teacherId: piece.teacherId,
+          studentId: piece.studentId,
+          createdAt: piece.createdAt,
+          updatedAt: piece.updatedAt,
+        );
+        final firstShareSenderService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(pieceWithPdf),
+          annotationRepository: senderAnnotations,
+          audioAssetStore: senderAudioStore,
+          storage: storage,
+          currentUserId: () => 'teacher-1',
+          currentUserName: () => 'Jane Doe',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        final exportResult = await firstShareSenderService.exportBundle(
+          piece.id,
+        );
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+
+        final receiverPieceRepository = _FakePieceRepository.withPieces([]);
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: receiverPieceRepository,
+          annotationRepository: _FakeAnnotationRepository(),
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          currentUserName: () => 'Sam Smith',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        await receiverService.importBundle(bundle.filePath);
+
+        final registered = await receiverPieceRepository.getPiece(piece.id);
+        final registeredPiece = (registered as Success<Piece>).value;
+        expect(registeredPiece.teacherName, 'Jane Doe');
+        expect(registeredPiece.studentName, 'Sam Smith');
       },
     );
 

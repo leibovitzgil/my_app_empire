@@ -30,6 +30,7 @@ Future<void> showInviteSheet(
   required PieceRepository pieceRepository,
   required String teacherId,
   required String pieceId,
+  String? teacherName,
 }) async {
   final bloc = InviteBloc(
     inviteService: inviteService,
@@ -37,6 +38,7 @@ Future<void> showInviteSheet(
     pieceRepository: pieceRepository,
     teacherId: teacherId,
     pieceId: pieceId,
+    teacherName: teacherName,
   )..add(const InviteSheetOpened());
   await AppBottomSheet.show<void>(
     context,

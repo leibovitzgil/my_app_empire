@@ -42,6 +42,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
     required AudioAssetStore audioAssetStore,
     required LocalStorageService storage,
     required String Function() currentUserId,
+    String? Function()? currentUserName,
     Future<Directory> Function()? bundlesDirectory,
     DateTime Function()? clock,
     Future<ShareResult> Function(ShareParams params)? shareInvoker,
@@ -51,6 +52,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
        _audioAssetStore = audioAssetStore,
        _storage = storage,
        _currentUserId = currentUserId,
+       _currentUserName = currentUserName ?? (() => null),
        _bundlesDirectory = bundlesDirectory ?? getTemporaryDirectory,
        _now = clock ?? DateTime.now,
        _shareInvoker = shareInvoker ?? SharePlus.instance.share,
@@ -61,6 +63,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
   final AudioAssetStore _audioAssetStore;
   final LocalStorageService _storage;
   final String Function() _currentUserId;
+  final String? Function() _currentUserName;
   final Future<Directory> Function() _bundlesDirectory;
   final DateTime Function() _now;
   final Future<ShareResult> Function(ShareParams params) _shareInvoker;
@@ -161,7 +164,9 @@ class FileShareReviewSyncService implements ReviewSyncService {
         pieceId: manifest.pieceId,
         title: manifest.pieceTitle,
         teacherId: manifest.authorId,
+        teacherName: manifest.authorName,
         studentId: isSelfImport ? null : currentUserId,
+        studentName: isSelfImport ? null : _currentUserName(),
         sourcePath: tempPath,
       )).orThrow();
     } finally {
@@ -229,11 +234,19 @@ class FileShareReviewSyncService implements ReviewSyncService {
     }
 
     final now = _now();
+    // Only attached when exporting as the current device's own user (the
+    // overwhelming common case — `authorId` is otherwise only overridden by
+    // tests): a different, explicitly-passed `authorId` isn't someone whose
+    // display name this device could actually know.
+    final authorName = resolvedAuthorId == _currentUserId()
+        ? _currentUserName()
+        : null;
     final manifest = ReviewManifest(
       version: 1,
       pieceId: pieceId,
       pieceTitle: piece.title,
       authorId: resolvedAuthorId,
+      authorName: authorName,
       exportedAtMillis: now.millisecondsSinceEpoch,
       basePdfChecksum: piece.basePdfChecksum,
       basePdfFilename: pdfFilename,

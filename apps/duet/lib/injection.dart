@@ -4,6 +4,7 @@
 import 'package:audio/audio.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
@@ -29,15 +30,23 @@ Future<void> configureDependencies() async {
   final storage = await LocalStorageService.init();
   getIt.registerSingleton<LocalStorageService>(storage);
 
-  getIt.registerLazySingleton<AuthRepository>(MockAuthRepository.new);
+  // Constructed directly (rather than via `AuthRepository.new` as a lazy
+  // singleton) so `CurrentUserName` below can subscribe to its
+  // Duet-local-only `displayName` stream, which isn't part of the shared
+  // `AuthRepository` contract (see that getter's doc).
+  final mockAuthRepository = MockAuthRepository();
+  getIt.registerSingleton<AuthRepository>(mockAuthRepository);
 
-  // Eager singletons: both must subscribe to `AuthRepository.user` before
-  // the user can possibly log in (see `CurrentUser`'s doc) — a lazy
-  // singleton resolved for the first time *after* login would miss that
-  // first (and, for a returning session's persisted role, defining) emission
-  // on the broadcast stream.
+  // Eager singletons: both must subscribe to `AuthRepository.user` (and
+  // `MockAuthRepository.displayName`) before the user can possibly log in
+  // (see `CurrentUser`'s doc) — a lazy singleton resolved for the first time
+  // *after* login would miss that first (and, for a returning session's
+  // persisted role, defining) emission on the broadcast stream.
   final currentUser = CurrentUser(getIt<AuthRepository>().user);
   getIt.registerSingleton<CurrentUser>(currentUser);
+
+  final currentUserName = CurrentUserName(mockAuthRepository.displayName);
+  getIt.registerSingleton<CurrentUserName>(currentUserName);
 
   getIt.registerSingleton<UserRoleRepository>(
     LocalUserRoleRepository(
@@ -109,6 +118,7 @@ Future<void> configureDependencies() async {
       audioAssetStore: getIt<AudioAssetStore>(),
       storage: getIt<LocalStorageService>(),
       currentUserId: getIt<CurrentUser>().call,
+      currentUserName: getIt<CurrentUserName>().call,
     ),
   );
 
