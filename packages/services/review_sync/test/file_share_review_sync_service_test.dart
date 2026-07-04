@@ -686,6 +686,73 @@ void main() {
       },
     );
 
+    test(
+      "importBundle's notification title includes the author's name from "
+      'the manifest when known',
+      () async {
+        final namedSenderService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: senderAnnotations,
+          audioAssetStore: senderAudioStore,
+          storage: storage,
+          currentUserId: () => 'teacher-1',
+          currentUserName: () => 'Jane Doe',
+          bundlesDirectory: () async => tempDir,
+        );
+        final export = await namedSenderService.exportBundle(piece.id);
+        final bundle = (export as Success<ExportedBundle>).value;
+
+        String? capturedTitle;
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: _FakeAnnotationRepository(),
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          bundlesDirectory: () async => tempDir,
+          onImported: ({required title, required body}) async {
+            capturedTitle = title;
+          },
+        );
+
+        await receiverService.importBundle(bundle.filePath);
+
+        expect(capturedTitle, 'New feedback from Jane Doe');
+      },
+    );
+
+    test(
+      "importBundle's notification title falls back to generic copy when "
+      "the author's name is unknown",
+      () async {
+        final export = await senderService.exportBundle(piece.id);
+        final bundle = (export as Success<ExportedBundle>).value;
+
+        String? capturedTitle;
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: _FakeAnnotationRepository(),
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          bundlesDirectory: () async => tempDir,
+          onImported: ({required title, required body}) async {
+            capturedTitle = title;
+          },
+        );
+
+        await receiverService.importBundle(bundle.filePath);
+
+        expect(capturedTitle, 'New review feedback');
+      },
+    );
+
     test('importBundle fails for an unpaired/unknown piece', () async {
       final export = await senderService.exportBundle(piece.id);
       final bundle = (export as Success<ExportedBundle>).value;

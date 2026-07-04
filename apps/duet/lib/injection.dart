@@ -5,12 +5,14 @@ import 'package:audio/audio.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/duet_roles.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_pairing/feature_pairing.dart';
+import 'package:feature_settings/feature_settings.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
@@ -61,15 +63,23 @@ Future<void> configureDependencies() async {
     SimulatedMonetizationService.new,
   );
 
-  // Lazy-async and never awaited/consumed anywhere in this MVP: no screen
-  // requests a notification permission yet, and `review_sync`'s own
-  // `ReviewSyncNotifier` hook (see `FileShareReviewSyncService`) has nothing
-  // to call it with — `NotificationsManager` only wraps FCM permission
-  // flows, with no local-notification API. Registered per the DI plan
-  // anyway so the contract has a binding; left unconsumed is a real,
-  // documented gap for a later phase.
+  // Lazy-async since it awaits `SharedPreferences.getInstance()`. Now
+  // consumed two ways: `NotificationPermissionGateway` below (for the
+  // Settings screen's push toggle) and `ReviewSyncService`'s `onImported`
+  // hook further down (for the "feedback arrived" local notification).
   getIt.registerLazySingletonAsync<NotificationsManager>(
     NotificationsManager.create,
+  );
+
+  getIt.registerLazySingleton<SettingsRepository>(
+    () => LocalSettingsRepository(getIt<LocalStorageService>()),
+  );
+  // Lazy-async, like `NotificationsManager` itself: the gateway can't exist
+  // before the manager it wraps does.
+  getIt.registerLazySingletonAsync<NotificationPermissionGateway>(
+    () async => DuetNotificationPermissionGateway(
+      await getIt.getAsync<NotificationsManager>(),
+    ),
   );
 
   getIt.registerLazySingleton<PdfRenderService>(PdfxRenderService.new);
@@ -119,6 +129,13 @@ Future<void> configureDependencies() async {
       storage: getIt<LocalStorageService>(),
       currentUserId: getIt<CurrentUser>().call,
       currentUserName: getIt<CurrentUserName>().call,
+      // The title/body copy (including the author's name, when known) is
+      // already composed by `FileShareReviewSyncService` itself — this hook
+      // just has to surface it as a real device notification.
+      onImported: ({required title, required body}) async {
+        final manager = await getIt.getAsync<NotificationsManager>();
+        await manager.showLocal(title: title, body: body);
+      },
     ),
   );
 

@@ -28,6 +28,7 @@ class LibraryPage extends StatelessWidget {
     required this.currentRole,
     required this.onOpenScore,
     this.onInvitePiece,
+    this.onOpenSettings,
     this.filePicker,
     this.currentUserName,
     super.key,
@@ -60,6 +61,13 @@ class LibraryPage extends StatelessWidget {
   /// (e.g. an app that hasn't wired pairing yet).
   final void Function(Piece piece)? onInvitePiece;
 
+  /// Called when the user wants to open the app's settings screen. A
+  /// callback for the same reason as [onOpenScore]/[onInvitePiece]: settings
+  /// lives in `feature_settings`, a sibling package this one must not depend
+  /// on. `null` hides the settings action entirely (e.g. an app that hasn't
+  /// wired settings yet).
+  final VoidCallback? onOpenSettings;
+
   /// Picks a PDF for the import flow. Defaults to [pickPdfFile]; override in
   /// tests to avoid the platform channel.
   final PdfFilePicker? filePicker;
@@ -85,6 +93,7 @@ class LibraryPage extends StatelessWidget {
         currentUserId: currentUserId,
         onOpenScore: onOpenScore,
         onInvitePiece: onInvitePiece,
+        onOpenSettings: onOpenSettings,
         filePicker: filePicker,
         currentUserName: currentUserName,
       ),
@@ -103,6 +112,7 @@ class LibraryHomeScreen extends StatelessWidget {
     required this.currentUserId,
     required this.onOpenScore,
     this.onInvitePiece,
+    this.onOpenSettings,
     this.filePicker,
     this.currentUserName,
     super.key,
@@ -126,6 +136,9 @@ class LibraryHomeScreen extends StatelessWidget {
   /// See [LibraryPage.onInvitePiece].
   final void Function(Piece piece)? onInvitePiece;
 
+  /// See [LibraryPage.onOpenSettings].
+  final VoidCallback? onOpenSettings;
+
   /// See [LibraryPage.filePicker].
   final PdfFilePicker? filePicker;
 
@@ -140,29 +153,35 @@ class LibraryHomeScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Duet'),
-            actions: isTeacher
-                ? [
-                    PermissionGate(
-                      repository: userRoleRepository,
-                      permission: DuetPermissions.inviteStudent,
-                      child: IconButton(
-                        icon: const Icon(Icons.person_add_alt),
-                        tooltip: 'Invite student',
-                        onPressed: () =>
-                            unawaited(_onInviteStudent(context, state)),
-                      ),
-                    ),
-                    PermissionGate(
-                      repository: userRoleRepository,
-                      permission: DuetPermissions.importPiece,
-                      child: IconButton(
-                        icon: const Icon(Icons.add),
-                        tooltip: 'Import piece',
-                        onPressed: () => unawaited(_openImportFlow(context)),
-                      ),
-                    ),
-                  ]
-                : null,
+            actions: [
+              if (isTeacher) ...[
+                PermissionGate(
+                  repository: userRoleRepository,
+                  permission: DuetPermissions.inviteStudent,
+                  child: IconButton(
+                    icon: const Icon(Icons.person_add_alt),
+                    tooltip: 'Invite student',
+                    onPressed: () =>
+                        unawaited(_onInviteStudent(context, state)),
+                  ),
+                ),
+                PermissionGate(
+                  repository: userRoleRepository,
+                  permission: DuetPermissions.importPiece,
+                  child: IconButton(
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Import piece',
+                    onPressed: () => unawaited(_openImportFlow(context)),
+                  ),
+                ),
+              ],
+              if (onOpenSettings != null)
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  tooltip: 'Settings',
+                  onPressed: onOpenSettings,
+                ),
+            ],
           ),
           body: switch (state.status) {
             LibraryStatus.loading => const Padding(

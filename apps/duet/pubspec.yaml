@@ -27,6 +27,8 @@ dependencies:
     path: ../../packages/features/feature_paywall
   feature_score:
     path: ../../packages/features/feature_score
+  feature_settings:
+    path: ../../packages/features/feature_settings
   file_picker: ^12.0.0-beta.7
   flutter:
     sdk: flutter

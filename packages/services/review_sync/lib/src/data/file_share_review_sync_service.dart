@@ -410,8 +410,17 @@ class FileShareReviewSyncService implements ReviewSyncService {
         final changed = manifest.strokes.isNotEmpty || newAudioNotes.isNotEmpty;
         final onImported = _onImported;
         if (changed && onImported != null) {
+          // The author's display name travels with the manifest (see
+          // `exportBundle`'s `authorName`), not the receiving device's own
+          // identity — it's whoever left the feedback, not who's reading it.
+          // Older bundles (or an author who had no display name set at
+          // export time) carry `null`, so this falls back to generic copy
+          // rather than showing a blank/placeholder name.
+          final authorName = manifest.authorName;
           await onImported(
-            title: 'Duet review update',
+            title: authorName != null
+                ? 'New feedback from $authorName'
+                : 'New review feedback',
             body:
                 '${piece.title}: ${manifest.strokes.length} strokes, '
                 '${newAudioNotes.length} notes',

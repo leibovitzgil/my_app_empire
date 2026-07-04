@@ -9,6 +9,7 @@ import 'package:duet/injection.dart';
 import 'package:duet/ui/role_selection/role_selection_cubit.dart';
 import 'package:duet/ui/role_selection_screen.dart';
 import 'package:duet/ui/score_page.dart';
+import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_library/feature_library.dart';
 import 'package:feature_pairing/feature_pairing.dart' hide DuetPermissions;
@@ -70,6 +71,10 @@ class _AppViewState extends State<AppView> {
         GoRoute(
           path: '/home',
           builder: (context, state) => const HomeScreen(),
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const DuetSettingsPage(),
         ),
         GoRoute(
           path: '/invite/accept/:token',
@@ -205,6 +210,7 @@ class HomeScreen extends StatelessWidget {
       currentRole: isTeacher ? PieceRole.teacher : PieceRole.student,
       onOpenScore: (piece) => _openScore(context, piece),
       onInvitePiece: (piece) => _openInvite(context, piece, currentUserId),
+      onOpenSettings: () => context.push('/settings'),
       currentUserName: getIt<CurrentUserName>().call(),
     );
   }

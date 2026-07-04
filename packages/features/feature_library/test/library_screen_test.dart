@@ -59,6 +59,7 @@ void main() {
       WidgetTester tester, {
       required PieceRole role,
       required String currentUserId,
+      VoidCallback? onOpenSettings,
     }) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -69,6 +70,7 @@ void main() {
             currentUserId: currentUserId,
             currentRole: role,
             onOpenScore: (_) {},
+            onOpenSettings: onOpenSettings,
           ),
         ),
       );
@@ -114,6 +116,43 @@ void main() {
         expect(find.text('No pieces yet'), findsOneWidget);
         expect(find.textContaining('Ask your teacher'), findsOneWidget);
         expect(find.byTooltip('Import piece'), findsNothing);
+      },
+    );
+
+    testWidgets('hides the settings action when onOpenSettings is null', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        role: PieceRole.teacher,
+        currentUserId: teacherId,
+      );
+      piecesController.add(const []);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byTooltip('Settings'), findsNothing);
+    });
+
+    testWidgets(
+      'shows the settings action for both roles and invokes the callback',
+      (tester) async {
+        var opened = 0;
+        await pumpScreen(
+          tester,
+          role: PieceRole.student,
+          currentUserId: studentId,
+          onOpenSettings: () => opened++,
+        );
+        piecesController.add(const []);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byTooltip('Settings'), findsOneWidget);
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+
+        expect(opened, 1);
       },
     );
 

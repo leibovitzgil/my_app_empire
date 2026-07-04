@@ -148,5 +148,37 @@ void main() {
       expect(find.text('Something went wrong.'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
+
+    // extraTile is the app-glue slot for e.g. Duet's Teacher-only
+    // "Manage plan" row — absent by default, rendered when supplied.
+    testWidgets('renders no extra row by default', (tester) async {
+      await pump(tester, const SettingsState.loaded(pushEnabled: false));
+
+      expect(find.text('Manage plan'), findsNothing);
+    });
+
+    testWidgets('renders extraTile below the notifications toggle', (
+      tester,
+    ) async {
+      whenListen(
+        bloc,
+        const Stream<SettingsState>.empty(),
+        initialState: const SettingsState.loaded(pushEnabled: false),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: _theme,
+          home: BlocProvider<SettingsBloc>.value(
+            value: bloc,
+            child: const SettingsScreen(
+              extraTile: ListTile(title: Text('Manage plan')),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Manage plan'), findsOneWidget);
+    });
   });
 }
