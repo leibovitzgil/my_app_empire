@@ -54,6 +54,15 @@ class _FakePieceRepository implements PieceRepository {
   @override
   Future<Result<void>> renamePiece(String pieceId, String title) =>
       throw UnimplementedError();
+
+  @override
+  Future<Result<Piece>> registerImportedPiece({
+    required String pieceId,
+    required String title,
+    required String teacherId,
+    required String sourcePath,
+    String? studentId,
+  }) => throw UnimplementedError();
 }
 
 void main() {
@@ -213,5 +222,88 @@ void main() {
       );
       expect(result, isA<ResultFailure<void>>());
     });
+
+    test(
+      'createInvite allows a free teacher to create invites for multiple '
+      'unpaired pieces, but accepting a second one that would exceed the '
+      'cap is rejected at accept-time',
+      () async {
+        final pieceTwo = Piece(
+          id: 'p2',
+          title: 'Prelude',
+          basePdfChecksum: 'c2',
+          basePdfPath: '/tmp/p2.pdf',
+          teacherId: teacherId,
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+        pieceRepository.pieces = [piece, pieceTwo];
+
+        // Neither piece is paired yet, so both invites are created fine —
+        // invite creation isn't the bottleneck.
+        final firstInvite = await service.createInvite(
+          teacherId: teacherId,
+          pieceId: 'p1',
+        );
+        final secondInvite = await service.createInvite(
+          teacherId: teacherId,
+          pieceId: 'p2',
+        );
+        expect(firstInvite, isA<Success<InviteLink>>());
+        expect(secondInvite, isA<Success<InviteLink>>());
+
+        // Accepting the first invite pairs p1 with student-1, landing the
+        // free-tier teacher at their cap.
+        final firstAccept = await service.acceptInvite(
+          'token-0',
+          studentId: 'student-1',
+        );
+        expect(firstAccept, isA<Success<void>>());
+
+        // Accepting the second invite (a *different* student) would push
+        // the teacher over the cap — this must be rejected at accept-time
+        // even though invite-creation allowed it.
+        final secondAccept = await service.acceptInvite(
+          'token-1',
+          studentId: 'student-2',
+        );
+        expect(secondAccept, isA<ResultFailure<void>>());
+
+        final fetchedTwo = await pieceRepository.getPiece('p2');
+        expect((fetchedTwo as Success<Piece>).value.studentId, isNull);
+      },
+    );
+
+    test(
+      'acceptInvite succeeds over the cap for a pro teacher',
+      () async {
+        final pieceTwo = Piece(
+          id: 'p2',
+          title: 'Prelude',
+          basePdfChecksum: 'c2',
+          basePdfPath: '/tmp/p2.pdf',
+          teacherId: teacherId,
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+        pieceRepository.pieces = [piece, pieceTwo];
+        monetization.setProStatus(true);
+
+        await service.createInvite(teacherId: teacherId, pieceId: 'p1');
+        await service.createInvite(teacherId: teacherId, pieceId: 'p2');
+
+        final firstAccept = await service.acceptInvite(
+          'token-0',
+          studentId: 'student-1',
+        );
+        final secondAccept = await service.acceptInvite(
+          'token-1',
+          studentId: 'student-2',
+        );
+
+        expect(firstAccept, isA<Success<void>>());
+        expect(secondAccept, isA<Success<void>>());
+      },
+    );
   });
 }

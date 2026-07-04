@@ -110,6 +110,24 @@ class LocalPieceRepository implements PieceRepository {
 
   String _nextId() => 'piece_${_now().microsecondsSinceEpoch}_${_seq++}';
 
+  /// Copies the PDF at [sourcePath] into this repository's persistent
+  /// `pieces/` directory under a name keyed by [id], and checksums it.
+  /// Shared by [importPiece] (which mints [id] itself) and
+  /// [registerImportedPiece] (which is handed [id] by the caller, to
+  /// preserve a sender's piece identity).
+  Future<({String checksum, String destPath})> _copyIntoPiecesStorage(
+    String id,
+    String sourcePath,
+  ) async {
+    final checksum = (await _pdfRenderService.checksum(sourcePath)).orThrow();
+    final documentsDir = await _documentsDirectory();
+    final piecesDir = Directory(p.join(documentsDir.path, 'pieces'))
+      ..createSync(recursive: true);
+    final destPath = p.join(piecesDir.path, '$id${p.extension(sourcePath)}');
+    await File(sourcePath).copy(destPath);
+    return (checksum: checksum, destPath: destPath);
+  }
+
   @override
   Stream<List<Piece>> watchPieces() async* {
     yield _visibleTo(_currentUserId());
@@ -130,22 +148,45 @@ class LocalPieceRepository implements PieceRepository {
     required String title,
     required String sourcePath,
   }) => Result.guard<Piece>(() async {
-    final checksum = (await _pdfRenderService.checksum(sourcePath)).orThrow();
-
-    final documentsDir = await _documentsDirectory();
-    final piecesDir = Directory(p.join(documentsDir.path, 'pieces'))
-      ..createSync(recursive: true);
     final id = _nextId();
-    final destPath = p.join(piecesDir.path, '$id${p.extension(sourcePath)}');
-    await File(sourcePath).copy(destPath);
+    final copied = await _copyIntoPiecesStorage(id, sourcePath);
 
     final now = _now();
     final piece = Piece(
       id: id,
       title: title,
-      basePdfChecksum: checksum,
-      basePdfPath: destPath,
+      basePdfChecksum: copied.checksum,
+      basePdfPath: copied.destPath,
       teacherId: _currentUserId(),
+      createdAt: now,
+      updatedAt: now,
+    );
+    _pieces = [..._pieces, piece];
+    await _emit();
+    return piece;
+  });
+
+  @override
+  Future<Result<Piece>> registerImportedPiece({
+    required String pieceId,
+    required String title,
+    required String teacherId,
+    required String sourcePath,
+    String? studentId,
+  }) => Result.guard<Piece>(() async {
+    if (_findOrNull(pieceId) != null) {
+      throw StateError('Piece already exists locally: $pieceId');
+    }
+    final copied = await _copyIntoPiecesStorage(pieceId, sourcePath);
+
+    final now = _now();
+    final piece = Piece(
+      id: pieceId,
+      title: title,
+      basePdfChecksum: copied.checksum,
+      basePdfPath: copied.destPath,
+      teacherId: teacherId,
+      studentId: studentId,
       createdAt: now,
       updatedAt: now,
     );

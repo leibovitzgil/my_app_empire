@@ -208,6 +208,15 @@ class FakePieceRepository implements PieceRepository {
     String pieceId, {
     required String studentId,
   }) => throw UnimplementedError();
+
+  @override
+  Future<Result<Piece>> registerImportedPiece({
+    required String pieceId,
+    required String title,
+    required String teacherId,
+    required String sourcePath,
+    String? studentId,
+  }) => throw UnimplementedError();
 }
 
 /// A minimal in-memory [AnnotationRepository], permissive (no ownership

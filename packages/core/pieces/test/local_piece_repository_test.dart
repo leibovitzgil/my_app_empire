@@ -217,6 +217,53 @@ void main() {
       },
     );
 
+    test(
+      'registerImportedPiece creates a piece preserving the given identity '
+      'fields rather than minting a new id',
+      () async {
+        final result = await repository.registerImportedPiece(
+          pieceId: 'sender-piece-1',
+          title: 'Shared from another device',
+          teacherId: 'remote-teacher',
+          studentId: 'remote-student',
+          sourcePath: sourcePdf.path,
+        );
+
+        expect(result, isA<Success<Piece>>());
+        final piece = (result as Success<Piece>).value;
+        expect(piece.id, 'sender-piece-1');
+        expect(piece.title, 'Shared from another device');
+        expect(piece.teacherId, 'remote-teacher');
+        expect(piece.studentId, 'remote-student');
+        expect(piece.basePdfChecksum, 'checksum-of-source.pdf');
+        expect(File(piece.basePdfPath).existsSync(), isTrue);
+
+        final fetched = await repository.getPiece('sender-piece-1');
+        expect((fetched as Success<Piece>).value.id, 'sender-piece-1');
+      },
+    );
+
+    test(
+      'registerImportedPiece fails when the piece already exists locally',
+      () async {
+        await repository.registerImportedPiece(
+          pieceId: 'sender-piece-2',
+          title: 'First register',
+          teacherId: 'remote-teacher',
+          sourcePath: sourcePdf.path,
+        );
+
+        final result = await repository.registerImportedPiece(
+          pieceId: 'sender-piece-2',
+          title: 'Second register',
+          teacherId: 'remote-teacher',
+          sourcePath: sourcePdf.path,
+        );
+
+        expect(result, isA<ResultFailure<Piece>>());
+      },
+    );
+
     test('pairStudent attaches a student to an unpaired piece', () async {
       final imported = await repository.importPiece(
         title: 'To pair',
@@ -419,6 +466,21 @@ class _DeferredPieceRepository implements PieceRepository {
     String pieceId, {
     required String studentId,
   }) => _resolve().pairStudent(pieceId, studentId: studentId);
+
+  @override
+  Future<Result<Piece>> registerImportedPiece({
+    required String pieceId,
+    required String title,
+    required String teacherId,
+    required String sourcePath,
+    String? studentId,
+  }) => _resolve().registerImportedPiece(
+    pieceId: pieceId,
+    title: title,
+    teacherId: teacherId,
+    sourcePath: sourcePath,
+    studentId: studentId,
+  );
 
   @override
   Stream<List<Piece>> watchPieces() => _resolve().watchPieces();

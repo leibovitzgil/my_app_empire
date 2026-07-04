@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_utils/core_utils.dart';
@@ -9,16 +10,20 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakePieceRepository implements PieceRepository {
-  _FakePieceRepository(this.piece);
+  _FakePieceRepository(Piece piece) : pieces = [piece];
 
-  final Piece piece;
+  /// Constructs with an explicit (possibly empty) starting set of pieces —
+  /// used to simulate a receiver that has never seen a given piece before.
+  _FakePieceRepository.withPieces(this.pieces);
+
+  List<Piece> pieces;
 
   @override
   Future<Result<Piece>> getPiece(String pieceId) async {
-    if (pieceId != piece.id) {
-      return ResultFailure<Piece>(StateError('Unknown piece: $pieceId'));
+    for (final piece in pieces) {
+      if (piece.id == pieceId) return Success(piece);
     }
-    return Success(piece);
+    return ResultFailure<Piece>(StateError('Unknown piece: $pieceId'));
   }
 
   @override
@@ -43,6 +48,42 @@ class _FakePieceRepository implements PieceRepository {
     String pieceId, {
     required String studentId,
   }) => throw UnimplementedError();
+
+  /// A simple, deterministic, content-based "checksum" (sum of byte
+  /// values) — good enough for this fake to prove real checksum
+  /// verification wiring without depending on `pdf_rendering`.
+  Future<String> _checksumOf(String path) async {
+    final bytes = await File(path).readAsBytes();
+    return bytes.fold<int>(0, (sum, byte) => sum + byte).toString();
+  }
+
+  @override
+  Future<Result<Piece>> registerImportedPiece({
+    required String pieceId,
+    required String title,
+    required String teacherId,
+    required String sourcePath,
+    String? studentId,
+  }) async {
+    if (pieces.any((p) => p.id == pieceId)) {
+      return ResultFailure<Piece>(
+        StateError('Piece already exists locally: $pieceId'),
+      );
+    }
+    final now = DateTime(2024);
+    final piece = Piece(
+      id: pieceId,
+      title: title,
+      basePdfChecksum: await _checksumOf(sourcePath),
+      basePdfPath: sourcePath,
+      teacherId: teacherId,
+      studentId: studentId,
+      createdAt: now,
+      updatedAt: now,
+    );
+    pieces = [...pieces, piece];
+    return Success(piece);
+  }
 
   @override
   Stream<List<Piece>> watchPieces() => throw UnimplementedError();
@@ -672,5 +713,131 @@ void main() {
         isA<ReviewSyncException>(),
       );
     });
+
+    test(
+      'importBundle creates a brand-new local Piece from a first-share '
+      "bundle's embedded PDF when the receiver has never seen it before",
+      () async {
+        final pdfBytes = utf8.encode('%PDF-1.4 real bytes');
+        final expectedChecksum = pdfBytes
+            .fold<int>(0, (sum, byte) => sum + byte)
+            .toString();
+        final pdfPath = '${tempDir.path}/base.pdf';
+        File(pdfPath).writeAsBytesSync(pdfBytes);
+        final pieceWithPdf = Piece(
+          id: piece.id,
+          title: piece.title,
+          basePdfChecksum: expectedChecksum,
+          basePdfPath: pdfPath,
+          teacherId: piece.teacherId,
+          studentId: piece.studentId,
+          createdAt: piece.createdAt,
+          updatedAt: piece.updatedAt,
+        );
+        final firstShareSenderService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(pieceWithPdf),
+          annotationRepository: senderAnnotations,
+          audioAssetStore: senderAudioStore,
+          storage: storage,
+          currentUserId: () => 'teacher-1',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        final exportResult = await firstShareSenderService.exportBundle(
+          piece.id,
+        );
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+
+        // The receiver's device has *never* seen this piece — its
+        // repository starts out empty, unlike every other test above.
+        final receiverPieceRepository = _FakePieceRepository.withPieces([]);
+        final receiverAnnotations = _FakeAnnotationRepository();
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: receiverPieceRepository,
+          annotationRepository: receiverAnnotations,
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        final importResult = await receiverService.importBundle(
+          bundle.filePath,
+        );
+
+        expect(importResult, isA<Success<ReviewBundleSummary>>());
+        final summary = (importResult as Success<ReviewBundleSummary>).value;
+        expect(summary.strokeCount, 2);
+        expect(summary.audioNoteCount, 1);
+
+        // A brand-new local Piece was created, preserving the sender's
+        // identity fields rather than minting a new id.
+        final registered = await receiverPieceRepository.getPiece(piece.id);
+        expect(registered, isA<Success<Piece>>());
+        final registeredPiece = (registered as Success<Piece>).value;
+        expect(registeredPiece.title, piece.title);
+        expect(registeredPiece.teacherId, 'teacher-1');
+        expect(registeredPiece.studentId, 'student-1');
+        // The extracted PDF's checksum matches the manifest's declared
+        // basePdfChecksum — proof the transferred bytes are intact.
+        expect(registeredPiece.basePdfChecksum, expectedChecksum);
+
+        final receiverState = await receiverAnnotations.watch(piece.id).first;
+        expect(
+          receiverState.layers.single.strokes.map((s) => s.id).toSet(),
+          {'s1', 's2'},
+        );
+        expect(receiverState.audioNotes.single.id, 'n1');
+      },
+    );
+
+    test(
+      "importBundle hard-fails when the local piece's basePdfChecksum has "
+      "drifted from the sender's, rather than silently applying possibly "
+      'misaligned region-anchored annotations',
+      () async {
+        final exportResult = await senderService.exportBundle(piece.id);
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+
+        final driftedPiece = Piece(
+          id: piece.id,
+          title: piece.title,
+          basePdfChecksum: 'a-completely-different-checksum',
+          basePdfPath: piece.basePdfPath,
+          teacherId: piece.teacherId,
+          studentId: piece.studentId,
+          createdAt: piece.createdAt,
+          updatedAt: piece.updatedAt,
+        );
+        final receiverAnnotations = _FakeAnnotationRepository();
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(driftedPiece),
+          annotationRepository: receiverAnnotations,
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'student-1',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        final result = await receiverService.importBundle(bundle.filePath);
+
+        expect(result, isA<ResultFailure<ReviewBundleSummary>>());
+        expect(
+          (result as ResultFailure<ReviewBundleSummary>).error,
+          isA<ReviewSyncException>(),
+        );
+        // No annotations were applied — the mismatch was caught before any
+        // (possibly misaligned) strokes/notes landed.
+        final receiverState = await receiverAnnotations.watch(piece.id).first;
+        expect(receiverState.layers, isEmpty);
+        expect(receiverState.audioNotes, isEmpty);
+      },
+    );
   });
 }

@@ -158,6 +158,33 @@ class DeepLinkInviteService implements InviteService {
   }) => Result.guard<void>(() async {
     final invites = _load();
     final invite = _requireValid(invites, token);
+
+    // Re-assert the free-tier cap immediately before committing the
+    // pairing. `createInvite`'s check only guards against the piece
+    // invited-for *at creation time* already being paired — it can't see
+    // sibling invites created concurrently for other unpaired pieces. Since
+    // pairing only actually lands here (via `pairStudent`), re-counting
+    // paired students right before that call closes the gap for the
+    // sequential case: accepting invite A lands a pairing, so a
+    // subsequently-accepted invite B for the same teacher sees that fresh
+    // count and is rejected if it would exceed the cap.
+    final piece = (await _pieceRepository.getPiece(invite.pieceId)).orThrow();
+    final isPro = await _monetization.isProUser();
+    if (!isPro && piece.studentId == null) {
+      final pieces = await _pieceRepository.watchPieces().first;
+      final pairedStudents = pieces
+          .where(
+            (p) => p.teacherId == invite.teacherId && p.studentId != null,
+          )
+          .map((p) => p.studentId)
+          .toSet();
+      if (pairedStudents.length >= _freeTierStudentLimit) {
+        throw const InviteException(
+          'Free plan allows 1 student. Upgrade to invite more.',
+        );
+      }
+    }
+
     (await _pieceRepository.pairStudent(
       invite.pieceId,
       studentId: studentId,

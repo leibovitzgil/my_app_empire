@@ -88,6 +88,95 @@ class FileShareReviewSyncService implements ReviewSyncService {
     };
   }
 
+  /// Resolves the local [Piece] a bundle's [manifest] applies to, creating
+  /// it on the fly from the bundle's embedded PDF if this is a genuine
+  /// cross-device "first share" — the receiver has never seen
+  /// `manifest.pieceId` before, and the manifest carries the base PDF
+  /// precisely for this case (see `exportBundle`'s `_baseSharedKey` doc).
+  /// Fails the same way [_requirePiece] does if there's no local copy and
+  /// no embedded PDF to create one from.
+  ///
+  /// If the piece *does* already exist locally, its `basePdfChecksum` is
+  /// compared against the manifest's to catch drift between copies — a
+  /// mismatch means the region-anchored annotations below could silently
+  /// misalign, so this hard-fails rather than applying them.
+  Future<Piece> _resolvePiece(ReviewManifest manifest, Archive archive) async {
+    final existing = await _pieceRepository.getPiece(manifest.pieceId);
+    switch (existing) {
+      case Success<Piece>(:final value):
+        if (value.basePdfChecksum != manifest.basePdfChecksum) {
+          throw ReviewSyncException(
+            'Base PDF checksum mismatch for ${manifest.pieceId}: the local '
+            "copy has drifted from the sender's. Refusing to apply "
+            'region-anchored annotations that could silently misalign.',
+          );
+        }
+        return value;
+      case ResultFailure<Piece>():
+        return _importPieceFromBundle(manifest, archive);
+    }
+  }
+
+  Future<Piece> _importPieceFromBundle(
+    ReviewManifest manifest,
+    Archive archive,
+  ) async {
+    final pdfFilename = manifest.basePdfFilename;
+    if (pdfFilename == null) {
+      throw ReviewSyncException(
+        'Unknown piece: ${manifest.pieceId} (no local copy, and this '
+        'bundle has no embedded PDF to create one from)',
+      );
+    }
+    final pdfEntries = archive.files.where(
+      (f) => f.name == 'pdf/$pdfFilename',
+    );
+    if (pdfEntries.isEmpty) {
+      throw ReviewSyncException(
+        'Bundle is missing the embedded PDF (pdf/$pdfFilename) needed to '
+        'create ${manifest.pieceId} locally',
+      );
+    }
+
+    final tempDir = await _bundlesDirectory();
+    if (!tempDir.existsSync()) tempDir.createSync(recursive: true);
+    final tempPath = p.join(
+      tempDir.path,
+      'import_${manifest.pieceId}${p.extension(pdfFilename)}',
+    );
+    final tempFile = File(tempPath);
+    await tempFile.writeAsBytes(pdfEntries.first.content as List<int>);
+
+    final currentUserId = _currentUserId();
+    // Only the teacher's export ever embeds the base PDF (see
+    // `_baseSharedKey`), so a first-share bundle's author is always the
+    // teacher; the receiving device belongs to the (currently signed-in)
+    // student, unless this is the teacher's own device re-importing their
+    // own bundle.
+    final isSelfImport = currentUserId == manifest.authorId;
+
+    final Piece piece;
+    try {
+      piece = (await _pieceRepository.registerImportedPiece(
+        pieceId: manifest.pieceId,
+        title: manifest.pieceTitle,
+        teacherId: manifest.authorId,
+        studentId: isSelfImport ? null : currentUserId,
+        sourcePath: tempPath,
+      )).orThrow();
+    } finally {
+      if (tempFile.existsSync()) await tempFile.delete();
+    }
+
+    if (piece.basePdfChecksum != manifest.basePdfChecksum) {
+      throw ReviewSyncException(
+        'Imported PDF checksum for ${manifest.pieceId} does not match the '
+        "manifest's basePdfChecksum — the transferred file may be corrupt",
+      );
+    }
+    return piece;
+  }
+
   PieceRole _roleOf(Piece piece, String authorId) =>
       piece.teacherId == authorId ? PieceRole.teacher : PieceRole.student;
 
@@ -217,7 +306,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
                 as Map<String, dynamic>;
         final manifest = ReviewManifest.fromJson(manifestJson);
 
-        final piece = await _requirePiece(manifest.pieceId);
+        final piece = await _resolvePiece(manifest, archive);
 
         final lastAppliedKey = _lastAppliedKey(
           manifest.pieceId,
