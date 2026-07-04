@@ -11,8 +11,9 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('GoogleLogo', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: AppTheme.testTheme(),
+        home: const Scaffold(
           body: Center(child: GoogleLogo(size: 96)),
         ),
       ),

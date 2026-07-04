@@ -66,11 +66,7 @@ class _ShareSheetState extends State<ShareSheet> {
   void _copyLink() {
     final link = context.read<MembersBloc>().inviteLink;
     unawaited(Clipboard.setData(ClipboardData(text: link)));
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(content: Text('Invite link copied to clipboard')),
-      );
+    AppSnackbar.success(context, 'Invite link copied to clipboard');
   }
 
   @override
@@ -84,11 +80,12 @@ class _ShareSheetState extends State<ShareSheet> {
           (current.actionError != null &&
               current.actionError != previous.actionError),
       listener: (context, state) {
-        final message = state.actionError ?? state.actionMessage;
-        if (message != null) {
-          ScaffoldMessenger.of(context)
-            ..clearSnackBars()
-            ..showSnackBar(SnackBar(content: Text(message)));
+        final error = state.actionError;
+        final message = state.actionMessage;
+        if (error != null) {
+          AppSnackbar.error(context, error);
+        } else if (message != null) {
+          AppSnackbar.success(context, message);
         }
       },
       child: SingleChildScrollView(
@@ -126,19 +123,14 @@ class _ShareSheetState extends State<ShareSheet> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: AppTextField(
                     controller: _controller,
+                    hint: 'Add by email…',
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _invite(),
-                    decoration: InputDecoration(
-                      hintText: 'Add by email…',
-                      prefixIcon: const Icon(Icons.mail_outline),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                    prefixIcon: const Icon(Icons.mail_outline),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -211,24 +203,14 @@ class _MemberTile extends StatelessWidget {
 
   Future<void> _confirmRemove(BuildContext context) async {
     final bloc = context.read<MembersBloc>();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Remove ${member.collaborator.name}?'),
-        content: const Text('They will lose access to this list.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Remove ${member.collaborator.name}?',
+      message: 'They will lose access to this list.',
+      confirmLabel: 'Remove',
+      isDestructive: true,
     );
-    if (confirmed ?? false) {
+    if (confirmed) {
       bloc.add(MemberRemoved(member.collaborator.id));
     }
   }

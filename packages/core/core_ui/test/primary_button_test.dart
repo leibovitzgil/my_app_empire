@@ -45,5 +45,25 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.text('Tap me'), findsNothing);
     });
+
+    testWidgets('renders and invokes onPressed when destructive', (
+      tester,
+    ) async {
+      var pressed = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PrimaryButton(
+              label: 'Delete',
+              onPressed: () => pressed++,
+              isDestructive: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PrimaryButton));
+      expect(pressed, 1);
+    });
   });
 }

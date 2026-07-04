@@ -1,3 +1,6 @@
+import 'package:core_theme/core_theme.dart';
+import 'package:core_ui/src/widgets/app_password_field.dart';
+import 'package:core_ui/src/widgets/app_text_field.dart';
 import 'package:core_ui/src/widgets/labeled_divider.dart';
 import 'package:core_ui/src/widgets/primary_button.dart';
 import 'package:flutter/material.dart';
@@ -85,7 +88,7 @@ class _SignInViewState extends State<SignInView> {
                 children: [
                   if (widget.logo != null) ...[
                     Align(child: widget.logo),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.lg),
                   ],
                   if (widget.title != null) ...[
                     Text(
@@ -93,38 +96,36 @@ class _SignInViewState extends State<SignInView> {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineSmall,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.lg),
                   ],
-                  TextField(
+                  AppTextField(
                     controller: _emailController,
+                    label: 'Email',
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
+                    textInputAction: TextInputAction.next,
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppPasswordField(controller: _passwordController),
                   if (widget.errorText != null) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
                     Text(
                       widget.errorText!,
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.lg),
                   PrimaryButton(
                     label: widget.submitLabel,
                     onPressed: widget.isBusy ? null : _submitEmail,
                     isLoading: widget.isBusy,
                   ),
                   if (social.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.md + AppSpacing.xs),
                     const LabeledDivider(label: 'or'),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.md + AppSpacing.xs),
                     for (var i = 0; i < social.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 12),
+                      if (i > 0)
+                        const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
                       social[i],
                     ],
                   ],

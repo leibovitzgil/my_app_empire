@@ -59,16 +59,12 @@ class SocialSignInButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final lead = leading ?? (icon != null ? Icon(icon, size: 20) : null);
     return SizedBox(
-      height: 48,
       width: double.infinity,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
