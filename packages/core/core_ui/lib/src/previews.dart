@@ -95,6 +95,27 @@ Widget labeledDividerPreview() {
   return const LabeledDivider(label: 'or');
 }
 
+@Preview(name: 'LabeledToggleChip • unselected')
+Widget labeledToggleChipUnselectedPreview() {
+  return LabeledToggleChip(
+    label: 'Teacher',
+    icon: Icons.school_outlined,
+    selected: false,
+    onTap: () {},
+  );
+}
+
+@Preview(name: 'LabeledToggleChip • selected + owned')
+Widget labeledToggleChipSelectedOwnedPreview() {
+  return LabeledToggleChip(
+    label: 'Teacher',
+    icon: Icons.school_outlined,
+    selected: true,
+    owned: true,
+    onTap: () {},
+  );
+}
+
 @Preview(name: 'InitialsAvatar')
 Widget initialsAvatarPreview() {
   return const InitialsAvatar(initials: 'GL', color: Colors.indigo);

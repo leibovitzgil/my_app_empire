@@ -1,0 +1,24 @@
+name: review_sync
+description: "Exports, shares and imports review bundles for pieces."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  core_utils:
+    path: ../../core/core_utils
+  file_picker: ^12.0.0-beta.7
+  flutter:
+    sdk: flutter
+  path_provider: ^2.1.6
+  pieces:
+    path: ../../core/pieces
+  share_plus: ^13.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.3.0

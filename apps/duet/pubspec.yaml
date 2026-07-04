@@ -1,0 +1,31 @@
+name: duet
+description: "Collaborative sheet music & mentorship."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+
+dependencies:
+  core_ui:
+    path: ../../packages/core/core_ui
+  core_utils:
+    path: ../../packages/core/core_utils
+  deep_linking:
+    path: ../../packages/services/deep_linking
+  feature_auth:
+    path: ../../packages/features/feature_auth
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+  get_it: ^9.2.1
+  go_router: ^17.3.0
+  local_storage:
+    path: ../../packages/core/local_storage
+  user_roles:
+    path: ../../packages/core/user_roles
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.3.0

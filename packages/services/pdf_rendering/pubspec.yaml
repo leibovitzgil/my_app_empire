@@ -1,0 +1,21 @@
+name: pdf_rendering
+description: "PDF paging, rendering and checksum service for sheet-music pieces."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  core_utils:
+    path: ../../core/core_utils
+  equatable: ^2.0.8
+  flutter:
+    sdk: flutter
+  pdfx: ^2.9.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.3.0

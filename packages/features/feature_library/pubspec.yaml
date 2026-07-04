@@ -1,0 +1,26 @@
+name: feature_library
+description: "Browse and manage shared sheet-music pieces."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  bloc: ^9.2.1
+  core_ui:
+    path: ../../core/core_ui
+  equatable: ^2.0.5
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+  pieces:
+    path: ../../core/pieces
+
+dev_dependencies:
+  bloc_test: ^10.0.0
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.0
+  very_good_analysis: ^10.3.0
