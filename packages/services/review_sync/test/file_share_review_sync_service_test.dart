@@ -703,6 +703,7 @@ void main() {
         final bundle = (export as Success<ExportedBundle>).value;
 
         String? capturedTitle;
+        String? capturedBody;
         final receiverService = FileShareReviewSyncService(
           pieceRepository: _FakePieceRepository(piece),
           annotationRepository: _FakeAnnotationRepository(),
@@ -715,12 +716,16 @@ void main() {
           bundlesDirectory: () async => tempDir,
           onImported: ({required title, required body}) async {
             capturedTitle = title;
+            capturedBody = body;
           },
         );
 
         await receiverService.importBundle(bundle.filePath);
 
         expect(capturedTitle, 'New feedback from Jane Doe');
+        // The body is name-agnostic (stroke/audio-note counts from the
+        // manifest), regardless of whether the author's name is known.
+        expect(capturedBody, 'Clair de Lune: 2 strokes, 1 notes');
       },
     );
 
@@ -732,6 +737,7 @@ void main() {
         final bundle = (export as Success<ExportedBundle>).value;
 
         String? capturedTitle;
+        String? capturedBody;
         final receiverService = FileShareReviewSyncService(
           pieceRepository: _FakePieceRepository(piece),
           annotationRepository: _FakeAnnotationRepository(),
@@ -744,12 +750,14 @@ void main() {
           bundlesDirectory: () async => tempDir,
           onImported: ({required title, required body}) async {
             capturedTitle = title;
+            capturedBody = body;
           },
         );
 
         await receiverService.importBundle(bundle.filePath);
 
         expect(capturedTitle, 'New review feedback');
+        expect(capturedBody, 'Clair de Lune: 2 strokes, 1 notes');
       },
     );
 

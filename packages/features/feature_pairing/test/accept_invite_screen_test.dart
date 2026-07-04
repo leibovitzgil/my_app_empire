@@ -54,6 +54,10 @@ void main() {
       expect(find.text('Clair de Lune'), findsOneWidget);
       expect(find.text('Accept'), findsOneWidget);
       expect(find.text('Decline'), findsOneWidget);
+      // `details` above carries no `teacherName`, so the screen must fall
+      // back to the initials-from-id placeholder rather than showing
+      // nothing/crashing.
+      expect(find.textContaining('Teacher '), findsOneWidget);
     });
 
     testWidgets(

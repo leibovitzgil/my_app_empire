@@ -171,6 +171,10 @@ void main() {
 
         expect(firstId, isNotNull);
         expect(secondId, isNotNull);
+        // The actual point of this test: two calls must not collide on the
+        // same notification id, or the second `show` would silently replace
+        // the first instead of both staying visible.
+        expect(firstId, isNot(secondId));
       });
 
       test('maps a port failure to a ResultFailure<void>', () async {

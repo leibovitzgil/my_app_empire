@@ -32,7 +32,9 @@
 // sandbox's headless `flutter_tester` (the decode's completion callback
 // needs a real event-loop turn that a `testWidgets` body's `FakeAsync` zone
 // doesn't reliably provide, and `tester.runAsync`, the sanctioned way to get
-// one, itself hung intermittently when tried here). So:
+// one, itself hung intermittently when tried here for the *full*
+// `ScoreViewerScreen` (its `StreamBuilder`s, gesture detectors, and multiple
+// concurrent futures around `ScorePageCanvas`). So:
 //   - `duet_flow_test.dart` (headless) continues the Score Viewer portion
 //     against a bare `ScoreBloc` (no `ScoreViewerScreen` widget at all) —
 //     deterministic and fast, and still proves the piece the real import UI
@@ -44,6 +46,13 @@
 //     `flutter test integration_test/` needs one) mounts the real
 //     `ScoreViewerScreen` and drives real drag gestures, since a real
 //     device's `IntegrationTestWidgetsFlutterBinding` has no such issue.
+//   - `PracticeView` — the thin, single-`FutureBuilder` wrapper around
+//     `ScorePageCanvas` used for region-centering — turns out not to share
+//     the full screen's flakiness: a single bounded `tester.runAsync` call
+//     (with no sibling async work competing for the event loop) is enough
+//     for its decode to complete reliably. See
+//     `packages/features/feature_score/test/practice_view_test.dart`, which
+//     covers region-centering at the widget level in isolation.
 import 'dart:async';
 
 import 'package:audio/audio.dart';
