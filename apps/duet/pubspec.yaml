@@ -7,14 +7,27 @@ environment:
   sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
+  audio:
+    path: ../../packages/services/audio
+  bloc: ^9.2.1
   core_ui:
     path: ../../packages/core/core_ui
   core_utils:
     path: ../../packages/core/core_utils
   deep_linking:
     path: ../../packages/services/deep_linking
+  equatable: ^2.0.5
   feature_auth:
     path: ../../packages/features/feature_auth
+  feature_library:
+    path: ../../packages/features/feature_library
+  feature_pairing:
+    path: ../../packages/features/feature_pairing
+  feature_paywall:
+    path: ../../packages/features/feature_paywall
+  feature_score:
+    path: ../../packages/features/feature_score
+  file_picker: ^12.0.0-beta.7
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
@@ -22,10 +35,23 @@ dependencies:
   go_router: ^17.3.0
   local_storage:
     path: ../../packages/core/local_storage
+  monetization:
+    path: ../../packages/core/monetization
+  notifications:
+    path: ../../packages/services/notifications
+  path: ^1.9.0
+  path_provider: ^2.1.6
+  pdf_rendering:
+    path: ../../packages/services/pdf_rendering
+  pieces:
+    path: ../../packages/core/pieces
+  review_sync:
+    path: ../../packages/services/review_sync
   user_roles:
     path: ../../packages/core/user_roles
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  shared_preferences: ^2.2.2
   very_good_analysis: ^10.3.0

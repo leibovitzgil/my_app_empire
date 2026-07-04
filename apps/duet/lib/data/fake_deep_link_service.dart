@@ -27,7 +27,7 @@ class FakeDeepLinkService implements DeepLinkService {
   Stream<Uri> get onLink => _controller.stream;
 
   @override
-  Result<DeepLinkIntent> parse(Uri uri) => appTemplateDeepLinkParser(uri);
+  Result<DeepLinkIntent> parse(Uri uri) => duetDeepLinkParser(uri);
 
   @override
   Result<DeepLinkIntent> parseRaw(String rawValue) {

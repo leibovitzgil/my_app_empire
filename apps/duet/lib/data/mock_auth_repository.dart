@@ -2,8 +2,15 @@ import 'dart:async';
 import 'package:feature_auth/feature_auth.dart';
 
 /// An in-memory [AuthRepository] for local development.
+///
+/// Broadcast (unlike a plain, single-subscription controller) because more
+/// than one long-lived singleton needs to observe [user]: `AuthBloc`,
+/// `CurrentUser`, and `UserRoleRepository` all subscribe independently (each
+/// eagerly, at app-startup — see `injection.dart` — so none misses the first
+/// emission despite a broadcast stream not replaying past events to a late
+/// subscriber).
 class MockAuthRepository implements AuthRepository {
-  final _controller = StreamController<String?>();
+  final _controller = StreamController<String?>.broadcast();
 
   @override
   Stream<String?> get user => _controller.stream;

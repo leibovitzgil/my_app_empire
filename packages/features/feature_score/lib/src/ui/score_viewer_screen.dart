@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audio/audio.dart';
 import 'package:core_ui/core_ui.dart';
+import 'package:core_utils/core_utils.dart';
 import 'package:feature_score/src/bloc/audio_playback_cubit.dart';
 import 'package:feature_score/src/bloc/record_audio_cubit.dart';
 import 'package:feature_score/src/bloc/score_bloc.dart';
@@ -32,7 +33,10 @@ class ScoreViewerScreen extends StatefulWidget {
     required this.recorderService,
     required this.playerService,
     required this.recordingPathBuilder,
+    required this.audioAssetStore,
     this.syncStatus = ScoreSyncStatus.notSynced,
+    this.onShareRequested,
+    this.onImportRequested,
     super.key,
   });
 
@@ -50,10 +54,27 @@ class ScoreViewerScreen extends StatefulWidget {
   /// `path_provider` directly; the app-glue layer supplies this.
   final String Function() recordingPathBuilder;
 
-  /// The review-sync status to show in the app bar's badge. A static value
-  /// for this phase — wiring a live value from `review_sync` is app-glue
-  /// work for a later phase.
+  /// Resolves a durable id for a just-recorded file (see
+  /// `_saveAudioNote`) and resolves a saved [AudioNote.audioAssetId] back to
+  /// a playable path (see `_ReadyBody._playNote`) — an audio note's
+  /// `audioAssetId` must never be treated as a raw filesystem path.
+  final AudioAssetStore audioAssetStore;
+
+  /// The review-sync status to show in the app bar's badge. This package
+  /// deliberately doesn't own a live sync source (that's `review_sync`,
+  /// app-glue's dependency, not this package's) — callers pass whatever they
+  /// track, defaulting to [ScoreSyncStatus.notSynced].
   final ScoreSyncStatus syncStatus;
+
+  /// Invoked when "Share my annotations" is selected from the overflow menu,
+  /// if provided; `null` hides the action. A callback rather than a direct
+  /// `review_sync` dependency, for the same cross-package reason as
+  /// `feature_library`'s `onOpenScore`/`onInvitePiece`.
+  final Future<void> Function()? onShareRequested;
+
+  /// Invoked when "Import review bundle" is selected from the overflow menu,
+  /// if provided; `null` hides the action. See [onShareRequested].
+  final Future<void> Function()? onImportRequested;
 
   @override
   State<ScoreViewerScreen> createState() => _ScoreViewerScreenState();
@@ -115,6 +136,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
               ScoreStatus.ready => _ReadyBody(
                 state: state,
                 renderService: widget.renderService,
+                audioAssetStore: widget.audioAssetStore,
               ),
             },
             floatingActionButton: state.status == ScoreStatus.ready
@@ -153,21 +175,45 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
         child: _RecordAudioSheetBody(
           outputPathBuilder: widget.recordingPathBuilder,
           onSaved: (path, elapsed) {
-            final note = AudioNote(
-              id: 'note_${DateTime.now().microsecondsSinceEpoch}',
-              authorId: state.currentUserId,
-              audioAssetId: path,
-              pageIndex: region.pageIndex,
-              durationMs: elapsed.inMilliseconds,
-              region: region,
-              createdAt: DateTime.now(),
-            );
-            scoreBloc.add(AudioNoteSaved(note, path));
+            unawaited(_saveAudioNote(scoreBloc, state, region, path, elapsed));
           },
         ),
       ),
     );
     scoreBloc.add(const RegionSelectionCleared());
+  }
+
+  /// Resolves the just-recorded file at [recordedPath] to a durable asset id
+  /// via [AudioAssetStore.put] before constructing the [AudioNote] — an
+  /// audio note's `audioAssetId` must never be the raw recording path (it
+  /// needs to keep resolving after the recording's temp file is gone, and
+  /// after an export/import round-trip through `review_sync`, which reads
+  /// and writes assets by id).
+  Future<void> _saveAudioNote(
+    ScoreBloc scoreBloc,
+    ScoreState state,
+    Region region,
+    String recordedPath,
+    Duration elapsed,
+  ) async {
+    final putResult = await widget.audioAssetStore.put(recordedPath);
+    final assetId = switch (putResult) {
+      Success<String>(:final value) => value,
+      // Falls back to the raw path so the note isn't silently dropped; it
+      // just won't survive past this recording's temp file the way a
+      // properly-stored asset would.
+      ResultFailure<String>() => recordedPath,
+    };
+    final note = AudioNote(
+      id: 'note_${DateTime.now().microsecondsSinceEpoch}',
+      authorId: state.currentUserId,
+      audioAssetId: assetId,
+      pageIndex: region.pageIndex,
+      durationMs: elapsed.inMilliseconds,
+      region: region,
+      createdAt: DateTime.now(),
+    );
+    scoreBloc.add(AudioNoteSaved(note, recordedPath));
   }
 
   void _openPracticeView(
@@ -234,6 +280,16 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
                 ),
               child: const Text('Practice this page'),
             ),
+            if (widget.onShareRequested != null)
+              PopupMenuItem<void>(
+                onTap: () => unawaited(widget.onShareRequested!()),
+                child: const Text('Share my annotations'),
+              ),
+            if (widget.onImportRequested != null)
+              PopupMenuItem<void>(
+                onTap: () => unawaited(widget.onImportRequested!()),
+                child: const Text('Import review bundle'),
+              ),
           ],
         ),
       ],
@@ -297,10 +353,15 @@ class _ModeButtons extends StatelessWidget {
 }
 
 class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({required this.state, required this.renderService});
+  const _ReadyBody({
+    required this.state,
+    required this.renderService,
+    required this.audioAssetStore,
+  });
 
   final ScoreState state;
   final PdfRenderService renderService;
+  final AudioAssetStore audioAssetStore;
 
   @override
   Widget build(BuildContext context) {
@@ -405,8 +466,25 @@ class _ReadyBody extends StatelessWidget {
     if (playback.isPlaying(note.id)) {
       unawaited(playbackCubit.stop());
     } else {
-      unawaited(playbackCubit.play(note.id, note.audioAssetId));
+      unawaited(_playNote(playbackCubit, note));
     }
+  }
+
+  /// Resolves [AudioNote.audioAssetId] to a playable path via
+  /// [AudioAssetStore.pathFor] before starting playback — the id is never
+  /// itself a path (see [_ScoreViewerScreenState._saveAudioNote]).
+  Future<void> _playNote(
+    AudioPlaybackCubit playbackCubit,
+    AudioNote note,
+  ) async {
+    final pathResult = await audioAssetStore.pathFor(note.audioAssetId);
+    final path = switch (pathResult) {
+      Success<String>(:final value) => value,
+      // Falls back to treating the id as a path directly — covers a note
+      // saved before this asset-store wiring existed.
+      ResultFailure<String>() => note.audioAssetId,
+    };
+    await playbackCubit.play(note.id, path);
   }
 }
 
