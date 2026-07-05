@@ -10,6 +10,7 @@ dependencies:
   audio:
     path: ../../packages/services/audio
   bloc: ^9.2.1
+  cloud_firestore: ^6.0.0
   core_ui:
     path: ../../packages/core/core_ui
   core_utils:
@@ -30,6 +31,8 @@ dependencies:
   feature_settings:
     path: ../../packages/features/feature_settings
   file_picker: ^12.0.0-beta.7
+  firebase_auth: ^6.5.4
+  firebase_core: ^4.11.0
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
@@ -49,13 +52,17 @@ dependencies:
     path: ../../packages/core/pieces
   review_sync:
     path: ../../packages/services/review_sync
+  user_directory:
+    path: ../../packages/core/user_directory
   user_roles:
     path: ../../packages/core/user_roles
 
 dev_dependencies:
+  firebase_messaging: ^16.4.1
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
+  mocktail: ^1.0.0
   shared_preferences: ^2.2.2
   very_good_analysis: ^10.3.0

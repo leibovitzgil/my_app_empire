@@ -2,12 +2,19 @@ import 'package:bloc/bloc.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:equatable/equatable.dart';
 import 'package:feature_pairing/src/domain/invite_service.dart';
+import 'package:monetization/monetization.dart';
+import 'package:pieces/pieces.dart';
 
 part 'accept_invite_state.dart';
 
-/// Drives the Accept Invite screen: resolves an invite token, then accepts
-/// (or the caller can simply navigate away to decline — there's nothing to
-/// undo server-side for a decline).
+/// Drives the Accept Invite screen (the tokenized deep-link/secondary path —
+/// see `feature_pairing`'s package doc for how this relates to the primary
+/// email-invite path): resolves an invite token, then re-checks the same
+/// per-piece collaborator cap (`CollaboratorLimits`) the email path uses
+/// before allowing acceptance — surfacing [AcceptInviteStatus.atCap]/
+/// [AcceptInviteStatus.alreadyCollaborator] instead of a generic failure so
+/// the UI can render a tailored body for each. The caller can simply
+/// navigate away to decline — there's nothing to undo server-side.
 ///
 /// A [Cubit] rather than a [Bloc] — like `feature_library`'s
 /// `PieceDetailCubit` — since it's a simple, externally-triggered
@@ -16,10 +23,15 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
   /// Creates an [AcceptInviteCubit] for [studentId] accepting [token].
   AcceptInviteCubit({
     required InviteService inviteService,
+    required PieceRepository pieceRepository,
+    required MonetizationService monetizationService,
     required this.token,
     required this.studentId,
     this.studentName,
+    this.studentEmail,
   }) : _inviteService = inviteService,
+       _pieceRepository = pieceRepository,
+       _monetization = monetizationService,
        super(const AcceptInviteState.initial());
 
   /// The invite token to resolve/accept.
@@ -32,16 +44,53 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
   /// [InviteService.acceptInvite].
   final String? studentName;
 
-  final InviteService _inviteService;
+  /// The accepting student's email, if known — passed through to
+  /// [InviteService.acceptInvite] (AC-2: acceptance records uid+email).
+  final String? studentEmail;
 
-  /// Resolves [token] to its piece/teacher details.
+  final InviteService _inviteService;
+  final PieceRepository _pieceRepository;
+  final MonetizationService _monetization;
+
+  /// Resolves [token] to its piece/teacher details, then checks whether the
+  /// accepter is already a collaborator or the piece is at its cap.
   Future<void> load() async {
     emit(state.copyWith(status: AcceptInviteStatus.loading, clearError: true));
     final result = await _inviteService.resolveInvite(token);
     switch (result) {
       case Success<InviteDetails>(:final value):
-        emit(state.copyWith(status: AcceptInviteStatus.ready, details: value));
+        await _checkAccess(value);
       case ResultFailure<InviteDetails>(:final error):
+        emit(
+          state.copyWith(status: AcceptInviteStatus.failure, error: '$error'),
+        );
+    }
+  }
+
+  Future<void> _checkAccess(InviteDetails details) async {
+    final pieceResult = await _pieceRepository.getPiece(details.pieceId);
+    switch (pieceResult) {
+      case Success<Piece>(:final value):
+        if (value.isCollaborator(studentId)) {
+          emit(
+            state.copyWith(
+              status: AcceptInviteStatus.alreadyCollaborator,
+              details: details,
+            ),
+          );
+          return;
+        }
+        final isPro = await _monetization.isProUser();
+        if (CollaboratorLimits.isAtCap(value, isPro)) {
+          emit(
+            state.copyWith(status: AcceptInviteStatus.atCap, details: details),
+          );
+          return;
+        }
+        emit(
+          state.copyWith(status: AcceptInviteStatus.ready, details: details),
+        );
+      case ResultFailure<Piece>(:final error):
         emit(
           state.copyWith(status: AcceptInviteStatus.failure, error: '$error'),
         );
@@ -58,6 +107,7 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
       token,
       studentId: studentId,
       studentName: studentName,
+      studentEmail: studentEmail,
     );
     switch (result) {
       case Success<void>():

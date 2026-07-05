@@ -13,6 +13,17 @@ import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:user_roles/user_roles.dart';
 
+/// Builds the [AvatarStackPerson] list for [piece]'s current collaborators,
+/// shared by every row in this screen that surfaces a per-piece
+/// [AvatarStack].
+List<AvatarStackPerson> _avatarsFor(Piece piece) => [
+  for (final collaborator in piece.collaborators)
+    (
+      initials: LibraryFormat.initialsFor(collaborator.uid),
+      color: Color(LibraryFormat.colorValueFor(collaborator.uid)),
+    ),
+];
+
 /// Entry widget for the library feature: provides [LibraryBloc] and renders
 /// [LibraryHomeScreen]. Apps wire this in with one line, supplying the
 /// concrete repositories/services and the two cross-feature navigation
@@ -28,6 +39,7 @@ class LibraryPage extends StatelessWidget {
     required this.currentRole,
     required this.onOpenScore,
     this.onInvitePiece,
+    this.onOpenCollaborators,
     this.onOpenSettings,
     this.filePicker,
     this.currentUserName,
@@ -61,6 +73,12 @@ class LibraryPage extends StatelessWidget {
   /// (e.g. an app that hasn't wired pairing yet).
   final void Function(Piece piece)? onInvitePiece;
 
+  /// Called when the user taps a piece's "Collaborators (N)" tile in Piece
+  /// Detail, to navigate to `feature_pairing`'s Collaborators screen. A
+  /// callback for the same reason as [onOpenScore]/[onInvitePiece]. `null`
+  /// hides the tile entirely (see `PieceDetailScreen.onOpenCollaborators`).
+  final void Function(Piece piece)? onOpenCollaborators;
+
   /// Called when the user wants to open the app's settings screen. A
   /// callback for the same reason as [onOpenScore]/[onInvitePiece]: settings
   /// lives in `feature_settings`, a sibling package this one must not depend
@@ -93,6 +111,7 @@ class LibraryPage extends StatelessWidget {
         currentUserId: currentUserId,
         onOpenScore: onOpenScore,
         onInvitePiece: onInvitePiece,
+        onOpenCollaborators: onOpenCollaborators,
         onOpenSettings: onOpenSettings,
         filePicker: filePicker,
         currentUserName: currentUserName,
@@ -112,6 +131,7 @@ class LibraryHomeScreen extends StatelessWidget {
     required this.currentUserId,
     required this.onOpenScore,
     this.onInvitePiece,
+    this.onOpenCollaborators,
     this.onOpenSettings,
     this.filePicker,
     this.currentUserName,
@@ -135,6 +155,9 @@ class LibraryHomeScreen extends StatelessWidget {
 
   /// See [LibraryPage.onInvitePiece].
   final void Function(Piece piece)? onInvitePiece;
+
+  /// See [LibraryPage.onOpenCollaborators].
+  final void Function(Piece piece)? onOpenCollaborators;
 
   /// See [LibraryPage.onOpenSettings].
   final VoidCallback? onOpenSettings;
@@ -223,6 +246,7 @@ class LibraryHomeScreen extends StatelessWidget {
             currentUserId: currentUserId,
             pieceId: piece.id,
             onOpenScore: onOpenScore,
+            onOpenCollaborators: onOpenCollaborators,
           ),
         ),
       ),
@@ -348,12 +372,18 @@ class _StudentGroupState extends State<_StudentGroup> {
   @override
   Widget build(BuildContext context) {
     final hasUnread = widget.pieces.any(widget.state.isUnread);
-    // All of a student's pieces should carry the same `studentName` (it's
-    // set once, at pairing time), but fall back across the group in case an
-    // older/imported piece predates the field on just one of them.
-    final studentName = widget.pieces
-        .map((p) => p.studentName)
-        .firstWhere((name) => name != null, orElse: () => null);
+    // A collaborator's name should be the same across every piece they're
+    // on (it's set once, at pairing/invite-accept time), but fall back
+    // across the group in case an older/imported piece predates it on just
+    // one of them. Looked up by this group's own `studentId` — NOT the
+    // generic `studentName` compat getter, which only ever reflects a
+    // piece's FIRST collaborator and would show the wrong name for a
+    // piece's second-or-later collaborator's own group (AC-4).
+    final matchingNames = widget.pieces
+        .expand((p) => p.collaborators)
+        .where((c) => c.uid == widget.studentId && c.name != null)
+        .map((c) => c.name);
+    final studentName = matchingNames.isEmpty ? null : matchingNames.first;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -384,6 +414,12 @@ class _StudentGroupState extends State<_StudentGroup> {
             Padding(
               padding: const EdgeInsets.only(left: AppSpacing.lg),
               child: AppListTile(
+                // Only shown once a piece has more than one collaborator —
+                // a single-collaborator piece already names them in the
+                // group header above, so an avatar here would be redundant.
+                leading: piece.collaboratorCount > 1
+                    ? AvatarStack(people: _avatarsFor(piece))
+                    : null,
                 title: Text(piece.title),
                 subtitle: Text(
                   'Last activity: '
@@ -470,6 +506,12 @@ class _StudentBody extends StatelessWidget {
       children: [
         for (final piece in pieces)
           AppListTile(
+            // Only shown when this piece has more than one collaborator —
+            // i.e. someone besides "me" is also sharing it with the
+            // teacher.
+            leading: piece.collaboratorCount > 1
+                ? AvatarStack(people: _avatarsFor(piece))
+                : null,
             title: Text(piece.title),
             subtitle: Text(
               piece.teacherName ??

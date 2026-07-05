@@ -9,6 +9,7 @@ export 'src/widgets/app_search_field.dart';
 export 'src/widgets/app_snackbar.dart';
 export 'src/widgets/app_text_button.dart';
 export 'src/widgets/app_text_field.dart';
+export 'src/widgets/avatar_stack.dart';
 export 'src/widgets/brand_logos.dart';
 export 'src/widgets/confirm_dialog.dart';
 export 'src/widgets/empty_state_view.dart';

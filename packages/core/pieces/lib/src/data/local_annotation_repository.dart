@@ -65,7 +65,7 @@ class LocalAnnotationRepository implements AnnotationRepository {
     final result = await _pieceRepository.getPiece(pieceId);
     if (result case Success<Piece>(:final value)) {
       if (value.teacherId == authorId) return PieceRole.teacher;
-      if (value.studentId == authorId) return PieceRole.student;
+      if (value.isCollaborator(authorId)) return PieceRole.student;
     }
     // Unknown piece or participant; default to student since the teacher is
     // always expected to be resolvable (they created the piece).
@@ -222,4 +222,20 @@ class LocalAnnotationRepository implements AnnotationRepository {
       ),
     );
   });
+
+  @override
+  Future<Result<void>> removeAuthorSlice(String pieceId, String authorId) =>
+      Result.guard<void>(() async {
+        final current = _annotationsFor(pieceId);
+        await _emit(
+          pieceId,
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: current.layers.where((l) => l.ownerId != authorId).toList(),
+            audioNotes: current.audioNotes
+                .where((n) => n.authorId != authorId)
+                .toList(),
+          ),
+        );
+      });
 }

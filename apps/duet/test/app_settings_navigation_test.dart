@@ -100,10 +100,23 @@ class _EmptyPieceRepository implements PieceRepository {
   Future<Result<void>> leavePiece(String pieceId) => throw UnimplementedError();
 
   @override
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) =>
+      throw UnimplementedError();
+
+  @override
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
     String? teacherName,
   }) => throw UnimplementedError();
 

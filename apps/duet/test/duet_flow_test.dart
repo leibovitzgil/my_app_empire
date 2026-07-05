@@ -4,9 +4,13 @@
 // for why this continues against a bare `ScoreBloc` rather than the real
 // `ScoreViewerScreen` (the widget-mounting variant lives in
 // `integration_test/app_flow_test.dart`, device-only).
+import 'package:core_utils/core_utils.dart';
+import 'package:feature_pairing/feature_pairing.dart';
 import 'package:feature_score/feature_score.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:notifications/notifications.dart';
 import 'package:pieces/pieces.dart';
+import 'package:user_directory/user_directory.dart';
 
 import 'duet_flow_harness.dart';
 
@@ -145,6 +149,78 @@ void main() {
       expect(reopened.state.teacherStrokes, hasLength(1));
       expect(reopened.state.notes, hasLength(1));
       expect(reopened.state.notes.single.region, recordedNote.region);
+    },
+  );
+
+  testWidgets(
+    'email invite -> (foreground) inbox delivery -> accept, over the shared '
+    'in-memory message gateway, records the collaborator with their email '
+    '(AC-1, AC-2)',
+    (tester) async {
+      const studentId = 'student-e2e';
+      const studentEmail = 'student@duet.dev';
+
+      final imported = await runDuetImportFlow(tester);
+      final pieceRepository = imported.pieceRepository;
+      final piece = imported.piece;
+
+      // One shared `InMemoryUserMessaging` instance backs both contracts —
+      // mirroring `injection.dart`'s default-gate binding — so the owner's
+      // `sendInvite` is immediately visible on the invitee's `watchInvites`
+      // stream within this process.
+      final messaging = InMemoryUserMessaging();
+      final directory = InMemoryUserDirectory(
+        seed: const [
+          DirectoryUser(
+            uid: studentId,
+            email: studentEmail,
+            displayName: 'Student',
+          ),
+        ],
+      );
+      final inviteService = DefaultCollaboratorInviteService(
+        userDirectory: directory,
+        pieceRepository: pieceRepository,
+        monetizationService: FakeMonetizationService(),
+        messageGateway: messaging,
+      );
+
+      // 1. Owner sends an email invite; it resolves to the seeded student
+      // account and a message lands in their inbox (the foreground/
+      // warm-start delivery bridge itself — surfacing that as a device
+      // notification — is `injection.dart`'s app-level concern, covered at
+      // the unit level by `services/notifications`' own tests).
+      final sendResult = await inviteService.sendInvite(
+        pieceId: piece.id,
+        ownerId: teacherId,
+        email: studentEmail,
+        ownerName: 'Teacher',
+      );
+      expect(sendResult.isSuccess, isTrue);
+      expect((sendResult as Success<LookupOutcome>).value, isA<Resolved>());
+
+      final invites = await inviteService.watchInvites(studentId).first;
+      expect(invites, hasLength(1));
+      expect(invites.single.pieceId, piece.id);
+      expect(invites.single.ownerId, teacherId);
+
+      // 2. The invitee accepts; the piece now records them as a
+      // collaborator, with their email attached (AC-2).
+      final acceptResult = await inviteService.acceptInvite(
+        invites.single,
+        accepterId: studentId,
+        accepterName: 'Student',
+        accepterEmail: studentEmail,
+      );
+      expect(acceptResult.isSuccess, isTrue);
+
+      final updated = (await pieceRepository.getPiece(piece.id)).orThrow();
+      expect(updated.isCollaborator(studentId), isTrue);
+      final collaborator = updated.collaborators.firstWhere(
+        (c) => c.uid == studentId,
+      );
+      expect(collaborator.email, studentEmail);
+      expect(collaborator.name, 'Student');
     },
   );
 }

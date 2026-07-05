@@ -25,23 +25,64 @@ class _FakePieceRepository implements PieceRepository {
   Stream<List<Piece>> watchPieces() => Stream.value(pieces);
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<void>> addCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? teacherName,
+    required String userId,
+    String? name,
+    String? email,
   }) async {
     final piece = pieces.firstWhere((p) => p.id == pieceId);
+    if (piece.isCollaborator(userId)) return const Success(null);
     final updated = piece.copyWith(
-      studentId: studentId,
-      studentName: studentName,
-      teacherName: teacherName,
+      collaborators: [
+        ...piece.collaborators,
+        Collaborator(uid: userId, name: name, email: email),
+      ],
     );
     pieces = [
       for (final p in pieces)
         if (p.id == pieceId) updated else p,
     ];
-    return Success(updated);
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) async {
+    final piece = pieces.firstWhere((p) => p.id == pieceId);
+    final updated = piece.copyWith(
+      collaborators: piece.collaborators
+          .where((collaborator) => collaborator.uid != userId)
+          .toList(),
+    );
+    pieces = [
+      for (final p in pieces)
+        if (p.id == pieceId) updated else p,
+    ];
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<Piece>> pairStudent(
+    String pieceId, {
+    required String studentId,
+    String? studentName,
+    String? studentEmail,
+    String? teacherName,
+  }) async {
+    final piece = pieces.firstWhere((p) => p.id == pieceId);
+    if (teacherName != null && piece.teacherName == null) {
+      pieces = [
+        for (final p in pieces)
+          if (p.id == pieceId) p.copyWith(teacherName: teacherName) else p,
+      ];
+    }
+    await addCollaborator(
+      pieceId,
+      userId: studentId,
+      name: studentName,
+      email: studentEmail,
+    );
+    return Success(pieces.firstWhere((p) => p.id == pieceId));
   }
 
   @override
@@ -135,8 +176,26 @@ void main() {
     );
 
     test(
-      'createInvite fails at the free-tier student limit for a non-pro '
-      'teacher',
+      'createInvite fails when the piece is already at the free-tier '
+      'collaborator cap (FIX-1/FIX-2: per-piece, not library-wide)',
+      () async {
+        pieceRepository.pieces = [
+          piece.copyWith(studentId: 'existing-student'),
+        ];
+
+        final result = await service.createInvite(
+          teacherId: teacherId,
+          pieceId: 'p1',
+        );
+
+        expect(result, isA<ResultFailure<InviteLink>>());
+      },
+    );
+
+    test(
+      'createInvite succeeds for a free teacher even when a DIFFERENT '
+      'piece is already paired — the cap is per-piece, never a library-wide '
+      'total (FIX-1/FIX-2 regression guard)',
       () async {
         pieceRepository.pieces = [
           piece,
@@ -157,23 +216,13 @@ void main() {
           pieceId: 'p1',
         );
 
-        expect(result, isA<ResultFailure<InviteLink>>());
+        expect(result, isA<Success<InviteLink>>());
       },
     );
 
-    test('createInvite succeeds over the limit for a pro teacher', () async {
+    test('createInvite succeeds over the cap for a pro teacher', () async {
       pieceRepository.pieces = [
-        piece,
-        Piece(
-          id: 'p2',
-          title: 'Already paired',
-          basePdfChecksum: 'c',
-          basePdfPath: '/tmp/p2.pdf',
-          teacherId: teacherId,
-          studentId: 'existing-student',
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        ),
+        piece.copyWith(studentId: 'existing-student'),
       ];
       monetization.setProStatus(true);
 
@@ -306,73 +355,54 @@ void main() {
     });
 
     test(
-      'createInvite allows a free teacher to create invites for multiple '
-      'unpaired pieces, but accepting a second one that would exceed the '
-      'cap is rejected at accept-time',
+      'link accept is cap-gated by CURRENT collaborator count '
+      '(FIX-1/AC-6/AC-11): an outstanding second link for the SAME piece '
+      'still resolves, but accepting it once the free-tier cap is hit is '
+      'rejected',
       () async {
-        final pieceTwo = Piece(
-          id: 'p2',
-          title: 'Prelude',
-          basePdfChecksum: 'c2',
-          basePdfPath: '/tmp/p2.pdf',
-          teacherId: teacherId,
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
-        pieceRepository.pieces = [piece, pieceTwo];
-
-        // Neither piece is paired yet, so both invites are created fine —
-        // invite creation isn't the bottleneck.
         final firstInvite = await service.createInvite(
           teacherId: teacherId,
           pieceId: 'p1',
         );
         final secondInvite = await service.createInvite(
           teacherId: teacherId,
-          pieceId: 'p2',
+          pieceId: 'p1',
         );
         expect(firstInvite, isA<Success<InviteLink>>());
         expect(secondInvite, isA<Success<InviteLink>>());
 
-        // Accepting the first invite pairs p1 with student-1, landing the
-        // free-tier teacher at their cap.
+        // The outstanding second link still resolves (AC-11) — creating it
+        // wasn't rejected, since the piece had no collaborators yet.
+        final resolved = await service.resolveInvite('token-1');
+        expect(resolved, isA<Success<InviteDetails>>());
+
         final firstAccept = await service.acceptInvite(
           'token-0',
           studentId: 'student-1',
         );
         expect(firstAccept, isA<Success<void>>());
 
-        // Accepting the second invite (a *different* student) would push
-        // the teacher over the cap — this must be rejected at accept-time
-        // even though invite-creation allowed it.
+        // Accepting the second (still-valid, unconsumed) link for the same
+        // piece now exceeds the free-tier cap of 1 and must be rejected.
         final secondAccept = await service.acceptInvite(
           'token-1',
           studentId: 'student-2',
         );
         expect(secondAccept, isA<ResultFailure<void>>());
 
-        final fetchedTwo = await pieceRepository.getPiece('p2');
-        expect((fetchedTwo as Success<Piece>).value.studentId, isNull);
+        final fetched = await pieceRepository.getPiece('p1');
+        expect((fetched as Success<Piece>).value.collaboratorCount, 1);
       },
     );
 
     test(
-      'acceptInvite succeeds over the cap for a pro teacher',
+      'acceptInvite succeeds over the free-tier cap for a pro teacher '
+      '(same piece, second collaborator)',
       () async {
-        final pieceTwo = Piece(
-          id: 'p2',
-          title: 'Prelude',
-          basePdfChecksum: 'c2',
-          basePdfPath: '/tmp/p2.pdf',
-          teacherId: teacherId,
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
-        pieceRepository.pieces = [piece, pieceTwo];
         monetization.setProStatus(true);
 
         await service.createInvite(teacherId: teacherId, pieceId: 'p1');
-        await service.createInvite(teacherId: teacherId, pieceId: 'p2');
+        await service.createInvite(teacherId: teacherId, pieceId: 'p1');
 
         final firstAccept = await service.acceptInvite(
           'token-0',
@@ -385,6 +415,9 @@ void main() {
 
         expect(firstAccept, isA<Success<void>>());
         expect(secondAccept, isA<Success<void>>());
+
+        final fetched = await pieceRepository.getPiece('p1');
+        expect((fetched as Success<Piece>).value.collaboratorCount, 2);
       },
     );
   });

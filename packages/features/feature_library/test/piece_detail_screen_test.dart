@@ -22,6 +22,7 @@ void main() {
       WidgetTester tester, {
       required Piece piece,
       required String currentUserId,
+      void Function(Piece piece)? onOpenCollaborators,
     }) async {
       when(
         () => repository.getPiece(piece.id),
@@ -33,6 +34,7 @@ void main() {
             currentUserId: currentUserId,
             pieceId: piece.id,
             onOpenScore: (_) {},
+            onOpenCollaborators: onOpenCollaborators,
           ),
         ),
       );
@@ -149,5 +151,62 @@ void main() {
 
       expect(find.text('No student paired yet.'), findsOneWidget);
     });
+
+    testWidgets(
+      'hides the Collaborators tile when onOpenCollaborators is null',
+      (tester) async {
+        final piece = Piece(
+          id: 'p1',
+          title: 'Clair de Lune',
+          basePdfChecksum: 'checksum',
+          basePdfPath: '/tmp/p1.pdf',
+          teacherId: teacherId,
+          collaborators: const [
+            Collaborator(uid: studentId),
+            Collaborator(uid: 'student-2'),
+          ],
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+
+        await pumpScreen(tester, piece: piece, currentUserId: teacherId);
+
+        expect(find.textContaining('Collaborators ('), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'shows "Collaborators (N)" and navigates on tap when wired',
+      (tester) async {
+        final piece = Piece(
+          id: 'p1',
+          title: 'Clair de Lune',
+          basePdfChecksum: 'checksum',
+          basePdfPath: '/tmp/p1.pdf',
+          teacherId: teacherId,
+          collaborators: const [
+            Collaborator(uid: studentId),
+            Collaborator(uid: 'student-2'),
+          ],
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+
+        Piece? tapped;
+        await pumpScreen(
+          tester,
+          piece: piece,
+          currentUserId: teacherId,
+          onOpenCollaborators: (p) => tapped = p,
+        );
+
+        expect(find.text('Collaborators (2)'), findsOneWidget);
+
+        await tester.tap(find.text('Collaborators (2)'));
+        await tester.pump();
+
+        expect(tapped?.id, 'p1');
+      },
+    );
   });
 }

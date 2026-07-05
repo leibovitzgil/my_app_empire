@@ -1,7 +1,31 @@
 part of 'accept_invite_cubit.dart';
 
 /// The phase of [AcceptInviteCubit]'s accept-invite flow.
-enum AcceptInviteStatus { loading, ready, accepting, accepted, failure }
+enum AcceptInviteStatus {
+  /// Resolving [AcceptInviteCubit.token] (and, once resolved, the
+  /// accepter's current access to that piece).
+  loading,
+
+  /// Resolved and under the collaborator cap — ready to accept.
+  ready,
+
+  /// The accepter is already a collaborator on this piece (e.g. re-opening
+  /// an already-consumed invite).
+  alreadyCollaborator,
+
+  /// The piece is already at its collaborator cap for the owner's current
+  /// monetization tier.
+  atCap,
+
+  /// [InviteService.acceptInvite] is in flight.
+  accepting,
+
+  /// The invite was accepted.
+  accepted,
+
+  /// Resolving the token, or accepting, failed.
+  failure,
+}
 
 /// Immutable state for [AcceptInviteCubit].
 final class AcceptInviteState extends Equatable {
@@ -17,8 +41,10 @@ final class AcceptInviteState extends Equatable {
   /// The current phase.
   final AcceptInviteStatus status;
 
-  /// The resolved invite details, once [status] is
-  /// [AcceptInviteStatus.ready] (or was, before accepting).
+  /// The resolved invite details, once [status] is [AcceptInviteStatus.ready]
+  /// (or was, before accepting) — also populated for
+  /// [AcceptInviteStatus.alreadyCollaborator]/[AcceptInviteStatus.atCap], so
+  /// the UI can still show the piece title.
   final InviteDetails? details;
 
   /// The most recent failure (invalid/expired token, or an accept failure),

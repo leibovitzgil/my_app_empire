@@ -4,6 +4,7 @@ import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/role_selection/role_selection_cubit.dart';
@@ -80,9 +81,12 @@ class _AppViewState extends State<AppView> {
           path: '/invite/accept/:token',
           builder: (context, state) => AcceptInvitePage(
             inviteService: getIt<InviteService>(),
+            pieceRepository: getIt<PieceRepository>(),
+            monetizationService: getIt<MonetizationService>(),
             token: state.pathParameters['token']!,
             studentId: getIt<CurrentUser>().call(),
             studentName: getIt<CurrentUserName>().call(),
+            studentEmail: getIt<CurrentUserEmail>().call(),
             // Kept deliberately simple: land back on the (now-updated)
             // library rather than deep-navigating into the freshly-paired
             // piece, so a failed/edge-case navigation here can never strand
@@ -210,6 +214,8 @@ class HomeScreen extends StatelessWidget {
       currentRole: isTeacher ? PieceRole.teacher : PieceRole.student,
       onOpenScore: (piece) => _openScore(context, piece),
       onInvitePiece: (piece) => _openInvite(context, piece, currentUserId),
+      onOpenCollaborators: (piece) =>
+          _openCollaborators(context, piece, currentUserId),
       onOpenSettings: () => context.push('/settings'),
       currentUserName: getIt<CurrentUserName>().call(),
     );
@@ -229,12 +235,31 @@ class HomeScreen extends StatelessWidget {
     unawaited(
       showInviteSheet(
         context,
+        collaboratorInviteService: getIt<CollaboratorInviteService>(),
         inviteService: getIt<InviteService>(),
         monetizationService: getIt<MonetizationService>(),
         pieceRepository: getIt<PieceRepository>(),
         teacherId: teacherId,
         pieceId: piece.id,
         teacherName: getIt<CurrentUserName>().call(),
+      ),
+    );
+  }
+
+  void _openCollaborators(
+    BuildContext context,
+    Piece piece,
+    String currentUserId,
+  ) {
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => CollaboratorsPage(
+            pieceRepository: getIt<PieceRepository>(),
+            pieceId: piece.id,
+            currentUserId: currentUserId,
+          ),
+        ),
       ),
     );
   }

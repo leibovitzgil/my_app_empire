@@ -1,8 +1,10 @@
+import 'package:feature_auth/src/domain/auth_account.dart';
+import 'package:feature_auth/src/domain/auth_account_provider.dart';
 import 'package:feature_auth/src/domain/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-class FirebaseAuthRepository implements AuthRepository {
+class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
   FirebaseAuthRepository({firebase_auth.FirebaseAuth? firebaseAuth})
     : _firebaseAuth = firebaseAuth ?? firebase_auth.FirebaseAuth.instance;
 
@@ -12,6 +14,18 @@ class FirebaseAuthRepository implements AuthRepository {
   Stream<String?> get user {
     return _firebaseAuth.authStateChanges().map((firebaseUser) {
       return firebaseUser?.uid;
+    });
+  }
+
+  @override
+  Stream<AuthAccount?> get account {
+    return _firebaseAuth.authStateChanges().map((firebaseUser) {
+      if (firebaseUser == null) return null;
+      return AuthAccount(
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+      );
     });
   }
 

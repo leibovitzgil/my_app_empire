@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Duet's Firestore schema for the collaborator-sharing seams this feature
+// added: an email-discovery directory (`usersByEmail`), device-token
+// bookkeeping (`deviceTokens`), and the generic per-user message inbox
+// (`userInbox`) `feature_pairing`'s invites ride over — see
+// `core/user_directory`/`services/notifications` for the client contracts
+// these collections back. Piece/annotation storage itself stays on-device
+// (`LocalPieceRepository`/`LocalAnnotationRepository`, via `local_storage`)
+// for this build — no `pieces` collection exists in Firestore yet, so it's
+// sketched below only as documentation for a future Firestore-backed
+// `PieceRepository`, mirroring how `apps/tandem`'s rules file documents its
+// own production block ahead of actually deploying it.
+//
+// v1 accepted risks (FIX-4): a `usersByEmail` read is an exact-key GET,
+// gated on the target document's own `discoverable` flag — a
+// non-discoverable entry is unreadable by anyone but its own owner,
+// identical (from a caller's perspective) to no entry existing at all —
+// and `list`/`query` is never allowed, so a client can never enumerate the
+// directory, only resolve one email it already knows. That mitigation is
+// NOT rate-limited by these rules (nor by the emulator); rate-limiting the
+// lookup endpoint itself is a pre-prod gate, out of scope for v1.
+//
+// v1 accepted risk (`userInbox`): a signed-in client may `create` a message
+// in any recipient's inbox as long as `toUid` matches the path — this is
+// inherent to the v1 client-writes-inbox design (production moves the write
+// behind a Firestore-triggered Cloud Function, gating who may send). It is a
+// notification-spam vector, but is not a data-exposure or takeover one:
+// accepting a spam "invite" only adds the accepter to the *sender's* own
+// piece, which is harmless to the victim. Sender-side authorization is a
+// pre-prod gate, out of scope for v1.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /usersByEmail/{emailKey} {
+      allow get: if request.auth != null &&
+        (resource.data.discoverable == true ||
+          resource.data.uid == request.auth.uid);
+      // Never a list/query — see the risk note above.
+      allow list: if false;
+      allow create, update: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid;
+      allow delete: if request.auth != null &&
+        request.auth.uid == resource.data.uid;
+    }
+
+    // Forward-provisioning only (see `FirestoreUserMessaging`'s doc): a
+    // signed-in device may only manage its own token list.
+    match /deviceTokens/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Each user's own inbox: only its owner may read a message or mark it
+    // read; a message is only ever created by/for the sender it's addressed
+    // to (`toUid` must match the path), never by the recipient themselves;
+    // nothing ever deletes an inbox message outright (see `markRead`).
+    match /userInbox/{uid}/messages/{messageId} {
+      allow read, update: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null &&
+        request.resource.data.toUid == uid;
+      allow delete: if false;
+    }
+
+    // --- Forward-looking only: no `pieces` collection exists in this
+    // build (piece/annotation storage is on-device via `local_storage`).
+    // Sketched so a future Firestore-backed `PieceRepository` lands with
+    // the right scoping from day one: only the owning teacher or a current
+    // collaborator may read/write a piece.
+    // match /pieces/{pieceId} {
+    //   function isParticipant() {
+    //     return request.auth != null && (
+    //       resource.data.teacherId == request.auth.uid ||
+    //       request.auth.uid in resource.data.collaboratorIds
+    //     );
+    //   }
+    //   allow read, write: if isParticipant();
+    // }
+
+    // Deny-by-default: any path not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

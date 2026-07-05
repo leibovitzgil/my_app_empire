@@ -1,4 +1,10 @@
+export 'src/data/device_token_sync.dart';
+export 'src/data/firestore_user_messaging.dart';
+export 'src/data/in_memory_user_messaging.dart';
 export 'src/data/local_notification_exception.dart';
 export 'src/data/local_notification_port.dart';
+export 'src/domain/device_token_registry.dart';
+export 'src/domain/user_message.dart';
+export 'src/domain/user_message_gateway.dart';
 export 'src/notifications_manager.dart';
 export 'src/ui/soft_prompt_dialog.dart';

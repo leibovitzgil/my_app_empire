@@ -75,4 +75,11 @@ abstract class AnnotationRepository {
     required List<InkStroke> strokes,
     required List<AudioNote> audioNotes,
   });
+
+  /// Drops [authorId]'s ink layer and audio notes on [pieceId] entirely,
+  /// used when they're removed as a collaborator (owner-removed, or they
+  /// left themself). Privileged and non-gated by the caller's current user
+  /// id, mirroring [replaceAuthorSlice] — the caller (`PieceRepository`) is
+  /// trusted to have already authorized the removal itself.
+  Future<Result<void>> removeAuthorSlice(String pieceId, String authorId);
 }

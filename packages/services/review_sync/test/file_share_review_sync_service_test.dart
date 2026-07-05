@@ -45,10 +45,23 @@ class _FakePieceRepository implements PieceRepository {
       throw UnimplementedError();
 
   @override
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) =>
+      throw UnimplementedError();
+
+  @override
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
     String? teacherName,
   }) => throw UnimplementedError();
 
@@ -157,6 +170,10 @@ class _FakeAnnotationRepository implements AnnotationRepository {
 
   @override
   Future<Result<void>> eraseStroke(String pieceId, String strokeId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Result<void>> removeAuthorSlice(String pieceId, String authorId) =>
       throw UnimplementedError();
 }
 
