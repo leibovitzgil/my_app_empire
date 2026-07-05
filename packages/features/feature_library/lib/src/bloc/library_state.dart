@@ -57,19 +57,30 @@ final class LibraryState extends Equatable {
       piece.updatedAt.isAfter(piece.createdAt) &&
       !viewedPieceIds.contains(piece.id);
 
-  /// Teacher variant: this teacher's own pieces, grouped by paired student id
-  /// (`null` for pieces awaiting a student, e.g. just imported).
+  /// Teacher variant: this teacher's own pieces, grouped by collaborator id
+  /// (`null` for pieces awaiting a collaborator, e.g. just imported). A
+  /// piece with more than one collaborator (AC-4) appears once under EACH of
+  /// its collaborators' groups, so every collaborator sees it in their own
+  /// section.
   Map<String?, List<Piece>> get piecesByStudent {
     final grouped = <String?, List<Piece>>{};
     for (final piece in pieces.where((p) => p.teacherId == currentUserId)) {
-      (grouped[piece.studentId] ??= <Piece>[]).add(piece);
+      if (piece.collaboratorIds.isEmpty) {
+        (grouped[null] ??= <Piece>[]).add(piece);
+        continue;
+      }
+      for (final collaboratorId in piece.collaboratorIds) {
+        (grouped[collaboratorId] ??= <Piece>[]).add(piece);
+      }
     }
     return grouped;
   }
 
-  /// Student variant: the pieces a teacher has shared with this student.
+  /// Student variant: the pieces a teacher has shared with this
+  /// collaborator — any piece this user collaborates on, not just the first
+  /// (AC-4: a second collaborator must see the piece too).
   List<Piece> get sharedWithMe =>
-      pieces.where((p) => p.studentId == currentUserId).toList();
+      pieces.where((p) => p.isCollaborator(currentUserId)).toList();
 
   /// This teacher's pieces that have no paired student yet — candidates for
   /// the "Invite student" action.

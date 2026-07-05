@@ -3,8 +3,14 @@ import 'package:feature_pairing/feature_pairing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:monetization/monetization.dart';
+import 'package:pieces/pieces.dart';
 
 class MockInviteService extends Mock implements InviteService {}
+
+class MockPieceRepository extends Mock implements PieceRepository {}
+
+class MockMonetizationService extends Mock implements MonetizationService {}
 
 void main() {
   group('AcceptInviteScreen', () {
@@ -17,20 +23,39 @@ void main() {
     );
 
     late MockInviteService inviteService;
+    late MockPieceRepository pieceRepository;
+    late MockMonetizationService monetization;
+
+    Piece piece({List<Collaborator> collaborators = const []}) => Piece(
+      id: 'p1',
+      title: 'Clair de Lune',
+      basePdfChecksum: 'c',
+      basePdfPath: '/tmp/p.pdf',
+      teacherId: 'teacher-1',
+      collaborators: collaborators,
+      createdAt: DateTime(2024),
+      updatedAt: DateTime(2024),
+    );
 
     setUp(() {
       inviteService = MockInviteService();
+      pieceRepository = MockPieceRepository();
+      monetization = MockMonetizationService();
+      when(
+        () => pieceRepository.getPiece('p1'),
+      ).thenAnswer((_) async => Success(piece()));
+      when(() => monetization.isProUser()).thenAnswer((_) async => false);
     });
 
-    Future<void> pumpScreen(WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AcceptInvitePage(
-            inviteService: inviteService,
-            token: token,
-            studentId: studentId,
-            onAccepted: (_) {},
-          ),
+    Widget buildPage({void Function(String pieceId)? onAccepted}) {
+      return MaterialApp(
+        home: AcceptInvitePage(
+          inviteService: inviteService,
+          pieceRepository: pieceRepository,
+          monetizationService: monetization,
+          token: token,
+          studentId: studentId,
+          onAccepted: onAccepted ?? (_) {},
         ),
       );
     }
@@ -42,7 +67,7 @@ void main() {
         () => inviteService.resolveInvite(token),
       ).thenAnswer((_) async => const Success(details));
 
-      await pumpScreen(tester);
+      await tester.pumpWidget(buildPage());
       await tester.pump();
       await tester.pump();
       // Flushes flutter_animate's initial delayed-start future for
@@ -75,7 +100,7 @@ void main() {
           ),
         );
 
-        await pumpScreen(tester);
+        await tester.pumpWidget(buildPage());
         await tester.pump();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 1));
@@ -92,7 +117,7 @@ void main() {
         ),
       );
 
-      await pumpScreen(tester);
+      await tester.pumpWidget(buildPage());
       await tester.pump();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 1));
@@ -114,19 +139,13 @@ void main() {
           token,
           studentId: studentId,
           studentName: any(named: 'studentName'),
+          studentEmail: any(named: 'studentEmail'),
         ),
       ).thenAnswer((_) async => const Success<void>(null));
 
       String? acceptedPieceId;
       await tester.pumpWidget(
-        MaterialApp(
-          home: AcceptInvitePage(
-            inviteService: inviteService,
-            token: token,
-            studentId: studentId,
-            onAccepted: (pieceId) => acceptedPieceId = pieceId,
-          ),
-        ),
+        buildPage(onAccepted: (pieceId) => acceptedPieceId = pieceId),
       );
       await tester.pump();
       await tester.pump();
@@ -138,5 +157,60 @@ void main() {
 
       expect(acceptedPieceId, 'p1');
     });
+
+    testWidgets(
+      'shows an already-collaborator body when the accepter already has '
+      'access, with a Continue that invokes onAccepted',
+      (tester) async {
+        when(
+          () => inviteService.resolveInvite(token),
+        ).thenAnswer((_) async => const Success(details));
+        when(() => pieceRepository.getPiece('p1')).thenAnswer(
+          (_) async => Success(
+            piece(collaborators: const [Collaborator(uid: studentId)]),
+          ),
+        );
+
+        String? acceptedPieceId;
+        await tester.pumpWidget(
+          buildPage(onAccepted: (pieceId) => acceptedPieceId = pieceId),
+        );
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1));
+
+        expect(find.textContaining('already a collaborator'), findsOneWidget);
+        expect(find.text('Continue'), findsOneWidget);
+
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+
+        expect(acceptedPieceId, 'p1');
+      },
+    );
+
+    testWidgets(
+      'shows an at-cap body when the piece is already at its collaborator '
+      'cap',
+      (tester) async {
+        when(
+          () => inviteService.resolveInvite(token),
+        ).thenAnswer((_) async => const Success(details));
+        when(() => pieceRepository.getPiece('p1')).thenAnswer(
+          (_) async => Success(
+            piece(collaborators: const [Collaborator(uid: 'someone-else')]),
+          ),
+        );
+
+        await tester.pumpWidget(buildPage());
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1));
+
+        expect(find.textContaining('Free plan allows 1'), findsOneWidget);
+        expect(find.text('Got it'), findsOneWidget);
+        expect(find.text('Accept'), findsNothing);
+      },
+    );
   });
 }

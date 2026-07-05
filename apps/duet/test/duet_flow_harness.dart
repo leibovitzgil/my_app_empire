@@ -60,6 +60,7 @@ import 'package:core_utils/core_utils.dart';
 import 'package:feature_library/feature_library.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:monetization/monetization.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:user_roles/user_roles.dart';
@@ -151,6 +152,49 @@ class FakeAudioPlayerService implements AudioPlayerService {
       const Stream<PlaybackProgress>.empty();
 }
 
+/// A [MonetizationService] fixed at free-tier (`isProUser` always `false`),
+/// used only by the collaborator-invite funnel test below to exercise
+/// `CollaboratorLimits`' free-tier cap without depending on the real
+/// `SimulatedMonetizationService`'s own async/persistence behavior. Every
+/// other member is unused by that flow and throws if ever called.
+class FakeMonetizationService implements MonetizationService {
+  @override
+  Future<bool> isProUser({String entitlementIdentifier = 'pro'}) async => false;
+
+  @override
+  Stream<bool> isProUserStream({String entitlementIdentifier = 'pro'}) =>
+      Stream.value(false);
+
+  @override
+  Future<void> initialize(String apiKey, {String? appUserId}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> logIn(String appUserId) => throw UnimplementedError();
+
+  @override
+  Future<void> logOut() => throw UnimplementedError();
+
+  @override
+  Future<Offerings?> getOfferings() => throw UnimplementedError();
+
+  @override
+  Future<CustomerInfo?> purchasePackage(Package package) =>
+      throw UnimplementedError();
+
+  @override
+  Future<CustomerInfo?> purchaseMonthly() => throw UnimplementedError();
+
+  @override
+  Future<CustomerInfo?> purchaseAnnual() => throw UnimplementedError();
+
+  @override
+  Future<CustomerInfo?> restorePurchases() => throw UnimplementedError();
+
+  @override
+  Stream<CustomerInfo> get customerInfoStream => throw UnimplementedError();
+}
+
 /// A minimal in-memory [PieceRepository]. Real persistence-across-restart
 /// and the pairing invariants are covered by
 /// `packages/core/pieces/test/local_piece_repository_test.dart`; this fake
@@ -215,10 +259,52 @@ class FakePieceRepository implements PieceRepository {
   Future<Result<void>> leavePiece(String pieceId) => throw UnimplementedError();
 
   @override
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  }) async {
+    final piece = _pieces[pieceId];
+    if (piece == null) {
+      return ResultFailure<void>(StateError('Unknown piece: $pieceId'));
+    }
+    final collaborators = [...piece.collaborators];
+    final index = collaborators.indexWhere((c) => c.uid == userId);
+    if (index >= 0) {
+      final existing = collaborators[index];
+      collaborators[index] = Collaborator(
+        uid: userId,
+        name: name ?? existing.name,
+        email: email ?? existing.email,
+      );
+    } else {
+      collaborators.add(Collaborator(uid: userId, name: name, email: email));
+    }
+    _pieces[pieceId] = piece.copyWith(collaborators: collaborators);
+    _controller.add(_pieces.values.toList());
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) async {
+    final piece = _pieces[pieceId];
+    if (piece == null) {
+      return ResultFailure<void>(StateError('Unknown piece: $pieceId'));
+    }
+    _pieces[pieceId] = piece.copyWith(
+      collaborators: piece.collaborators.where((c) => c.uid != userId).toList(),
+    );
+    _controller.add(_pieces.values.toList());
+    return const Success(null);
+  }
+
+  @override
   Future<Result<Piece>> pairStudent(
     String pieceId, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
     String? teacherName,
   }) => throw UnimplementedError();
 
@@ -355,6 +441,10 @@ class FakeAnnotationRepository implements AnnotationRepository {
     required List<InkStroke> strokes,
     required List<AudioNote> audioNotes,
   }) => throw UnimplementedError();
+
+  @override
+  Future<Result<void>> removeAuthorSlice(String pieceId, String authorId) =>
+      throw UnimplementedError();
 }
 
 /// A minimal in-memory [AudioAssetStore] — `put`/`pathFor` never touch disk;

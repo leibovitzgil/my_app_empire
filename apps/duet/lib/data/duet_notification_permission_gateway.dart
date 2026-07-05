@@ -10,10 +10,18 @@ import 'package:notifications/notifications.dart';
 class DuetNotificationPermissionGateway
     implements NotificationPermissionGateway {
   /// Creates a [DuetNotificationPermissionGateway] wrapping a
-  /// `NotificationsManager`.
-  const DuetNotificationPermissionGateway(this._manager);
+  /// `NotificationsManager`. [deviceTokenSync], if given, has
+  /// `registerCurrent()` invoked right after a successful grant (FIX-7):
+  /// `NotificationsManager.requestPermission` only ever returns a `bool`,
+  /// so there's no permission-grant *stream* to subscribe to instead — this
+  /// call site has to register explicitly.
+  const DuetNotificationPermissionGateway(
+    this._manager, {
+    DeviceTokenSync? deviceTokenSync,
+  }) : _deviceTokenSync = deviceTokenSync;
 
   final NotificationsManager _manager;
+  final DeviceTokenSync? _deviceTokenSync;
 
   @override
   Future<Result<NotificationPermission>> currentStatus() =>
@@ -30,7 +38,11 @@ class DuetNotificationPermissionGateway
     // "permanently denied" into a single `false`; re-reading the
     // side-effect-free status afterwards recovers the precise result the
     // gateway contract needs.
-    return _toPermission(await _manager.permissionStatus());
+    final permission = _toPermission(await _manager.permissionStatus());
+    if (permission == NotificationPermission.granted) {
+      await _deviceTokenSync?.registerCurrent();
+    }
+    return permission;
   });
 
   @override

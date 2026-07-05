@@ -326,6 +326,26 @@ void main() {
       expect((fetched as Success<Piece>).value.studentName, 'Sam Smith');
     });
 
+    test('pairStudent stores the given studentEmail (AC-2)', () async {
+      final imported = await repository.importPiece(
+        title: 'To pair',
+        sourcePath: sourcePdf.path,
+      );
+      final piece = (imported as Success<Piece>).value;
+
+      final result = await repository.pairStudent(
+        piece.id,
+        studentId: 'student-1',
+        studentName: 'Sam Smith',
+        studentEmail: 'sam@example.com',
+      );
+
+      expect(
+        (result as Success<Piece>).value.collaborators.single.email,
+        'sam@example.com',
+      );
+    });
+
     test(
       'pairStudent backfills teacherName only when the piece has none yet',
       () async {
@@ -353,7 +373,8 @@ void main() {
     );
 
     test(
-      'pairStudent fails when the piece already has a different student',
+      'pairStudent appends a second collaborator rather than rejecting '
+      '(FIX-6: no longer "already paired with a different student")',
       () async {
         final imported = await repository.importPiece(
           title: 'Already paired',
@@ -367,7 +388,11 @@ void main() {
           studentId: 'student-2',
         );
 
-        expect(result, isA<ResultFailure<Piece>>());
+        expect(result, isA<Success<Piece>>());
+        expect((result as Success<Piece>).value.collaboratorIds, [
+          'student-1',
+          'student-2',
+        ]);
       },
     );
 
@@ -387,6 +412,204 @@ void main() {
       expect(result, isA<Success<Piece>>());
       expect((result as Success<Piece>).value.studentId, 'student-1');
     });
+
+    test(
+      'addCollaborator supports a paid piece having two collaborators '
+      '(AC-4; not cap-gated at this layer)',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'Duet piece',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (imported as Success<Piece>).value;
+
+        final first = await repository.addCollaborator(
+          piece.id,
+          userId: 'student-1',
+          name: 'Sam',
+        );
+        final second = await repository.addCollaborator(
+          piece.id,
+          userId: 'student-2',
+          name: 'Alex',
+        );
+
+        expect(first, isA<Success<void>>());
+        expect(second, isA<Success<void>>());
+        final fetched = await repository.getPiece(piece.id);
+        expect((fetched as Success<Piece>).value.collaboratorIds, [
+          'student-1',
+          'student-2',
+        ]);
+        expect(fetched.value.collaboratorCount, 2);
+      },
+    );
+
+    test('addCollaborator is idempotent for the same userId', () async {
+      final imported = await repository.importPiece(
+        title: 'To pair',
+        sourcePath: sourcePdf.path,
+      );
+      final piece = (imported as Success<Piece>).value;
+
+      await repository.addCollaborator(piece.id, userId: 'student-1');
+      final result = await repository.addCollaborator(
+        piece.id,
+        userId: 'student-1',
+        name: 'Sam',
+      );
+
+      expect(result, isA<Success<void>>());
+      final fetched = await repository.getPiece(piece.id);
+      expect((fetched as Success<Piece>).value.collaboratorIds, [
+        'student-1',
+      ]);
+      expect(fetched.value.studentName, 'Sam');
+    });
+
+    test(
+      "removeCollaborator by the owner detaches only that collaborator's "
+      'layer (AC-7)',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'Duet piece',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (imported as Success<Piece>).value;
+        await repository.addCollaborator(piece.id, userId: 'student-1');
+        await repository.addCollaborator(piece.id, userId: 'student-2');
+        currentUserId = 'student-1';
+        await annotationRepository.addStroke(
+          piece.id,
+          const InkStroke(
+            id: 's1',
+            authorId: 'student-1',
+            pageIndex: 0,
+            colorId: 'red',
+            points: [InkPoint(x: 0, y: 0)],
+          ),
+        );
+        currentUserId = 'student-2';
+        await annotationRepository.addStroke(
+          piece.id,
+          const InkStroke(
+            id: 's2',
+            authorId: 'student-2',
+            pageIndex: 0,
+            colorId: 'blue',
+            points: [InkPoint(x: 0.1, y: 0.1)],
+          ),
+        );
+        currentUserId = piece.teacherId;
+
+        final result = await repository.removeCollaborator(
+          piece.id,
+          'student-1',
+        );
+
+        expect(result, isA<Success<void>>());
+        final fetched = await repository.getPiece(piece.id);
+        expect((fetched as Success<Piece>).value.collaboratorIds, [
+          'student-2',
+        ]);
+        final annotations = await annotationRepository.watch(piece.id).first;
+        final remainingOwners = annotations.layers
+            .map((l) => l.ownerId)
+            .toSet();
+        expect(remainingOwners, {'student-2'});
+      },
+    );
+
+    test('removeCollaborator is idempotent when not a collaborator', () async {
+      final imported = await repository.importPiece(
+        title: 'Unpaired piece',
+        sourcePath: sourcePdf.path,
+      );
+      final piece = (imported as Success<Piece>).value;
+
+      final result = await repository.removeCollaborator(
+        piece.id,
+        'never-a-collaborator',
+      );
+
+      expect(result, isA<Success<void>>());
+    });
+
+    test(
+      'removeCollaborator by a non-owner fails with OwnershipViolation '
+      '(AC-8)',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'Duet piece',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (imported as Success<Piece>).value;
+        await repository.addCollaborator(piece.id, userId: 'student-1');
+
+        currentUserId = 'student-1';
+        final result = await repository.removeCollaborator(
+          piece.id,
+          'student-1',
+        );
+
+        expect(result, isA<ResultFailure<void>>());
+        expect(
+          (result as ResultFailure<void>).error,
+          isA<OwnershipViolation>(),
+        );
+        final fetched = await repository.getPiece(piece.id);
+        expect((fetched as Success<Piece>).value.collaboratorIds, [
+          'student-1',
+        ]);
+      },
+    );
+
+    test(
+      'deletePiece by a non-owner fails with OwnershipViolation (AC-8)',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'Owner-only delete',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (imported as Success<Piece>).value;
+        await repository.addCollaborator(piece.id, userId: 'student-1');
+
+        currentUserId = 'student-1';
+        final result = await repository.deletePiece(piece.id);
+
+        expect(result, isA<ResultFailure<void>>());
+        expect(
+          (result as ResultFailure<void>).error,
+          isA<OwnershipViolation>(),
+        );
+        currentUserId = piece.teacherId;
+        expect(await repository.getPiece(piece.id), isA<Success<Piece>>());
+      },
+    );
+
+    test(
+      'leavePiece with multiple collaborators removes only the caller '
+      '(AC-9)',
+      () async {
+        final imported = await repository.importPiece(
+          title: 'Duet piece',
+          sourcePath: sourcePdf.path,
+        );
+        final piece = (imported as Success<Piece>).value;
+        await repository.addCollaborator(piece.id, userId: 'student-1');
+        await repository.addCollaborator(piece.id, userId: 'student-2');
+
+        currentUserId = 'student-1';
+        final result = await repository.leavePiece(piece.id);
+
+        expect(result, isA<Success<void>>());
+        currentUserId = piece.teacherId;
+        final fetched = await repository.getPiece(piece.id);
+        expect((fetched as Success<Piece>).value.collaboratorIds, [
+          'student-2',
+        ]);
+      },
+    );
 
     test('the teacher cannot leave their own piece', () async {
       final imported = await repository.importPiece(
@@ -510,6 +733,23 @@ class _DeferredPieceRepository implements PieceRepository {
   final PieceRepository Function() _resolve;
 
   @override
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  }) => _resolve().addCollaborator(
+    pieceId,
+    userId: userId,
+    name: name,
+    email: email,
+  );
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) =>
+      _resolve().removeCollaborator(pieceId, userId);
+
+  @override
   Future<Result<void>> deletePiece(String pieceId) =>
       _resolve().deletePiece(pieceId);
 
@@ -541,11 +781,13 @@ class _DeferredPieceRepository implements PieceRepository {
     String pieceId, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
     String? teacherName,
   }) => _resolve().pairStudent(
     pieceId,
     studentId: studentId,
     studentName: studentName,
+    studentEmail: studentEmail,
     teacherName: teacherName,
   );
 

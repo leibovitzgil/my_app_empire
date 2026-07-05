@@ -132,5 +132,53 @@ void main() {
         matchesGoldenFile('goldens/person_tile_default_dark.png'),
       );
     });
+
+    testWidgets('PersonTile (remove trailing, light)', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          _theme,
+          PersonTile(
+            initials: 'AM',
+            color: Colors.teal,
+            name: 'Alex Morgan',
+            subtitle: 'alex@example.com',
+            trailing: IconButton(
+              tooltip: 'Remove Alex Morgan',
+              icon: const Icon(Icons.person_remove_outlined),
+              onPressed: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(PersonTile),
+        matchesGoldenFile('goldens/person_tile_remove_trailing_light.png'),
+      );
+    });
+
+    testWidgets('PersonTile (remove trailing, dark)', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          _darkTheme,
+          PersonTile(
+            initials: 'AM',
+            color: Colors.teal,
+            name: 'Alex Morgan',
+            subtitle: 'alex@example.com',
+            trailing: IconButton(
+              tooltip: 'Remove Alex Morgan',
+              icon: const Icon(Icons.person_remove_outlined),
+              onPressed: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(PersonTile),
+        matchesGoldenFile('goldens/person_tile_remove_trailing_dark.png'),
+      );
+    });
   });
 }

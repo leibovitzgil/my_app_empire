@@ -8,14 +8,6 @@ import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:pieces/pieces.dart';
 
-/// Free-tier cap on paired students per teacher, enforced defensively inside
-/// [DeepLinkInviteService.createInvite] as a backstop. The primary gate is
-/// UI-level (`InviteBloc` checks this *before* even showing the invite
-/// sheet, so a gated teacher sees `feature_paywall`'s `PaywallScreen`
-/// instead) — this is belt-and-suspenders, the same pattern `ScoreBloc` uses
-/// to backstop `AnnotationRepository`'s ownership guards.
-const int defaultFreeTierStudentLimit = 1;
-
 /// An [InviteService] that mints tokenized invite links (see
 /// [InviteDeepLinks]), persists pending/consumed invites locally via
 /// [LocalStorageService] (JSON-encoded, mirroring `LocalPieceRepository`'s
@@ -29,13 +21,11 @@ class DeepLinkInviteService implements InviteService {
     required PieceRepository pieceRepository,
     required MonetizationService monetizationService,
     required LocalStorageService storage,
-    int freeTierStudentLimit = defaultFreeTierStudentLimit,
     String Function()? tokenGenerator,
     DateTime Function()? clock,
   }) : _pieceRepository = pieceRepository,
        _monetization = monetizationService,
        _storage = storage,
-       _freeTierStudentLimit = freeTierStudentLimit,
        _tokenGenerator = tokenGenerator ?? _generateToken,
        _now = clock ?? DateTime.now;
 
@@ -46,7 +36,6 @@ class DeepLinkInviteService implements InviteService {
   final PieceRepository _pieceRepository;
   final MonetizationService _monetization;
   final LocalStorageService _storage;
-  final int _freeTierStudentLimit;
   final String Function() _tokenGenerator;
   final DateTime Function() _now;
 
@@ -106,17 +95,15 @@ class DeepLinkInviteService implements InviteService {
     }
 
     final isPro = await _monetization.isProUser();
-    if (!isPro && piece.studentId == null) {
-      final pieces = await _pieceRepository.watchPieces().first;
-      final pairedStudents = pieces
-          .where((p) => p.teacherId == teacherId && p.studentId != null)
-          .map((p) => p.studentId)
-          .toSet();
-      if (pairedStudents.length >= _freeTierStudentLimit) {
-        throw const InviteException(
-          'Free plan allows 1 student. Upgrade to invite more.',
-        );
-      }
+    // Per-piece cap (FIX-1/FIX-2): the SAME `CollaboratorLimits` predicate
+    // the email-invite path (`DefaultCollaboratorInviteService`) uses,
+    // counting only this piece's current collaborators — never a
+    // library-wide total. Both invite paths converge on
+    // `PieceRepository.addCollaborator` and must never diverge here.
+    if (CollaboratorLimits.isAtCap(piece, isPro)) {
+      throw const InviteException(
+        'Free plan allows 1 collaborator. Upgrade to invite more.',
+      );
     }
 
     final token = _tokenGenerator();
@@ -159,40 +146,35 @@ class DeepLinkInviteService implements InviteService {
     String token, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
   }) => Result.guard<void>(() async {
     final invites = _load();
     final invite = _requireValid(invites, token);
 
-    // Re-assert the free-tier cap immediately before committing the
-    // pairing. `createInvite`'s check only guards against the piece
-    // invited-for *at creation time* already being paired — it can't see
-    // sibling invites created concurrently for other unpaired pieces. Since
-    // pairing only actually lands here (via `pairStudent`), re-counting
-    // paired students right before that call closes the gap for the
-    // sequential case: accepting invite A lands a pairing, so a
-    // subsequently-accepted invite B for the same teacher sees that fresh
-    // count and is rejected if it would exceed the cap.
+    // Re-assert the per-piece cap immediately before committing the
+    // pairing (FIX-1/FIX-2, same `CollaboratorLimits` predicate as
+    // `createInvite` and the email path). `createInvite`'s check only
+    // guards against this piece already being at cap *at creation time* —
+    // it can't see a sibling invite (for the SAME piece) accepted
+    // concurrently. Re-checking the piece's current collaborator count
+    // right before `pairStudent` closes that gap for the sequential case:
+    // accepting invite A lands a collaborator, so a subsequently-accepted
+    // invite B for the same piece sees that fresh count and is rejected if
+    // it would exceed the cap. This is deliberately per-piece, not a
+    // library-wide count across the teacher's other pieces.
     final piece = (await _pieceRepository.getPiece(invite.pieceId)).orThrow();
     final isPro = await _monetization.isProUser();
-    if (!isPro && piece.studentId == null) {
-      final pieces = await _pieceRepository.watchPieces().first;
-      final pairedStudents = pieces
-          .where(
-            (p) => p.teacherId == invite.teacherId && p.studentId != null,
-          )
-          .map((p) => p.studentId)
-          .toSet();
-      if (pairedStudents.length >= _freeTierStudentLimit) {
-        throw const InviteException(
-          'Free plan allows 1 student. Upgrade to invite more.',
-        );
-      }
+    if (CollaboratorLimits.isAtCap(piece, isPro)) {
+      throw const InviteException(
+        'Free plan allows 1 collaborator. Upgrade to invite more.',
+      );
     }
 
     (await _pieceRepository.pairStudent(
       invite.pieceId,
       studentId: studentId,
       studentName: studentName,
+      studentEmail: studentEmail,
       // `pairStudent` only ever uses this to backfill a piece that has no
       // `teacherName` yet (e.g. imported before that field existed) —
       // `importPiece` is otherwise the source of truth, so it's always

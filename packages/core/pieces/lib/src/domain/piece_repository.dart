@@ -3,8 +3,8 @@ import 'package:pieces/src/domain/piece.dart';
 
 /// Contract for listing, importing and managing [Piece]s.
 abstract class PieceRepository {
-  /// Emits the current user's pieces (as teacher or student), updating as
-  /// they change.
+  /// Emits the current user's pieces (as owner or collaborator), updating
+  /// as they change.
   Stream<List<Piece>> watchPieces();
 
   /// Fetches a single piece by [pieceId].
@@ -23,23 +23,50 @@ abstract class PieceRepository {
   /// Renames [pieceId] to [title].
   Future<Result<void>> renamePiece(String pieceId, String title);
 
-  /// Permanently deletes [pieceId]. Owner (teacher) only.
+  /// Permanently deletes [pieceId]. Owner-only: fails with an
+  /// `OwnershipViolation` (see `ownership.dart`) if the caller isn't
+  /// [Piece.teacherId].
   Future<Result<void>> deletePiece(String pieceId);
 
-  /// Removes the current user's association with [pieceId] without
-  /// deleting it for the other participant.
+  /// Removes the current user's own [Piece.collaborators] entry (and their
+  /// ink layer/audio notes) from [pieceId], without deleting it for anyone
+  /// else. A no-op if the caller isn't currently a collaborator. Fails if
+  /// the caller is the owner — owners delete the piece instead.
   Future<Result<void>> leavePiece(String pieceId);
 
-  /// Attaches [studentId] to [pieceId], completing a pairing/invite
-  /// acceptance. Idempotent if [studentId] is already the paired student;
-  /// fails if the piece is already paired with a *different* student.
+  /// Appends [userId] as a collaborator on [pieceId] (with [name]/[email] if
+  /// given), completing an invite acceptance. IDEMPOTENT: calling again for
+  /// an already-current collaborator updates their [name]/[email] (only
+  /// where newly given — never clobbered with a null) rather than
+  /// duplicating the entry. Not owner-gated (runs as the invitee) and NOT
+  /// cap-gated here — the collaborator cap (see `CollaboratorLimits`) is a
+  /// caller-side (invite service) concern, not this repository's.
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  });
+
+  /// Removes [userId] from [pieceId]'s collaborators, dropping their ink
+  /// layer/audio notes (via `AnnotationRepository.removeAuthorSlice`).
+  /// Owner-only: fails with an `OwnershipViolation` if the caller isn't
+  /// [Piece.teacherId]. Idempotent if [userId] isn't currently a
+  /// collaborator.
+  Future<Result<void>> removeCollaborator(String pieceId, String userId);
+
+  /// Attaches [studentId] to [pieceId] as a collaborator, completing a
+  /// pairing/invite acceptance. A thin, doc-preserving delegate to
+  /// [addCollaborator] — see that method for the append/idempotent
+  /// semantics (it no longer rejects a piece that already has a *different*
+  /// collaborator; multiple collaborators are supported).
   ///
-  /// [studentName] is the accepting student's display name, if the caller
-  /// has one to offer — always applied, since this call's own subject is
-  /// the pairing student. [teacherName] is a *backfill*: it only ever fills
-  /// in a piece that doesn't already have one (e.g. one imported before
-  /// this field existed) and never overwrites an existing
-  /// [Piece.teacherName], even if passed a different value.
+  /// [studentName]/[studentEmail] are the accepting student's display name/
+  /// email, if the caller has one to offer — always applied, since this
+  /// call's own subject is the pairing student. [teacherName] is a
+  /// *backfill*: it only ever fills in a piece that doesn't already have one
+  /// (e.g. one imported before this field existed) and never overwrites an
+  /// existing [Piece.teacherName], even if passed a different value.
   ///
   /// Owned by callers in `feature_pairing` — this package only exposes the
   /// mutation itself, mirroring how `AnnotationRepository.replaceAuthorSlice`
@@ -49,6 +76,7 @@ abstract class PieceRepository {
     String pieceId, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
     String? teacherName,
   });
 
@@ -71,7 +99,8 @@ abstract class PieceRepository {
   /// mechanism knows at this point — typically only [teacherName] (the
   /// export's author/teacher side, embedded in the sender's manifest), since
   /// [studentName] is normally already known locally as the receiving
-  /// device's own current user.
+  /// device's own current user. [studentId], if given, maps internally to a
+  /// single collaborator, mirroring the pre-migration shape.
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,

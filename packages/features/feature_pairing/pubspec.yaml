@@ -25,9 +25,13 @@ dependencies:
     path: ../../core/local_storage
   monetization:
     path: ../../core/monetization
+  notifications:
+    path: ../../services/notifications
   pieces:
     path: ../../core/pieces
   share_plus: ^13.2.0
+  user_directory:
+    path: ../../core/user_directory
   user_roles:
     path: ../../core/user_roles
 

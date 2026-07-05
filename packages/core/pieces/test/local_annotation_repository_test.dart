@@ -15,6 +15,18 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> getPiece(String pieceId) async => Success(piece);
 
   @override
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) =>
+      throw UnimplementedError();
+
+  @override
   Future<Result<void>> deletePiece(String pieceId) =>
       throw UnimplementedError();
 
@@ -37,6 +49,7 @@ class _FakePieceRepository implements PieceRepository {
     String pieceId, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
     String? teacherName,
   }) => throw UnimplementedError();
 
@@ -64,7 +77,10 @@ void main() {
     basePdfChecksum: 'abc',
     basePdfPath: '/pieces/piece-1.pdf',
     teacherId: 'teacher-1',
-    studentId: 'student-1',
+    collaborators: const [
+      Collaborator(uid: 'student-1'),
+      Collaborator(uid: 'student-2'),
+    ],
     createdAt: DateTime(2024),
     updatedAt: DateTime(2024),
   );
@@ -120,6 +136,48 @@ void main() {
       expect(annotations.layers.single.role, PieceRole.teacher);
       expect(annotations.layers.single.strokes.single.id, 's1');
     });
+
+    test(
+      'addStroke resolves the student role for any current collaborator, '
+      'not just the first (AC-5)',
+      () async {
+        currentUserId = 'student-2';
+        final result = await repository.addStroke(
+          piece.id,
+          stroke(id: 's-second', authorId: 'student-2'),
+        );
+
+        expect(result, isA<Success<void>>());
+        final annotations = await repository.watch(piece.id).first;
+        expect(annotations.layers.single.role, PieceRole.student);
+        expect(annotations.layers.single.ownerId, 'student-2');
+      },
+    );
+
+    test(
+      'two collaborators each get their own separate ink layer, without '
+      'overwriting each other (AC-5)',
+      () async {
+        currentUserId = 'student-1';
+        await repository.addStroke(
+          piece.id,
+          stroke(id: 'from-1', authorId: 'student-1'),
+        );
+        currentUserId = 'student-2';
+        await repository.addStroke(
+          piece.id,
+          stroke(id: 'from-2', authorId: 'student-2'),
+        );
+
+        final annotations = await repository.watch(piece.id).first;
+        expect(annotations.layers, hasLength(2));
+        final byOwner = {
+          for (final layer in annotations.layers) layer.ownerId: layer,
+        };
+        expect(byOwner['student-1']!.strokes.single.id, 'from-1');
+        expect(byOwner['student-2']!.strokes.single.id, 'from-2');
+      },
+    );
 
     test(
       'addStroke rejects a stroke authored by someone other than the '
@@ -271,6 +329,35 @@ void main() {
             .map((s) => s.id)
             .toSet();
         expect(strokeIds, {'teacher-stroke', 'student-stroke-v2'});
+      },
+    );
+
+    test(
+      "removeAuthorSlice drops an author's layer and audio notes entirely, "
+      'leaving other authors untouched (backs removeCollaborator/leavePiece, '
+      'AC-7)',
+      () async {
+        await repository.addStroke(piece.id, stroke(id: 'teacher-stroke'));
+        await repository.addAudioNote(piece.id, note(id: 'teacher-note'));
+        currentUserId = 'student-1';
+        await repository.addStroke(
+          piece.id,
+          stroke(id: 'student-stroke', authorId: 'student-1'),
+        );
+        await repository.addAudioNote(
+          piece.id,
+          note(id: 'student-note', authorId: 'student-1'),
+        );
+
+        final result = await repository.removeAuthorSlice(
+          piece.id,
+          'student-1',
+        );
+
+        expect(result, isA<Success<void>>());
+        final annotations = await repository.watch(piece.id).first;
+        expect(annotations.layers.map((l) => l.ownerId), ['teacher-1']);
+        expect(annotations.audioNotes.map((n) => n.id), ['teacher-note']);
       },
     );
   });

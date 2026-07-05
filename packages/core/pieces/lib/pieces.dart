@@ -4,6 +4,7 @@ export 'src/data/local_piece_repository.dart';
 export 'src/domain/annotation_repository.dart';
 export 'src/domain/audio_asset_store.dart';
 export 'src/domain/audio_note.dart';
+export 'src/domain/collaborator.dart';
 export 'src/domain/ink_layer.dart';
 export 'src/domain/ink_stroke.dart';
 export 'src/domain/ownership.dart';

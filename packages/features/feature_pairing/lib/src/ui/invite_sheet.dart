@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_pairing/src/bloc/invite_bloc.dart';
+import 'package:feature_pairing/src/domain/collaborator_invite_service.dart';
 import 'package:feature_pairing/src/domain/invite_service.dart';
+import 'package:feature_pairing/src/ui/invite_format.dart';
 import 'package:feature_paywall/feature_paywall.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,11 +13,15 @@ import 'package:monetization/monetization.dart';
 import 'package:pieces/pieces.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// Opens the "Invite a student" flow for [pieceId] (owned by [teacherId]).
+/// Opens the "Invite a collaborator" flow for [pieceId] (owned by
+/// [teacherId]): email is the PRIMARY path (live lookup-as-you-type via
+/// [collaboratorInviteService]), with the tokenized deep-link
+/// [inviteService] always available as a "Share invite link instead"
+/// fallback.
 ///
 /// Builds and owns an [InviteBloc] for the lifetime of the sheet — the
-/// paywall-gate check (see [InviteBloc._onOpened]) runs first via
-/// [InviteSheetOpened]; a gated teacher sees `feature_paywall`'s
+/// per-piece paywall-gate check (see [InviteBloc._onOpened]) runs first via
+/// [InviteSheetOpened]; a gated owner sees `feature_paywall`'s
 /// `PaywallScreen` rendered in place of the normal sheet body instead of the
 /// invite affordances, rather than a separate navigation. This is a judgment
 /// call: the brief asks for the paywall check to gate the sheet "first", but
@@ -25,6 +31,7 @@ import 'package:share_plus/share_plus.dart';
 /// invite UI while gated" outcome.
 Future<void> showInviteSheet(
   BuildContext context, {
+  required CollaboratorInviteService collaboratorInviteService,
   required InviteService inviteService,
   required MonetizationService monetizationService,
   required PieceRepository pieceRepository,
@@ -33,6 +40,7 @@ Future<void> showInviteSheet(
   String? teacherName,
 }) async {
   final bloc = InviteBloc(
+    collaboratorInviteService: collaboratorInviteService,
     inviteService: inviteService,
     monetizationService: monetizationService,
     pieceRepository: pieceRepository,
@@ -42,7 +50,7 @@ Future<void> showInviteSheet(
   )..add(const InviteSheetOpened());
   await AppBottomSheet.show<void>(
     context,
-    title: 'Invite a student',
+    title: 'Invite a collaborator',
     builder: (_) => BlocProvider<InviteBloc>.value(
       value: bloc,
       child: BlocProvider<PaywallBloc>(
@@ -56,19 +64,35 @@ Future<void> showInviteSheet(
   await bloc.close();
 }
 
-class _InviteSheetBody extends StatelessWidget {
+class _InviteSheetBody extends StatefulWidget {
   const _InviteSheetBody();
+
+  @override
+  State<_InviteSheetBody> createState() => _InviteSheetBodyState();
+}
+
+class _InviteSheetBodyState extends State<_InviteSheetBody> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<InviteBloc, InviteState>(
       listenWhen: (previous, current) =>
-          (current.status == InviteStatus.created &&
-              previous.status != InviteStatus.created) ||
+          (current.status == InviteStatus.sent &&
+              previous.status != InviteStatus.sent) ||
           (current.error != null && current.error != previous.error),
       listener: (context, state) {
-        if (state.status == InviteStatus.created) {
-          AppSnackbar.success(context, 'Invite link created');
+        if (state.status == InviteStatus.sent) {
+          AppSnackbar.success(
+            context,
+            state.link != null ? 'Invite link created' : 'Invite sent',
+          );
         } else if (state.error != null) {
           AppSnackbar.error(context, state.error!);
         }
@@ -81,18 +105,24 @@ class _InviteSheetBody extends StatelessWidget {
           ),
           InviteStatus.paywallRequired => const _PaywallGateBody(),
           InviteStatus.ready ||
-          InviteStatus.creating ||
-          InviteStatus.created ||
-          InviteStatus.failure => _ReadyBody(state: state),
+          InviteStatus.lookingUp ||
+          InviteStatus.resolved ||
+          InviteStatus.notFound ||
+          InviteStatus.alreadyCollaborator ||
+          InviteStatus.sending ||
+          InviteStatus.sent => _ReadyBody(
+            state: state,
+            emailController: _controller,
+          ),
         };
       },
     );
   }
 }
 
-/// Rendered in place of the invite sheet's normal body when the teacher is
-/// at/over the free-tier student limit — the same `PaywallScreen` used
-/// elsewhere in the app, re-skinned only by its own copy (not forked).
+/// Rendered in place of the invite sheet's normal body when the owner is
+/// at/over the collaborator cap — the same `PaywallScreen` used elsewhere in
+/// the app, re-skinned only by its own copy (not forked).
 class _PaywallGateBody extends StatelessWidget {
   const _PaywallGateBody();
 
@@ -106,25 +136,60 @@ class _PaywallGateBody extends StatelessWidget {
 }
 
 class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({required this.state});
+  const _ReadyBody({required this.state, required this.emailController});
 
   final InviteState state;
+  final TextEditingController emailController;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final busy = state.status == InviteStatus.sending;
     final link = state.link;
-    final busy = state.status == InviteStatus.creating;
+    final recipient = state.recipient;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Share this link with your student to pair them on this piece.',
+          'Invite a collaborator by email to work on this piece together.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: emailController,
+          label: 'Email',
+          hint: 'name@example.com',
+          keyboardType: TextInputType.emailAddress,
+          autocorrect: false,
+          enabled: !busy && link == null,
+          errorText: switch (state.status) {
+            InviteStatus.notFound =>
+              'No Duet account found for ${state.email}.',
+            InviteStatus.alreadyCollaborator =>
+              '${state.email} is already a collaborator.',
+            _ => null,
+          },
+          onChanged: (value) =>
+              context.read<InviteBloc>().add(InviteEmailChanged(value)),
+        ),
+        if (state.status == InviteStatus.resolved && recipient != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          PersonTile(
+            initials: InviteFormat.initialsFor(recipient.uid),
+            color: Color(InviteFormat.colorValueFor(recipient.uid)),
+            name: recipient.displayName ?? recipient.email,
+          ),
+        ],
+        if (state.status == InviteStatus.sent && link == null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Invite sent to ${recipient?.email ?? state.email}.',
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
         if (link != null) ...[
           SelectableText(link.uri.toString()),
@@ -146,9 +211,21 @@ class _ReadyBody extends StatelessWidget {
               ),
             ],
           ),
-        ] else
+        ] else ...[
           PrimaryButton(
-            label: 'Get invite link',
+            label: 'Send invite',
+            isLoading: busy,
+            onPressed: state.status == InviteStatus.resolved && !busy
+                ? () => context.read<InviteBloc>().add(
+                    const InviteSendRequested(),
+                  )
+                : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const LabeledDivider(label: 'or'),
+          const SizedBox(height: AppSpacing.md),
+          SecondaryButton(
+            label: 'Share invite link instead',
             isLoading: busy,
             onPressed: busy
                 ? null
@@ -156,6 +233,7 @@ class _ReadyBody extends StatelessWidget {
                     const InviteLinkCreateRequested(),
                   ),
           ),
+        ],
       ],
     );
   }

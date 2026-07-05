@@ -110,11 +110,12 @@ abstract class InviteService {
   /// [token] is unknown/expired/consumed, or if the piece is already paired
   /// with a different student.
   ///
-  /// [studentName] is the accepting student's own display name, sourced from
-  /// the accepting device's current-user identity.
+  /// [studentName]/[studentEmail] are the accepting student's own display
+  /// name/email, sourced from the accepting device's current-user identity.
   Future<Result<void>> acceptInvite(
     String token, {
     required String studentId,
     String? studentName,
+    String? studentEmail,
   });
 }

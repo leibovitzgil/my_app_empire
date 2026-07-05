@@ -176,6 +176,59 @@ void main() {
 
         expect(state.sharedWithMe.map((p) => p.id), ['p1']);
       });
+
+      test(
+        'piecesByStudent groups a piece under EVERY one of its '
+        'collaborators (AC-4)',
+        () {
+          final shared = Piece(
+            id: 'p1',
+            title: 'Nocturne',
+            basePdfChecksum: 'checksum',
+            basePdfPath: '/tmp/p1.pdf',
+            teacherId: teacherId,
+            collaborators: const [
+              Collaborator(uid: 'student-1'),
+              Collaborator(uid: 'student-2'),
+            ],
+            createdAt: DateTime(2024),
+            updatedAt: DateTime(2024),
+          );
+          final state = const LibraryState.initial(
+            currentUserId: teacherId,
+            currentRole: PieceRole.teacher,
+          ).copyWith(status: LibraryStatus.ready, pieces: [shared]);
+
+          final grouped = state.piecesByStudent;
+          expect(grouped['student-1']!.map((p) => p.id), ['p1']);
+          expect(grouped['student-2']!.map((p) => p.id), ['p1']);
+        },
+      );
+
+      test(
+        'sharedWithMe sees a piece even as its SECOND collaborator (AC-4)',
+        () {
+          final shared = Piece(
+            id: 'p1',
+            title: 'Nocturne',
+            basePdfChecksum: 'checksum',
+            basePdfPath: '/tmp/p1.pdf',
+            teacherId: teacherId,
+            collaborators: const [
+              Collaborator(uid: 'student-1'),
+              Collaborator(uid: 'student-2'),
+            ],
+            createdAt: DateTime(2024),
+            updatedAt: DateTime(2024),
+          );
+          final state = const LibraryState.initial(
+            currentUserId: 'student-2',
+            currentRole: PieceRole.student,
+          ).copyWith(status: LibraryStatus.ready, pieces: [shared]);
+
+          expect(state.sharedWithMe.map((p) => p.id), ['p1']);
+        },
+      );
     });
 
     test('empty-state expectations per role are reachable via state', () {

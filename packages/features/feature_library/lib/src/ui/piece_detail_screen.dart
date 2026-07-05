@@ -16,6 +16,7 @@ class PieceDetailPage extends StatelessWidget {
     required this.currentUserId,
     required this.pieceId,
     required this.onOpenScore,
+    this.onOpenCollaborators,
     super.key,
   });
 
@@ -33,6 +34,13 @@ class PieceDetailPage extends StatelessWidget {
   /// `LibraryPage.onOpenScore`.
   final void Function(Piece piece) onOpenScore;
 
+  /// Called when the user taps "Collaborators", to navigate to
+  /// `feature_pairing`'s Collaborators screen. A callback for the same
+  /// cross-package reason as [onOpenScore]: `feature_library` and
+  /// `feature_pairing` are siblings that must not depend on each other.
+  /// `null` hides the "Collaborators" tile entirely.
+  final void Function(Piece piece)? onOpenCollaborators;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<PieceDetailCubit>(
@@ -44,7 +52,10 @@ class PieceDetailPage extends StatelessWidget {
         unawaited(cubit.load(pieceId));
         return cubit;
       },
-      child: PieceDetailScreen(onOpenScore: onOpenScore),
+      child: PieceDetailScreen(
+        onOpenScore: onOpenScore,
+        onOpenCollaborators: onOpenCollaborators,
+      ),
     );
   }
 }
@@ -54,10 +65,17 @@ class PieceDetailPage extends StatelessWidget {
 /// (provided by [PieceDetailPage]).
 class PieceDetailScreen extends StatelessWidget {
   /// Creates a [PieceDetailScreen].
-  const PieceDetailScreen({required this.onOpenScore, super.key});
+  const PieceDetailScreen({
+    required this.onOpenScore,
+    this.onOpenCollaborators,
+    super.key,
+  });
 
   /// See [PieceDetailPage.onOpenScore].
   final void Function(Piece piece) onOpenScore;
+
+  /// See [PieceDetailPage.onOpenCollaborators].
+  final void Function(Piece piece)? onOpenCollaborators;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +116,7 @@ class PieceDetailScreen extends StatelessWidget {
             PieceDetailStatus.ready => _ReadyBody(
               state: state,
               onOpenScore: onOpenScore,
+              onOpenCollaborators: onOpenCollaborators,
             ),
           },
         );
@@ -107,10 +126,15 @@ class PieceDetailScreen extends StatelessWidget {
 }
 
 class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({required this.state, required this.onOpenScore});
+  const _ReadyBody({
+    required this.state,
+    required this.onOpenScore,
+    this.onOpenCollaborators,
+  });
 
   final PieceDetailState state;
   final void Function(Piece piece) onOpenScore;
+  final void Function(Piece piece)? onOpenCollaborators;
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +174,29 @@ class _ReadyBody extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          if (onOpenCollaborators != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppListTile(
+              leading: piece.collaborators.isEmpty
+                  ? const Icon(Icons.group_outlined)
+                  : AvatarStack(
+                      people: [
+                        for (final collaborator in piece.collaborators)
+                          (
+                            initials: LibraryFormat.initialsFor(
+                              collaborator.uid,
+                            ),
+                            color: Color(
+                              LibraryFormat.colorValueFor(collaborator.uid),
+                            ),
+                          ),
+                      ],
+                    ),
+              title: Text('Collaborators (${piece.collaboratorCount})'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => onOpenCollaborators!(piece),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           PrimaryButton(
             label: 'Open score',

@@ -121,6 +121,40 @@ Widget initialsAvatarPreview() {
   return const InitialsAvatar(initials: 'GL', color: Colors.indigo);
 }
 
+@Preview(name: 'AvatarStack • 2 people')
+Widget avatarStackTwoPreview() {
+  return const AvatarStack(
+    people: [
+      (initials: 'GL', color: Colors.indigo),
+      (initials: 'AM', color: Colors.teal),
+    ],
+  );
+}
+
+@Preview(name: 'AvatarStack • 3 people')
+Widget avatarStackThreePreview() {
+  return const AvatarStack(
+    people: [
+      (initials: 'GL', color: Colors.indigo),
+      (initials: 'AM', color: Colors.teal),
+      (initials: 'JD', color: Colors.orange),
+    ],
+  );
+}
+
+@Preview(name: 'AvatarStack • overflow (+N)')
+Widget avatarStackOverflowPreview() {
+  return const AvatarStack(
+    people: [
+      (initials: 'GL', color: Colors.indigo),
+      (initials: 'AM', color: Colors.teal),
+      (initials: 'JD', color: Colors.orange),
+      (initials: 'RK', color: Colors.pink),
+      (initials: 'SM', color: Colors.blue),
+    ],
+  );
+}
+
 @Preview(name: 'AppCard • default')
 Widget appCardDefaultPreview() {
   return AppCard(
