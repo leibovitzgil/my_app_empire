@@ -7,9 +7,6 @@ enum ScoreStatus { loading, ready, failure }
 /// single field): selecting one deselects any other.
 enum ScoreMode { view, draw, regionSelect }
 
-/// The three annotation layers a user can toggle visibility for.
-enum LayerKind { teacherInk, studentInk, audioPins }
-
 /// What a region-select gesture is for.
 enum RegionIntent { recordAudio, practice }
 
@@ -21,18 +18,15 @@ final class ScoreState extends Equatable {
     this.pieceId,
     this.piece,
     this.currentPage = 0,
-    this.teacherStrokes = const [],
-    this.studentStrokes = const [],
+    this.layers = const [],
     this.notes = const [],
     this.currentRole = PieceRole.student,
     this.mode = ScoreMode.view,
-    this.selectedColorId = 0,
     this.eraserActive = false,
     this.undoStack = const [],
     this.activeRegion,
     this.regionIntent,
-    this.teacherInkVisible = true,
-    this.studentInkVisible = true,
+    this.hiddenInkOwnerIds = const {},
     this.audioPinsVisible = true,
     this.cleanWorkspace = false,
     this.error,
@@ -56,11 +50,11 @@ final class ScoreState extends Equatable {
   /// The zero-based page currently shown.
   final int currentPage;
 
-  /// The teacher's ink strokes, across all pages.
-  final List<InkStroke> teacherStrokes;
-
-  /// The student's ink strokes, across all pages.
-  final List<InkStroke> studentStrokes;
+  /// Every participant's ink, one [ParticipantLayer] per participant on the
+  /// piece (its owner plus every collaborator), in [Piece.participantIds]
+  /// order. Re-derived from the annotations stream on each snapshot; each
+  /// layer's `visible` flag reflects [hiddenInkOwnerIds].
+  final List<ParticipantLayer> layers;
 
   /// The piece's audio notes, across all pages.
   final List<AudioNote> notes;
@@ -68,15 +62,12 @@ final class ScoreState extends Equatable {
   /// The signed-in participant's id.
   final String currentUserId;
 
-  /// Whether the signed-in participant is the piece's teacher or student.
+  /// Whether the signed-in participant owns the piece (its teacher) or is a
+  /// collaborator on it.
   final PieceRole currentRole;
 
   /// The current interaction mode.
   final ScoreMode mode;
-
-  /// The index (into the fixed ink palette) of the currently selected pen
-  /// colour.
-  final int selectedColorId;
 
   /// Whether the eraser tool is active (instead of the pen).
   final bool eraserActive;
@@ -92,13 +83,11 @@ final class ScoreState extends Equatable {
   /// What [activeRegion] is for, once known.
   final RegionIntent? regionIntent;
 
-  /// Source-of-truth visibility of the teacher's ink layer. Never mutated by
-  /// [CleanWorkspaceToggled].
-  final bool teacherInkVisible;
-
-  /// Source-of-truth visibility of the student's ink layer. Never mutated by
-  /// [CleanWorkspaceToggled].
-  final bool studentInkVisible;
+  /// The owner ids whose ink layers are currently toggled off. The
+  /// source-of-truth visibility set for per-participant ink, mirrored onto
+  /// each [ParticipantLayer.visible] so it survives an annotations re-derive.
+  /// Never mutated by [CleanWorkspaceToggled].
+  final Set<String> hiddenInkOwnerIds;
 
   /// Source-of-truth visibility of audio pin markers. Never mutated by
   /// [CleanWorkspaceToggled].
@@ -106,19 +95,26 @@ final class ScoreState extends Equatable {
 
   /// A transient mask: when true, every layer renders hidden regardless of
   /// its own visibility flag, without changing that flag. See
-  /// [effectiveTeacherInkVisible] et al. for the actual, computed visibility.
+  /// [effectiveInkVisible]/[effectiveAudioPinsVisible] for the actual,
+  /// computed visibility.
   final bool cleanWorkspace;
 
   /// The most recent (usually transient/non-blocking) error, if any.
   final String? error;
 
-  /// Effective visibility = `!cleanWorkspace && teacherInkVisible`. Computed,
-  /// never stored, so clean-workspace can never clobber the underlying flag.
-  bool get effectiveTeacherInkVisible => !cleanWorkspace && teacherInkVisible;
+  /// The signed-in participant's own layer, if it has been projected yet.
+  ParticipantLayer? get ownLayer {
+    for (final layer in layers) {
+      if (layer.isOwn) return layer;
+    }
+    return null;
+  }
 
-  /// Effective visibility = `!cleanWorkspace && studentInkVisible`. Computed,
-  /// never stored, so clean-workspace can never clobber the underlying flag.
-  bool get effectiveStudentInkVisible => !cleanWorkspace && studentInkVisible;
+  /// Effective visibility of [layer] = `!cleanWorkspace && layer.visible`.
+  /// Computed, never stored, so clean-workspace can never clobber the
+  /// underlying per-layer flag.
+  bool effectiveInkVisible(ParticipantLayer layer) =>
+      !cleanWorkspace && layer.visible;
 
   /// Effective visibility = `!cleanWorkspace && audioPinsVisible`. Computed,
   /// never stored, so clean-workspace can never clobber the underlying flag.
@@ -132,20 +128,17 @@ final class ScoreState extends Equatable {
     String? pieceId,
     Piece? piece,
     int? currentPage,
-    List<InkStroke>? teacherStrokes,
-    List<InkStroke>? studentStrokes,
+    List<ParticipantLayer>? layers,
     List<AudioNote>? notes,
     PieceRole? currentRole,
     ScoreMode? mode,
-    int? selectedColorId,
     bool? eraserActive,
     List<InkStroke>? undoStack,
     Region? activeRegion,
     bool clearActiveRegion = false,
     RegionIntent? regionIntent,
     bool clearRegionIntent = false,
-    bool? teacherInkVisible,
-    bool? studentInkVisible,
+    Set<String>? hiddenInkOwnerIds,
     bool? audioPinsVisible,
     bool? cleanWorkspace,
     String? error,
@@ -157,12 +150,10 @@ final class ScoreState extends Equatable {
       pieceId: pieceId ?? this.pieceId,
       piece: piece ?? this.piece,
       currentPage: currentPage ?? this.currentPage,
-      teacherStrokes: teacherStrokes ?? this.teacherStrokes,
-      studentStrokes: studentStrokes ?? this.studentStrokes,
+      layers: layers ?? this.layers,
       notes: notes ?? this.notes,
       currentRole: currentRole ?? this.currentRole,
       mode: mode ?? this.mode,
-      selectedColorId: selectedColorId ?? this.selectedColorId,
       eraserActive: eraserActive ?? this.eraserActive,
       undoStack: undoStack ?? this.undoStack,
       activeRegion: clearActiveRegion
@@ -171,8 +162,7 @@ final class ScoreState extends Equatable {
       regionIntent: clearRegionIntent
           ? null
           : (regionIntent ?? this.regionIntent),
-      teacherInkVisible: teacherInkVisible ?? this.teacherInkVisible,
-      studentInkVisible: studentInkVisible ?? this.studentInkVisible,
+      hiddenInkOwnerIds: hiddenInkOwnerIds ?? this.hiddenInkOwnerIds,
       audioPinsVisible: audioPinsVisible ?? this.audioPinsVisible,
       cleanWorkspace: cleanWorkspace ?? this.cleanWorkspace,
       error: clearError ? null : (error ?? this.error),
@@ -185,19 +175,16 @@ final class ScoreState extends Equatable {
     pieceId,
     piece,
     currentPage,
-    teacherStrokes,
-    studentStrokes,
+    layers,
     notes,
     currentUserId,
     currentRole,
     mode,
-    selectedColorId,
     eraserActive,
     undoStack,
     activeRegion,
     regionIntent,
-    teacherInkVisible,
-    studentInkVisible,
+    hiddenInkOwnerIds,
     audioPinsVisible,
     cleanWorkspace,
     error,

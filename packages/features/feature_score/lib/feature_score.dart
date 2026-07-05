@@ -1,13 +1,14 @@
 export 'src/bloc/audio_playback_cubit.dart';
 export 'src/bloc/record_audio_cubit.dart';
 export 'src/bloc/score_bloc.dart';
+export 'src/participant_layer.dart';
 export 'src/ui/practice_view.dart';
 export 'src/ui/score_viewer_screen.dart';
 export 'src/ui/widgets/audio_pin_marker.dart';
+export 'src/ui/widgets/draw_toolbar.dart';
 export 'src/ui/widgets/ink_overlay.dart';
 export 'src/ui/widgets/ink_palette.dart';
 export 'src/ui/widgets/layer_toggle_bar.dart';
-export 'src/ui/widgets/pen_color_picker.dart';
 export 'src/ui/widgets/region_selector.dart';
 export 'src/ui/widgets/score_page_canvas.dart';
 export 'src/ui/widgets/sync_status_badge.dart';

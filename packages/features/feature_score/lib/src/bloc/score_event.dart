@@ -51,15 +51,22 @@ final class ModeChanged extends ScoreEvent {
   List<Object?> get props => [mode];
 }
 
-/// A layer visibility chip was tapped. Presentation-layer only — never
-/// touches [ScoreState.cleanWorkspace].
-final class LayerVisibilityToggled extends ScoreEvent {
-  const LayerVisibilityToggled(this.layer);
+/// A participant's ink-layer visibility chip was tapped, identified by its
+/// [ownerId]. Presentation-layer only — never touches
+/// [ScoreState.cleanWorkspace].
+final class InkLayerToggled extends ScoreEvent {
+  const InkLayerToggled(this.ownerId);
 
-  final LayerKind layer;
+  final String ownerId;
 
   @override
-  List<Object?> get props => [layer];
+  List<Object?> get props => [ownerId];
+}
+
+/// The audio-pins visibility chip was tapped. Presentation-layer only — never
+/// touches [ScoreState.cleanWorkspace].
+final class AudioPinsToggled extends ScoreEvent {
+  const AudioPinsToggled();
 }
 
 /// Flips the transient clean-workspace mask, leaving the three per-layer
@@ -67,16 +74,6 @@ final class LayerVisibilityToggled extends ScoreEvent {
 /// was visible before.
 final class CleanWorkspaceToggled extends ScoreEvent {
   const CleanWorkspaceToggled();
-}
-
-/// A pen colour swatch was picked; also exits eraser mode.
-final class PenColorSelected extends ScoreEvent {
-  const PenColorSelected(this.colorId);
-
-  final int colorId;
-
-  @override
-  List<Object?> get props => [colorId];
 }
 
 /// Toggles the eraser tool on/off.

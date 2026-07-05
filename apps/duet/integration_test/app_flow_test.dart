@@ -79,9 +79,11 @@ void main() {
 
       await _dragIncrementally(tester, canvasCenter, const Offset(-48, -36));
       await tester.pumpAndSettle();
-      expect(bloc.state.teacherStrokes, hasLength(1));
-      expect(bloc.state.teacherStrokes.single.authorId, teacherId);
-      expect(bloc.state.studentStrokes, isEmpty);
+      // On an unpaired piece there is exactly one participant layer — the
+      // owner's — and the stroke lands on it.
+      expect(bloc.state.layers, hasLength(1));
+      expect(bloc.state.ownLayer!.strokes, hasLength(1));
+      expect(bloc.state.ownLayer!.strokes.single.authorId, teacherId);
       await shot('04_stroke_drawn');
 
       // Turn drawing mode back off before region-select (mutually
@@ -122,21 +124,22 @@ void main() {
       expect(recordedNote.region.width, greaterThan(0));
       await shot('06_audio_note_saved');
 
-      // 4. Layer toggles are independent and immediate: toggling teacher
-      // ink off leaves student ink and audio pins untouched.
-      await tester.tap(find.text('Teacher'));
+      // 4. Layer toggles are independent and immediate: toggling the owner's
+      // ink layer off (their chip carries the "(yours)" indicator) leaves
+      // audio pins untouched.
+      await tester.tap(find.bySemanticsLabel(RegExp(r'layer \(yours\)')));
       await tester.pump();
-      expect(bloc.state.teacherInkVisible, isFalse);
-      expect(bloc.state.studentInkVisible, isTrue);
+      expect(bloc.state.ownLayer!.visible, isFalse);
       expect(bloc.state.audioPinsVisible, isTrue);
-      await shot('07_teacher_layer_hidden');
+      await shot('07_own_layer_hidden');
 
       // 5. Clean workspace hides every layer regardless of its own flag...
       await tester.tap(find.byIcon(Icons.layers_outlined));
       await tester.pump();
       expect(bloc.state.cleanWorkspace, isTrue);
-      expect(bloc.state.effectiveTeacherInkVisible, isFalse);
-      expect(bloc.state.effectiveStudentInkVisible, isFalse);
+      for (final layer in bloc.state.layers) {
+        expect(bloc.state.effectiveInkVisible(layer), isFalse);
+      }
       expect(bloc.state.effectiveAudioPinsVisible, isFalse);
       await shot('08_clean_workspace');
 
@@ -148,14 +151,12 @@ void main() {
       expect(bloc.state.effectiveAudioPinsVisible, isFalse); // still masked
 
       // ...and turning clean workspace off restores the *exact* prior
-      // per-layer state — teacher still off, student still on, audio pins
-      // now off (the change made while masked) — never a reset to some
-      // default.
+      // per-layer state — the owner's ink still off, audio pins now off (the
+      // change made while masked) — never a reset to some default.
       await tester.tap(find.byIcon(Icons.layers_clear_outlined));
       await tester.pump();
       expect(bloc.state.cleanWorkspace, isFalse);
-      expect(bloc.state.teacherInkVisible, isFalse);
-      expect(bloc.state.studentInkVisible, isTrue);
+      expect(bloc.state.ownLayer!.visible, isFalse);
       expect(bloc.state.audioPinsVisible, isFalse);
       await shot('09_clean_workspace_restored');
 
@@ -173,7 +174,7 @@ void main() {
       await tester.pumpAndSettle();
       final reopened = scoreBloc!;
 
-      expect(reopened.state.teacherStrokes, hasLength(1));
+      expect(reopened.state.ownLayer!.strokes, hasLength(1));
       expect(reopened.state.notes, hasLength(1));
       expect(reopened.state.notes.single.region, recordedNote.region);
       await shot('10_reopened');
