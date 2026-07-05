@@ -1,0 +1,153 @@
+// Registrations are appended by `create_feature/create_package --wire`, so they
+// are written as standalone statements rather than a cascade.
+// ignore_for_file: cascade_invocations
+import 'package:audio/audio.dart';
+import 'package:deep_linking/deep_linking.dart';
+import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/duet_notification_permission_gateway.dart';
+import 'package:duet/data/fake_deep_link_service.dart';
+import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/recording_path_builder.dart';
+import 'package:duet/domain/duet_roles.dart';
+import 'package:feature_auth/feature_auth.dart';
+import 'package:feature_pairing/feature_pairing.dart';
+import 'package:feature_settings/feature_settings.dart';
+import 'package:get_it/get_it.dart';
+import 'package:local_storage/local_storage.dart';
+import 'package:monetization/monetization.dart';
+import 'package:notifications/notifications.dart';
+import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:pieces/pieces.dart';
+import 'package:review_sync/review_sync.dart';
+import 'package:user_roles/user_roles.dart';
+
+/// The app's service locator.
+final GetIt getIt = GetIt.instance;
+
+/// Registers every dependency duet composes. This is the canonical wiring
+/// pattern: register a concrete implementation against the contract that
+/// features depend on, so swapping (mock vs. real) happens in one place.
+Future<void> configureDependencies() async {
+  final storage = await LocalStorageService.init();
+  getIt.registerSingleton<LocalStorageService>(storage);
+
+  // Constructed directly (rather than via `AuthRepository.new` as a lazy
+  // singleton) so `CurrentUserName` below can subscribe to its
+  // Duet-local-only `displayName` stream, which isn't part of the shared
+  // `AuthRepository` contract (see that getter's doc).
+  final mockAuthRepository = MockAuthRepository();
+  getIt.registerSingleton<AuthRepository>(mockAuthRepository);
+
+  // Eager singletons: both must subscribe to `AuthRepository.user` (and
+  // `MockAuthRepository.displayName`) before the user can possibly log in
+  // (see `CurrentUser`'s doc) — a lazy singleton resolved for the first time
+  // *after* login would miss that first (and, for a returning session's
+  // persisted role, defining) emission on the broadcast stream.
+  final currentUser = CurrentUser(getIt<AuthRepository>().user);
+  getIt.registerSingleton<CurrentUser>(currentUser);
+
+  final currentUserName = CurrentUserName(mockAuthRepository.displayName);
+  getIt.registerSingleton<CurrentUserName>(currentUserName);
+
+  getIt.registerSingleton<UserRoleRepository>(
+    LocalUserRoleRepository(
+      storage: getIt<LocalStorageService>(),
+      userIdStream: getIt<AuthRepository>().user,
+      rolePermissions: DuetRoles.rolePermissions,
+      knownRoles: DuetRoles.knownRoles,
+    ),
+  );
+
+  getIt.registerLazySingleton<MonetizationService>(
+    SimulatedMonetizationService.new,
+  );
+
+  // Lazy-async since it awaits `SharedPreferences.getInstance()`. Now
+  // consumed two ways: `NotificationPermissionGateway` below (for the
+  // Settings screen's push toggle) and `ReviewSyncService`'s `onImported`
+  // hook further down (for the "feedback arrived" local notification).
+  getIt.registerLazySingletonAsync<NotificationsManager>(
+    NotificationsManager.create,
+  );
+
+  getIt.registerLazySingleton<SettingsRepository>(
+    () => LocalSettingsRepository(getIt<LocalStorageService>()),
+  );
+  // Lazy-async, like `NotificationsManager` itself: the gateway can't exist
+  // before the manager it wraps does.
+  getIt.registerLazySingletonAsync<NotificationPermissionGateway>(
+    () async => DuetNotificationPermissionGateway(
+      await getIt.getAsync<NotificationsManager>(),
+    ),
+  );
+
+  getIt.registerLazySingleton<PdfRenderService>(PdfxRenderService.new);
+  getIt.registerLazySingleton<AudioRecorderService>(
+    RecordAudioRecorderService.new,
+  );
+  getIt.registerLazySingleton<AudioPlayerService>(JustAudioPlayerService.new);
+  getIt.registerLazySingleton<AudioAssetStore>(LocalAudioAssetStore.new);
+  // Lazy-async, like every other service that eventually touches the
+  // filesystem: resolving the recordings temp directory only when the Score
+  // Viewer is first opened (see `DuetScorePage`) means a filesystem hiccup
+  // only breaks the recording feature, not the app's entire boot sequence.
+  getIt.registerLazySingletonAsync<RecordingPathBuilder>(
+    createRecordingPathBuilder,
+  );
+
+  // `PieceRepository`/`AnnotationRepository` have a constructor cycle:
+  // `LocalPieceRepository` needs an `AnnotationRepository` (to purge a
+  // deleted piece's annotations) and `LocalAnnotationRepository` needs a
+  // `PieceRepository` (to resolve a new author's teacher/student role). The
+  // Piece side takes a *lazy provider* rather than a direct instance,
+  // breaking the cycle: whichever of the two get_it resolves first fully
+  // constructs (caching itself as the singleton) before the other's factory
+  // below ever calls back into it.
+  getIt.registerLazySingleton<PieceRepository>(
+    () => LocalPieceRepository(
+      storage: getIt<LocalStorageService>(),
+      currentUserId: getIt<CurrentUser>().call,
+      pdfRenderService: getIt<PdfRenderService>(),
+      annotationRepository: getIt.call<AnnotationRepository>,
+      audioAssetStore: getIt<AudioAssetStore>(),
+    ),
+  );
+  getIt.registerLazySingleton<AnnotationRepository>(
+    () => LocalAnnotationRepository(
+      storage: getIt<LocalStorageService>(),
+      currentUserId: getIt<CurrentUser>().call,
+      pieceRepository: getIt<PieceRepository>(),
+    ),
+  );
+
+  getIt.registerLazySingleton<ReviewSyncService>(
+    () => FileShareReviewSyncService(
+      pieceRepository: getIt<PieceRepository>(),
+      annotationRepository: getIt<AnnotationRepository>(),
+      audioAssetStore: getIt<AudioAssetStore>(),
+      storage: getIt<LocalStorageService>(),
+      currentUserId: getIt<CurrentUser>().call,
+      currentUserName: getIt<CurrentUserName>().call,
+      // The title/body copy (including the author's name, when known) is
+      // already composed by `FileShareReviewSyncService` itself — this hook
+      // just has to surface it as a real device notification.
+      onImported: ({required title, required body}) async {
+        final manager = await getIt.getAsync<NotificationsManager>();
+        await manager.showLocal(title: title, body: body);
+      },
+    ),
+  );
+
+  getIt.registerLazySingleton<InviteService>(
+    () => DeepLinkInviteService(
+      pieceRepository: getIt<PieceRepository>(),
+      monetizationService: getIt<MonetizationService>(),
+      storage: getIt<LocalStorageService>(),
+    ),
+  );
+
+  getIt.registerLazySingleton<DeepLinkService>(FakeDeepLinkService.new);
+  // generated:register — `create_feature/create_package --wire duet` adds
+  // registrations above this line. Do not remove this marker.
+}

@@ -8,10 +8,13 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
+  core_utils:
+    path: ../../core/core_utils
   firebase_core: ^4.11.0
   firebase_messaging: ^16.4.1
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^19.4.2
   shared_preferences: ^2.2.2
 
 dev_dependencies:

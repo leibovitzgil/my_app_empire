@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:core_utils/core_utils.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:notifications/src/data/local_notification_exception.dart';
+import 'package:notifications/src/data/local_notification_port.dart';
 import 'package:notifications/src/ui/soft_prompt_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,7 +22,16 @@ enum NotificationPermissionStatus {
 }
 
 class NotificationsManager {
-  NotificationsManager(this._firebaseMessaging, this._prefs);
+  /// Creates a [NotificationsManager]. [localNotifications] defaults to a
+  /// real [PluginLocalNotificationPort]; tests inject a fake
+  /// [LocalNotificationPort] to avoid the platform channel.
+  NotificationsManager(
+    this._firebaseMessaging,
+    this._prefs, {
+    LocalNotificationPort? localNotifications,
+  }) : _localNotifications =
+           localNotifications ?? PluginLocalNotificationPort();
+
   static const String _kSoftPromptDeclinedKey =
       'notifications_soft_prompt_declined_timestamp';
   // Cooldown in days before showing soft prompt again
@@ -27,6 +39,7 @@ class NotificationsManager {
 
   final FirebaseMessaging _firebaseMessaging;
   final SharedPreferences _prefs;
+  final LocalNotificationPort _localNotifications;
 
   /// Creates a [NotificationsManager] with default dependencies.
   static Future<NotificationsManager> create() async {
@@ -122,6 +135,38 @@ class NotificationsManager {
 
   /// Stream of FCM tokens.
   Stream<String> get onTokenRefresh => _firebaseMessaging.onTokenRefresh;
+
+  /// Posts a device-local notification with the given [title]/[body] —
+  /// distinct from the FCM-permission flows above, this never touches the
+  /// network: it's for surfacing something that already happened locally
+  /// (e.g. an imported review-sync bundle) rather than a remote push.
+  ///
+  /// Never throws: plugin failures are mapped to a
+  /// [LocalNotificationException] inside a [ResultFailure], the same
+  /// pattern `services/networking` uses for `DioException`.
+  Future<Result<void>> showLocal({
+    required String title,
+    required String body,
+  }) => Result.guard<void>(() async {
+    try {
+      await _localNotifications.show(
+        id: _nextNotificationId(),
+        title: title,
+        body: body,
+      );
+    } on Object catch (error) {
+      throw LocalNotificationException(
+        'Failed to show local notification: $error',
+      );
+    }
+  });
+
+  // A distinct id per call so successive local notifications (e.g. two
+  // review-sync imports in a row) each stay visible instead of the plugin
+  // treating them as updates to the same notification. Truncated to fit
+  // `flutter_local_notifications`' platform-imposed 32-bit signed int id.
+  int _nextNotificationId() =>
+      DateTime.now().microsecondsSinceEpoch.remainder(1 << 31);
 
   bool _canShowSoftPrompt() {
     final lastDeclined = _prefs.getInt(_kSoftPromptDeclinedKey);

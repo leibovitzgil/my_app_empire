@@ -6,7 +6,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 /// The settings screen: a single push-notifications toggle whose value is
 /// persisted and reconciled against the OS permission on mount and resume.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  /// Creates a [SettingsScreen]. [extraTile] renders below the notifications
+  /// row — a slot for an app-specific settings row (e.g. a Teacher-only
+  /// "Manage plan" entry) without this package taking a direct dependency on
+  /// whatever feature that row navigates to.
+  const SettingsScreen({super.key, this.extraTile});
+
+  /// An optional extra row rendered below the notifications toggle.
+  final Widget? extraTile;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -91,6 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
+                if (widget.extraTile != null) widget.extraTile!,
               ],
             );
           },

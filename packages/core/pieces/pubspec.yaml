@@ -1,0 +1,27 @@
+name: pieces
+description: "Shared sheet-music piece, annotation and review-bundle domain."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  core_utils:
+    path: ../core_utils
+  equatable: ^2.0.5
+  flutter:
+    sdk: flutter
+  local_storage:
+    path: ../local_storage
+  path: ^1.9.0
+  path_provider: ^2.1.6
+  pdf_rendering:
+    path: ../../services/pdf_rendering
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+  very_good_analysis: ^10.3.0

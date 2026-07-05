@@ -24,4 +24,26 @@ void main() {
     expect(success.fold((v) => 'ok $v', (e) => 'err $e'), 'ok 1');
     expect(failure.fold((v) => 'ok $v', (e) => 'err $e'), 'err boom');
   });
+
+  group('Result.orThrow', () {
+    test('returns the value for a Success', () {
+      const success = Success<int>(42);
+      expect(success.orThrow(), 42);
+    });
+
+    test('rethrows an Exception error as-is', () {
+      const failure = ResultFailure<int>(FormatException('bad'));
+      expect(failure.orThrow, throwsFormatException);
+    });
+
+    test('rethrows an Error error as-is', () {
+      final failure = ResultFailure<int>(StateError('bad state'));
+      expect(failure.orThrow, throwsStateError);
+    });
+
+    test('wraps a non-Exception/Error failure in a StateError', () {
+      const failure = ResultFailure<int>('boom');
+      expect(() => failure.orThrow(), throwsStateError);
+    });
+  });
 }

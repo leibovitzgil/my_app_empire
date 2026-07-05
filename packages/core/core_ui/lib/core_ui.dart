@@ -15,6 +15,7 @@ export 'src/widgets/empty_state_view.dart';
 export 'src/widgets/error_retry_view.dart';
 export 'src/widgets/initials_avatar.dart';
 export 'src/widgets/labeled_divider.dart';
+export 'src/widgets/labeled_toggle_chip.dart';
 export 'src/widgets/loading_view.dart';
 export 'src/widgets/primary_button.dart';
 export 'src/widgets/secondary_button.dart';

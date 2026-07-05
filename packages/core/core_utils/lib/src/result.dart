@@ -52,3 +52,21 @@ final class ResultFailure<T> extends Result<T> {
   /// The stack trace at the point of failure, if available.
   final StackTrace? stackTrace;
 }
+
+/// Convenience for bridging a nested [Result] call into an outer
+/// `Result.guard` block, where the only way to propagate a failure is to
+/// throw.
+extension ResultUnwrap<T> on Result<T> {
+  /// Returns the success value, or throws the captured failure. The error is
+  /// rethrown as-is when it's already an [Exception] or [Error]; otherwise
+  /// it's wrapped in a [StateError] (e.g. `Result`s in tests sometimes carry
+  /// a plain `String`), so callers always satisfy `only_throw_errors`.
+  T orThrow() {
+    final self = this;
+    if (self is Success<T>) return self.value;
+    final error = (self as ResultFailure<T>).error;
+    if (error is Exception) throw error;
+    if (error is Error) throw error;
+    throw StateError(error.toString());
+  }
+}

@@ -1,0 +1,150 @@
+// Headless mirror of the Duet core-loop flow (import -> annotate -> record
+// an audio note -> toggle layers -> clean workspace -> close/reopen), so it
+// runs in the standard gate without a device. See `duet_flow_harness.dart`
+// for why this continues against a bare `ScoreBloc` rather than the real
+// `ScoreViewerScreen` (the widget-mounting variant lives in
+// `integration_test/app_flow_test.dart`, device-only).
+import 'package:feature_score/feature_score.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pieces/pieces.dart';
+
+import 'duet_flow_harness.dart';
+
+void main() {
+  testWidgets(
+    'import (real UI) -> annotate -> record audio note -> toggle layers -> '
+    'clean workspace -> close/reopen (bloc-level, against the piece the '
+    'real import UI created)',
+    (tester) async {
+      final imported = await runDuetImportFlow(tester);
+      final pieceRepository = imported.pieceRepository;
+      final annotationRepository = imported.annotationRepository;
+      final piece = imported.piece;
+
+      ScoreBloc openScore() => ScoreBloc(
+        pieceRepository: pieceRepository,
+        annotationRepository: annotationRepository,
+        currentUserId: teacherId,
+      )..add(ScoreOpened(piece.id));
+
+      final bloc = openScore();
+      await tester.pump();
+      await tester.pump();
+      expect(bloc.state.status, ScoreStatus.ready);
+
+      // 2. Teacher draws a stroke; ink lands on the teacher's own layer
+      // only, never the (nonexistent, unpaired) student's.
+      bloc
+        ..add(const ModeChanged(ScoreMode.draw))
+        ..add(
+          const StrokeCompleted([
+            InkPoint(x: 0.2, y: 0.2),
+            InkPoint(x: 0.6, y: 0.5),
+          ]),
+        );
+      await tester.pump();
+      await tester.pump();
+      expect(bloc.state.teacherStrokes, hasLength(1));
+      expect(bloc.state.teacherStrokes.single.authorId, teacherId);
+      expect(bloc.state.studentStrokes, isEmpty);
+
+      // 3. Region-select a passage and record an audio note on it.
+      bloc
+        ..add(const ModeChanged(ScoreMode.view))
+        ..add(const RegionSelectStarted(RegionIntent.recordAudio))
+        ..add(
+          const RegionSelectCompleted(
+            Region(pageIndex: 0, left: 0.3, top: 0.4, width: 0.2, height: 0.15),
+          ),
+        )
+        ..add(
+          AudioNoteSaved(
+            AudioNote(
+              id: 'note-1',
+              authorId: teacherId,
+              audioAssetId: 'asset-1',
+              pageIndex: 0,
+              durationMs: 4000,
+              region: const Region(
+                pageIndex: 0,
+                left: 0.3,
+                top: 0.4,
+                width: 0.2,
+                height: 0.15,
+              ),
+              createdAt: DateTime(2024),
+            ),
+            'rec_0.m4a',
+          ),
+        );
+      await tester.pump();
+      await tester.pump();
+
+      expect(bloc.state.notes, hasLength(1));
+      final recordedNote = bloc.state.notes.single;
+      expect(recordedNote.authorId, teacherId);
+      expect(
+        recordedNote.region,
+        const Region(
+          pageIndex: 0,
+          left: 0.3,
+          top: 0.4,
+          width: 0.2,
+          height: 0.15,
+        ),
+      );
+
+      // 4. Layer toggles are independent and immediate: toggling teacher
+      // ink off leaves student ink and audio pins untouched.
+      bloc.add(const LayerVisibilityToggled(LayerKind.teacherInk));
+      await tester.pump();
+      expect(bloc.state.teacherInkVisible, isFalse);
+      expect(bloc.state.studentInkVisible, isTrue);
+      expect(bloc.state.audioPinsVisible, isTrue);
+
+      // 5. Clean workspace hides every layer regardless of its own flag...
+      bloc.add(const CleanWorkspaceToggled());
+      await tester.pump();
+      expect(bloc.state.cleanWorkspace, isTrue);
+      expect(bloc.state.effectiveTeacherInkVisible, isFalse);
+      expect(bloc.state.effectiveStudentInkVisible, isFalse);
+      expect(bloc.state.effectiveAudioPinsVisible, isFalse);
+
+      // ...a layer toggled *while* masked still updates its underlying
+      // flag...
+      bloc.add(const LayerVisibilityToggled(LayerKind.audioPins));
+      await tester.pump();
+      expect(bloc.state.audioPinsVisible, isFalse);
+      expect(bloc.state.effectiveAudioPinsVisible, isFalse); // still masked
+
+      // ...and turning clean workspace off restores the *exact* prior
+      // per-layer state — teacher still off, student still on, audio pins
+      // now off (the change made while masked) — never a reset to some
+      // default.
+      bloc.add(const CleanWorkspaceToggled());
+      await tester.pump();
+      expect(bloc.state.cleanWorkspace, isFalse);
+      expect(bloc.state.teacherInkVisible, isFalse);
+      expect(bloc.state.studentInkVisible, isTrue);
+      expect(bloc.state.audioPinsVisible, isFalse);
+
+      // 6. "Close and reopen the piece": a brand-new `ScoreBloc` — not the
+      // one already in memory — reads the *same* (repository-backed)
+      // annotation repository and sees the same stroke and audio note (at
+      // the same fractional position). The original bloc is deliberately
+      // left open rather than `close()`d first (awaiting `close()` here hit
+      // this sandbox's same real-event-loop-turn limitation noted in
+      // `duet_flow_harness.dart` — verified empirically); both are closed at
+      // teardown instead.
+      addTearDown(bloc.close);
+      final reopened = openScore();
+      addTearDown(reopened.close);
+      await tester.pump();
+      await tester.pump();
+
+      expect(reopened.state.teacherStrokes, hasLength(1));
+      expect(reopened.state.notes, hasLength(1));
+      expect(reopened.state.notes.single.region, recordedNote.region);
+    },
+  );
+}
