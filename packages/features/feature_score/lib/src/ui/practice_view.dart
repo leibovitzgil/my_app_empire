@@ -1,12 +1,14 @@
 import 'package:core_ui/core_ui.dart';
+import 'package:feature_score/src/participant_layer.dart';
 import 'package:feature_score/src/ui/widgets/ink_overlay.dart';
+import 'package:feature_score/src/ui/widgets/ink_palette.dart';
 import 'package:feature_score/src/ui/widgets/score_page_canvas.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 
 /// A full-screen, view-only presentation of a single practice [region]:
-/// centers/zooms to it and shows both ink layers, but offers no
+/// centers/zooms to it and shows every participant's ink layer, but offers no
 /// drawing/recording tools.
 ///
 /// A small "Edit here" text button pops back to the Score Viewer, which
@@ -17,8 +19,7 @@ class PracticeView extends StatelessWidget {
   const PracticeView({
     required this.region,
     required this.renderService,
-    required this.teacherStrokes,
-    required this.studentStrokes,
+    required this.layers,
     super.key,
   });
 
@@ -28,11 +29,8 @@ class PracticeView extends StatelessWidget {
   /// The already-opened PDF render service.
   final PdfRenderService renderService;
 
-  /// The teacher's ink strokes, across all pages.
-  final List<InkStroke> teacherStrokes;
-
-  /// The student's ink strokes, across all pages.
-  final List<InkStroke> studentStrokes;
+  /// The participant ink layers to render, each in its own colour.
+  final List<ParticipantLayer> layers;
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +54,12 @@ class PracticeView extends StatelessWidget {
         pageIndex: region.pageIndex,
         focusRegion: region,
         overlays: [
-          InkOverlay(strokes: teacherStrokes, pageIndex: region.pageIndex),
-          InkOverlay(strokes: studentStrokes, pageIndex: region.pageIndex),
+          for (final layer in layers)
+            InkOverlay(
+              strokes: layer.strokes,
+              pageIndex: region.pageIndex,
+              color: inkColorForId(layer.colorId),
+            ),
         ],
       ),
     );

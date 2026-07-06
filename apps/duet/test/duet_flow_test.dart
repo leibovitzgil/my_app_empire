@@ -48,9 +48,14 @@ void main() {
         );
       await tester.pump();
       await tester.pump();
-      expect(bloc.state.teacherStrokes, hasLength(1));
-      expect(bloc.state.teacherStrokes.single.authorId, teacherId);
-      expect(bloc.state.studentStrokes, isEmpty);
+      // On an unpaired piece there is exactly one participant layer — the
+      // owner's — and the stroke lands on it.
+      expect(bloc.state.layers, hasLength(1));
+      final ownLayer = bloc.state.ownLayer!;
+      expect(ownLayer.ownerId, teacherId);
+      expect(ownLayer.isOwn, isTrue);
+      expect(ownLayer.strokes, hasLength(1));
+      expect(ownLayer.strokes.single.authorId, teacherId);
 
       // 3. Region-select a passage and record an audio note on it.
       bloc
@@ -98,38 +103,37 @@ void main() {
         ),
       );
 
-      // 4. Layer toggles are independent and immediate: toggling teacher
-      // ink off leaves student ink and audio pins untouched.
-      bloc.add(const LayerVisibilityToggled(LayerKind.teacherInk));
+      // 4. Layer toggles are independent and immediate: toggling the owner's
+      // ink layer off leaves audio pins untouched.
+      bloc.add(const InkLayerToggled(teacherId));
       await tester.pump();
-      expect(bloc.state.teacherInkVisible, isFalse);
-      expect(bloc.state.studentInkVisible, isTrue);
+      expect(bloc.state.ownLayer!.visible, isFalse);
+      expect(bloc.state.hiddenInkOwnerIds, {teacherId});
       expect(bloc.state.audioPinsVisible, isTrue);
 
       // 5. Clean workspace hides every layer regardless of its own flag...
       bloc.add(const CleanWorkspaceToggled());
       await tester.pump();
       expect(bloc.state.cleanWorkspace, isTrue);
-      expect(bloc.state.effectiveTeacherInkVisible, isFalse);
-      expect(bloc.state.effectiveStudentInkVisible, isFalse);
+      for (final layer in bloc.state.layers) {
+        expect(bloc.state.effectiveInkVisible(layer), isFalse);
+      }
       expect(bloc.state.effectiveAudioPinsVisible, isFalse);
 
       // ...a layer toggled *while* masked still updates its underlying
       // flag...
-      bloc.add(const LayerVisibilityToggled(LayerKind.audioPins));
+      bloc.add(const AudioPinsToggled());
       await tester.pump();
       expect(bloc.state.audioPinsVisible, isFalse);
       expect(bloc.state.effectiveAudioPinsVisible, isFalse); // still masked
 
       // ...and turning clean workspace off restores the *exact* prior
-      // per-layer state — teacher still off, student still on, audio pins
-      // now off (the change made while masked) — never a reset to some
-      // default.
+      // per-layer state — the owner's ink still off, audio pins now off (the
+      // change made while masked) — never a reset to some default.
       bloc.add(const CleanWorkspaceToggled());
       await tester.pump();
       expect(bloc.state.cleanWorkspace, isFalse);
-      expect(bloc.state.teacherInkVisible, isFalse);
-      expect(bloc.state.studentInkVisible, isTrue);
+      expect(bloc.state.ownLayer!.visible, isFalse);
       expect(bloc.state.audioPinsVisible, isFalse);
 
       // 6. "Close and reopen the piece": a brand-new `ScoreBloc` — not the
@@ -146,7 +150,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(reopened.state.teacherStrokes, hasLength(1));
+      expect(reopened.state.ownLayer!.strokes, hasLength(1));
       expect(reopened.state.notes, hasLength(1));
       expect(reopened.state.notes.single.region, recordedNote.region);
     },

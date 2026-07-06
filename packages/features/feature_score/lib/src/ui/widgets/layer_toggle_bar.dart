@@ -1,96 +1,148 @@
 import 'package:core_ui/core_ui.dart';
-import 'package:feature_score/src/bloc/score_bloc.dart';
+import 'package:feature_score/src/participant_layer.dart';
+import 'package:feature_score/src/ui/widgets/ink_palette.dart';
 import 'package:flutter/material.dart';
-import 'package:pieces/pieces.dart';
 
-/// Three [LabeledToggleChip]s for teacher ink / student ink / audio pins,
-/// shown below the Score Viewer's app bar.
+/// A horizontally-scrollable row of visibility toggles below the Score
+/// Viewer's app bar: one colour-coded chip per participant's ink layer (in
+/// collaboration mode a piece can have several), followed by a single audio-
+/// pins chip.
 ///
-/// Whichever chip matches [currentRole] (teacher ink for a teacher, student
-/// ink for a student) shows the chip's owned-indicator.
+/// Each ink chip shows its participant's auto-assigned layer colour and, for
+/// the signed-in user's own layer, an owned indicator.
 class LayerToggleBar extends StatelessWidget {
   /// Creates a [LayerToggleBar].
   const LayerToggleBar({
-    required this.currentRole,
-    required this.teacherInkVisible,
-    required this.studentInkVisible,
+    required this.layers,
     required this.audioPinsVisible,
-    required this.onToggle,
+    required this.onInkToggle,
+    required this.onAudioToggle,
     super.key,
   });
 
-  /// The signed-in participant's role, used to show the owned-indicator.
-  final PieceRole currentRole;
-
-  /// Whether the teacher ink chip is currently selected (visible).
-  final bool teacherInkVisible;
-
-  /// Whether the student ink chip is currently selected (visible).
-  final bool studentInkVisible;
+  /// The participant ink layers, one chip each, in participant order.
+  final List<ParticipantLayer> layers;
 
   /// Whether the audio pins chip is currently selected (visible).
   final bool audioPinsVisible;
 
-  /// Called with the toggled [LayerKind] when a chip is tapped.
-  final ValueChanged<LayerKind> onToggle;
+  /// Called with a layer's `ownerId` when its ink chip is tapped.
+  final ValueChanged<String> onInkToggle;
+
+  /// Called when the audio pins chip is tapped.
+  final VoidCallback onAudioToggle;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
       child: Row(
         children: [
-          _chip(
-            label: 'Teacher',
-            icon: Icons.school_outlined,
-            selected: teacherInkVisible,
-            owned: currentRole == PieceRole.teacher,
-            onTap: () => onToggle(LayerKind.teacherInk),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _chip(
-            label: 'Student',
-            icon: Icons.person_outline,
-            selected: studentInkVisible,
-            owned: currentRole == PieceRole.student,
-            onTap: () => onToggle(LayerKind.studentInk),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _chip(
-            label: 'Audio pins',
-            icon: Icons.mic_none_outlined,
+          for (final layer in layers) ...[
+            _InkLayerChip(
+              layer: layer,
+              onTap: () => onInkToggle(layer.ownerId),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          _AudioPinsChip(
             selected: audioPinsVisible,
-            onTap: () => onToggle(LayerKind.audioPins),
+            onTap: onAudioToggle,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _chip({
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-    bool owned = false,
-  }) {
+/// A single participant's ink toggle: a colour dot matching their layer
+/// colour, their name, and (for the signed-in user) an owned indicator.
+class _InkLayerChip extends StatelessWidget {
+  const _InkLayerChip({required this.layer, required this.onTap});
+
+  final ParticipantLayer layer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final foreground = layer.visible
+        ? scheme.onPrimaryContainer
+        : scheme.onSurfaceVariant;
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       child: Semantics(
         button: true,
         label:
-            '$label layer${owned ? ' (yours)' : ''}, '
-            '${selected ? 'shown' : 'hidden'}. Double tap to '
-            '${selected ? 'hide' : 'show'}.',
+            '${layer.label} layer${layer.isOwn ? ' (yours)' : ''}, '
+            '${layer.visible ? 'shown' : 'hidden'}. Double tap to '
+            '${layer.visible ? 'hide' : 'show'}.',
+        child: Center(
+          child: Material(
+            color: layer.visible
+                ? scheme.primaryContainer
+                : scheme.surfaceContainerHigh,
+            borderRadius: AppRadii.smRadius,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: AppRadii.smRadius,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: inkColorForId(layer.colorId),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(layer.label, style: TextStyle(color: foreground)),
+                    if (layer.isOwn) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(Icons.edit, size: 12, color: foreground),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AudioPinsChip extends StatelessWidget {
+  const _AudioPinsChip({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      child: Semantics(
+        button: true,
+        label:
+            'Audio pins layer, ${selected ? 'shown' : 'hidden'}. '
+            'Double tap to ${selected ? 'hide' : 'show'}.',
         child: Center(
           child: LabeledToggleChip(
-            label: label,
-            icon: icon,
+            label: 'Audio pins',
+            icon: Icons.mic_none_outlined,
             selected: selected,
-            owned: owned,
             onTap: onTap,
           ),
         ),

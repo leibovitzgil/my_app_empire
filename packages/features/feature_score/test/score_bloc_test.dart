@@ -141,7 +141,8 @@ void main() {
     );
 
     blocTest<ScoreBloc, ScoreState>(
-      'derives per-owner stroke lists from the annotations stream',
+      'projects one layer per participant from the annotations stream, in '
+      'participant order, each with a distinct auto-assigned colour',
       build: buildBloc,
       act: (bloc) async {
         bloc.add(const ScoreOpened(pieceId));
@@ -175,9 +176,79 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       },
       verify: (bloc) {
-        expect(bloc.state.teacherStrokes, hasLength(1));
-        expect(bloc.state.teacherStrokes.single.id, 't1');
-        expect(bloc.state.studentStrokes, isEmpty);
+        final layers = bloc.state.layers;
+        expect(layers, hasLength(2));
+        // Owner first, then the collaborator, in participant order.
+        expect(layers[0].ownerId, teacherId);
+        expect(layers[0].strokes, hasLength(1));
+        expect(layers[0].strokes.single.id, 't1');
+        expect(layers[0].colorId, 'p0');
+        expect(layers[0].isOwn, isTrue);
+        expect(layers[1].ownerId, studentId);
+        expect(layers[1].strokes, isEmpty);
+        expect(layers[1].colorId, 'p1');
+        expect(layers[1].isOwn, isFalse);
+      },
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'projects a layer for every collaborator, not just the first',
+      build: buildBloc,
+      setUp: () {
+        final multiPiece = Piece(
+          id: pieceId,
+          title: 'Trio',
+          basePdfChecksum: 'checksum',
+          basePdfPath: '/tmp/piece1.pdf',
+          teacherId: teacherId,
+          collaborators: const [
+            Collaborator(uid: 'student1', name: 'Bea'),
+            Collaborator(uid: 'student2', name: 'Cy'),
+          ],
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+        when(
+          () => pieceRepository.getPiece(pieceId),
+        ).thenAnswer((_) async => Success(multiPiece));
+      },
+      act: (bloc) async {
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          const PieceAnnotations(
+            pieceId: pieceId,
+            layers: [
+              InkLayer(
+                ownerId: 'student2',
+                role: PieceRole.student,
+                strokes: [
+                  InkStroke(
+                    id: 'c2',
+                    authorId: 'student2',
+                    pageIndex: 0,
+                    colorId: 'p2',
+                    points: [InkPoint(x: 0, y: 0), InkPoint(x: 1, y: 1)],
+                  ),
+                ],
+              ),
+            ],
+            audioNotes: [],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        final layers = bloc.state.layers;
+        expect(layers.map((l) => l.ownerId), [
+          teacherId,
+          'student1',
+          'student2',
+        ]);
+        expect(layers.map((l) => l.label), ['Owner', 'Bea', 'Cy']);
+        expect(layers.map((l) => l.colorId), ['p0', 'p1', 'p2']);
+        // The third participant's strokes are projected, not dropped.
+        expect(layers[2].strokes.single.id, 'c2');
       },
     );
 
@@ -227,62 +298,89 @@ void main() {
       );
     });
 
+    ParticipantLayer layerFor(ScoreBloc bloc, String ownerId) =>
+        bloc.state.layers.firstWhere((l) => l.ownerId == ownerId);
+
     blocTest<ScoreBloc, ScoreState>(
       'clean-workspace toggle restores exact prior per-layer visibility',
       build: buildBloc,
-      act: (bloc) => bloc
-        ..add(const LayerVisibilityToggled(LayerKind.teacherInk))
-        ..add(const CleanWorkspaceToggled())
-        ..add(const CleanWorkspaceToggled()),
+      act: (bloc) async {
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(PieceAnnotations.empty(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        bloc
+          ..add(const InkLayerToggled(teacherId)) // teacher ink off
+          ..add(const CleanWorkspaceToggled())
+          ..add(const CleanWorkspaceToggled());
+      },
       verify: (bloc) {
-        // Set up: teacherInk off, studentInk on (its default).
-        // After the sequence above, clean-workspace is back off, and the
-        // per-layer flags must be exactly what they were before it was
+        // Set up: teacher ink off, student ink on (its default).
+        // After the sequence above, clean-workspace is back off, and each
+        // layer's visibility must be exactly what it was before it was
         // toggled on — not reset to some default.
         expect(bloc.state.cleanWorkspace, isFalse);
-        expect(bloc.state.teacherInkVisible, isFalse);
-        expect(bloc.state.studentInkVisible, isTrue);
-        expect(bloc.state.effectiveTeacherInkVisible, isFalse);
-        expect(bloc.state.effectiveStudentInkVisible, isTrue);
+        expect(bloc.state.hiddenInkOwnerIds, {teacherId});
+        expect(layerFor(bloc, teacherId).visible, isFalse);
+        expect(layerFor(bloc, studentId).visible, isTrue);
+        expect(
+          bloc.state.effectiveInkVisible(layerFor(bloc, teacherId)),
+          isFalse,
+        );
+        expect(
+          bloc.state.effectiveInkVisible(layerFor(bloc, studentId)),
+          isTrue,
+        );
       },
     );
 
     blocTest<ScoreBloc, ScoreState>(
       'clean-workspace hides every layer regardless of its own flag',
       build: buildBloc,
-      act: (bloc) => bloc
-        ..add(const LayerVisibilityToggled(LayerKind.teacherInk))
-        ..add(const CleanWorkspaceToggled()),
+      act: (bloc) async {
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(PieceAnnotations.empty(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        bloc
+          ..add(const InkLayerToggled(teacherId))
+          ..add(const CleanWorkspaceToggled());
+      },
       verify: (bloc) {
-        expect(bloc.state.effectiveTeacherInkVisible, isFalse);
-        expect(bloc.state.effectiveStudentInkVisible, isFalse);
+        for (final layer in bloc.state.layers) {
+          expect(bloc.state.effectiveInkVisible(layer), isFalse);
+        }
         expect(bloc.state.effectiveAudioPinsVisible, isFalse);
       },
     );
 
     blocTest<ScoreBloc, ScoreState>(
-      'layer toggles are independent: toggling one leaves the others '
-      'untouched',
+      'toggling one ink layer leaves the other layers untouched',
       build: buildBloc,
-      act: (bloc) =>
-          bloc.add(const LayerVisibilityToggled(LayerKind.audioPins)),
+      act: (bloc) async {
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(PieceAnnotations.empty(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const InkLayerToggled(teacherId));
+      },
       verify: (bloc) {
-        expect(bloc.state.audioPinsVisible, isFalse);
-        expect(bloc.state.teacherInkVisible, isTrue);
-        expect(bloc.state.studentInkVisible, isTrue);
+        expect(layerFor(bloc, teacherId).visible, isFalse);
+        expect(layerFor(bloc, studentId).visible, isTrue);
+        expect(bloc.state.audioPinsVisible, isTrue);
       },
     );
 
     blocTest<ScoreBloc, ScoreState>(
-      'a layer toggled is immediate: a single event, a single emission',
+      'the audio-pins toggle is immediate: a single event, a single emission',
       build: buildBloc,
-      act: (bloc) =>
-          bloc.add(const LayerVisibilityToggled(LayerKind.studentInk)),
+      act: (bloc) => bloc.add(const AudioPinsToggled()),
       expect: () => [
-        isA<ScoreState>()
-            .having((s) => s.studentInkVisible, 'studentInkVisible', isFalse)
-            .having((s) => s.teacherInkVisible, 'teacherInkVisible', isTrue)
-            .having((s) => s.audioPinsVisible, 'audioPinsVisible', isTrue),
+        isA<ScoreState>().having(
+          (s) => s.audioPinsVisible,
+          'audioPinsVisible',
+          isFalse,
+        ),
       ],
     );
 
@@ -293,15 +391,12 @@ void main() {
       build: buildBloc,
       act: (bloc) => bloc
         ..add(const CleanWorkspaceToggled()) // mask: all start visible
-        ..add(const LayerVisibilityToggled(LayerKind.audioPins)) // toggled
-        // while masked
+        ..add(const AudioPinsToggled()) // toggled while masked
         ..add(const CleanWorkspaceToggled()), // unmask
       verify: (bloc) {
         expect(bloc.state.cleanWorkspace, isFalse);
         expect(bloc.state.audioPinsVisible, isFalse);
         expect(bloc.state.effectiveAudioPinsVisible, isFalse);
-        expect(bloc.state.teacherInkVisible, isTrue);
-        expect(bloc.state.studentInkVisible, isTrue);
       },
     );
 
@@ -356,19 +451,36 @@ void main() {
       );
 
       blocTest<ScoreBloc, ScoreState>(
-        "StrokeErased is a no-op for a stroke on the other party's layer",
+        "StrokeErased is a no-op for a stroke on another participant's layer",
         build: buildBloc,
         seed: () => const ScoreState.initial(currentUserId: teacherId).copyWith(
           status: ScoreStatus.ready,
           piece: piece,
           currentRole: PieceRole.teacher,
-          studentStrokes: const [
-            InkStroke(
-              id: 'student_stroke',
-              authorId: studentId,
-              pageIndex: 0,
+          layers: const [
+            ParticipantLayer(
+              ownerId: teacherId,
+              label: 'Owner',
               colorId: 'p0',
-              points: [InkPoint(x: 0, y: 0), InkPoint(x: 1, y: 1)],
+              strokes: [],
+              visible: true,
+              isOwn: true,
+            ),
+            ParticipantLayer(
+              ownerId: studentId,
+              label: 'Bea',
+              colorId: 'p1',
+              visible: true,
+              isOwn: false,
+              strokes: [
+                InkStroke(
+                  id: 'student_stroke',
+                  authorId: studentId,
+                  pageIndex: 0,
+                  colorId: 'p1',
+                  points: [InkPoint(x: 0, y: 0), InkPoint(x: 1, y: 1)],
+                ),
+              ],
             ),
           ],
         ),

@@ -11,9 +11,8 @@ final _theme = ThemeData(useMaterial3: true);
 
 Future<void> _pump(
   WidgetTester tester, {
-  int selectedColorId = 0,
   bool eraserActive = false,
-  bool canUndo = false,
+  bool canUndo = true,
 }) {
   return tester.pumpWidget(
     MaterialApp(
@@ -21,11 +20,10 @@ Future<void> _pump(
       home: Scaffold(
         body: Align(
           alignment: Alignment.bottomCenter,
-          child: PenColorPicker(
-            selectedColorId: selectedColorId,
+          child: DrawToolbar(
+            penColor: const Color(0xFF0072B2),
             eraserActive: eraserActive,
             canUndo: canUndo,
-            onColorSelected: (_) {},
             onEraserToggled: () {},
             onUndo: () {},
           ),
@@ -36,20 +34,20 @@ Future<void> _pump(
 }
 
 void main() {
-  group('PenColorPicker goldens', () {
-    testWidgets('pen selected, nothing to undo', (tester) async {
+  group('DrawToolbar goldens', () {
+    testWidgets('pen active, shows the participant ink colour', (tester) async {
       await _pump(tester);
       await expectLater(
-        find.byType(PenColorPicker),
-        matchesGoldenFile('goldens/pen_color_picker_pen.png'),
+        find.byType(DrawToolbar),
+        matchesGoldenFile('goldens/draw_toolbar_pen.png'),
       );
     });
 
-    testWidgets('eraser active, undo available', (tester) async {
-      await _pump(tester, eraserActive: true, canUndo: true);
+    testWidgets('eraser active', (tester) async {
+      await _pump(tester, eraserActive: true, canUndo: false);
       await expectLater(
-        find.byType(PenColorPicker),
-        matchesGoldenFile('goldens/pen_color_picker_eraser.png'),
+        find.byType(DrawToolbar),
+        matchesGoldenFile('goldens/draw_toolbar_eraser.png'),
       );
     });
   });

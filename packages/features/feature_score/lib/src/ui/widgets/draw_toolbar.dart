@@ -1,32 +1,31 @@
 import 'package:core_ui/core_ui.dart';
-import 'package:feature_score/src/ui/widgets/ink_palette.dart';
 import 'package:flutter/material.dart';
 
-/// A contextual toolbar shown only while drawing: the fixed 5-colour swatch
-/// row, an eraser toggle, and an undo button.
-class PenColorPicker extends StatelessWidget {
-  /// Creates a [PenColorPicker].
-  const PenColorPicker({
-    required this.selectedColorId,
+/// The contextual toolbar shown only while drawing.
+///
+/// In collaboration mode every participant draws in their own auto-assigned
+/// layer colour (there's no manual colour picking), so this shows that colour
+/// as a read-only "your ink" indicator alongside the eraser toggle and undo.
+class DrawToolbar extends StatelessWidget {
+  /// Creates a [DrawToolbar].
+  const DrawToolbar({
+    required this.penColor,
     required this.eraserActive,
     required this.canUndo,
-    required this.onColorSelected,
     required this.onEraserToggled,
     required this.onUndo,
     super.key,
   });
 
-  /// The index of the currently selected swatch.
-  final int selectedColorId;
+  /// The signed-in participant's own layer colour — the colour their strokes
+  /// are drawn in.
+  final Color penColor;
 
   /// Whether the eraser (rather than the pen) is active.
   final bool eraserActive;
 
   /// Whether there is a stroke to undo.
   final bool canUndo;
-
-  /// Called with the tapped swatch's index.
-  final ValueChanged<int> onColorSelected;
 
   /// Called when the eraser toggle is tapped.
   final VoidCallback onEraserToggled;
@@ -47,8 +46,26 @@ class PenColorPicker extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (var i = 0; i < kInkPalette.length; i++) _swatch(context, i),
-            const SizedBox(width: AppSpacing.sm),
+            Semantics(
+              label: 'Your ink colour',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: penColor,
+                    border: Border.all(color: scheme.onSurface, width: 2),
+                  ),
+                ),
+              ),
+            ),
+            Text(
+              'Your ink',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: AppSpacing.md),
             Semantics(
               button: true,
               label: eraserActive
@@ -83,39 +100,6 @@ class PenColorPicker extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _swatch(BuildContext context, int index) {
-    final scheme = Theme.of(context).colorScheme;
-    final isSelected = !eraserActive && selectedColorId == index;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Semantics(
-        button: true,
-        label: 'Pen colour ${index + 1}${isSelected ? ', selected' : ''}',
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: InkWell(
-            onTap: () => onColorSelected(index),
-            customBorder: const CircleBorder(),
-            child: Center(
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kInkPalette[index],
-                  border: isSelected
-                      ? Border.all(color: scheme.onSurface, width: 3)
-                      : null,
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );

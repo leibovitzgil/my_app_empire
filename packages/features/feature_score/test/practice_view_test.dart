@@ -62,16 +62,14 @@ void main() {
     Future<void> pumpPracticeView(
       WidgetTester tester, {
       required Region region,
-      List<InkStroke> teacherStrokes = const [],
-      List<InkStroke> studentStrokes = const [],
+      List<ParticipantLayer> layers = const [],
     }) async {
       await tester.pumpWidget(
         MaterialApp(
           home: PracticeView(
             region: region,
             renderService: renderService,
-            teacherStrokes: teacherStrokes,
-            studentStrokes: studentStrokes,
+            layers: layers,
           ),
         ),
       );
@@ -99,30 +97,46 @@ void main() {
           width: 0.2,
           height: 0.1,
         ),
-        teacherStrokes: [
-          const InkStroke(
-            id: 't1',
-            authorId: 'teacher-1',
-            pageIndex: 0,
-            colorId: 'red',
-            points: [InkPoint(x: 0.1, y: 0.1)],
+        layers: const [
+          ParticipantLayer(
+            ownerId: 'teacher-1',
+            label: 'Owner',
+            colorId: 'p0',
+            visible: true,
+            isOwn: true,
+            strokes: [
+              InkStroke(
+                id: 't1',
+                authorId: 'teacher-1',
+                pageIndex: 0,
+                colorId: 'p0',
+                points: [InkPoint(x: 0.1, y: 0.1)],
+              ),
+            ],
           ),
-        ],
-        studentStrokes: [
-          const InkStroke(
-            id: 's1',
-            authorId: 'student-1',
-            pageIndex: 0,
-            colorId: 'blue',
-            points: [InkPoint(x: 0.2, y: 0.2)],
+          ParticipantLayer(
+            ownerId: 'student-1',
+            label: 'Bea',
+            colorId: 'p1',
+            visible: true,
+            isOwn: false,
+            strokes: [
+              InkStroke(
+                id: 's1',
+                authorId: 'student-1',
+                pageIndex: 0,
+                colorId: 'p1',
+                points: [InkPoint(x: 0.2, y: 0.2)],
+              ),
+            ],
           ),
         ],
       );
 
       expect(find.text('Practice'), findsOneWidget);
       expect(find.byType(RawImage), findsOneWidget);
-      // One overlay per ink layer (teacher, student), regardless of how
-      // many strokes each carries.
+      // One overlay per participant ink layer, regardless of how many
+      // strokes each carries.
       expect(find.byType(InkOverlay), findsNWidgets(2));
       expect(find.text('Edit here'), findsOneWidget);
     });
@@ -206,8 +220,7 @@ void main() {
                         builder: (_) => PracticeView(
                           region: region,
                           renderService: renderService,
-                          teacherStrokes: const [],
-                          studentStrokes: const [],
+                          layers: const [],
                         ),
                       ),
                     ),

@@ -6,14 +6,13 @@ import 'package:core_utils/core_utils.dart';
 import 'package:feature_score/src/bloc/audio_playback_cubit.dart';
 import 'package:feature_score/src/bloc/record_audio_cubit.dart';
 import 'package:feature_score/src/bloc/score_bloc.dart';
-import 'package:feature_score/src/ink_color_id.dart';
 import 'package:feature_score/src/ui/practice_view.dart';
 import 'package:feature_score/src/ui/widgets/audio_pin_marker.dart';
+import 'package:feature_score/src/ui/widgets/draw_toolbar.dart';
 import 'package:feature_score/src/ui/widgets/fractional_region_align.dart';
 import 'package:feature_score/src/ui/widgets/ink_overlay.dart';
 import 'package:feature_score/src/ui/widgets/ink_palette.dart';
 import 'package:feature_score/src/ui/widgets/layer_toggle_bar.dart';
-import 'package:feature_score/src/ui/widgets/pen_color_picker.dart';
 import 'package:feature_score/src/ui/widgets/region_selector.dart';
 import 'package:feature_score/src/ui/widgets/score_page_canvas.dart';
 import 'package:feature_score/src/ui/widgets/sync_status_badge.dart';
@@ -229,8 +228,10 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
               builder: (_) => PracticeView(
                 region: region,
                 renderService: widget.renderService,
-                teacherStrokes: state.teacherStrokes,
-                studentStrokes: state.studentStrokes,
+                layers: [
+                  for (final layer in state.layers)
+                    if (layer.visible) layer,
+                ],
               ),
             ),
           )
@@ -370,11 +371,10 @@ class _ReadyBody extends StatelessWidget {
     return Column(
       children: [
         LayerToggleBar(
-          currentRole: state.currentRole,
-          teacherInkVisible: state.teacherInkVisible,
-          studentInkVisible: state.studentInkVisible,
+          layers: state.layers,
           audioPinsVisible: state.audioPinsVisible,
-          onToggle: (kind) => bloc.add(LayerVisibilityToggled(kind)),
+          onInkToggle: (ownerId) => bloc.add(InkLayerToggled(ownerId)),
+          onAudioToggle: () => bloc.add(const AudioPinsToggled()),
         ),
         Expanded(
           child: Stack(
@@ -383,16 +383,13 @@ class _ReadyBody extends StatelessWidget {
                 renderService: renderService,
                 pageIndex: pageIndex,
                 overlays: [
-                  if (state.effectiveTeacherInkVisible)
-                    InkOverlay(
-                      strokes: state.teacherStrokes,
-                      pageIndex: pageIndex,
-                    ),
-                  if (state.effectiveStudentInkVisible)
-                    InkOverlay(
-                      strokes: state.studentStrokes,
-                      pageIndex: pageIndex,
-                    ),
+                  for (final layer in state.layers)
+                    if (state.effectiveInkVisible(layer))
+                      InkOverlay(
+                        strokes: layer.strokes,
+                        pageIndex: pageIndex,
+                        color: inkColorForId(layer.colorId),
+                      ),
                   if (state.mode == ScoreMode.draw)
                     _DrawGestureLayer(pageIndex: pageIndex),
                   if (state.mode == ScoreMode.regionSelect)
@@ -438,11 +435,10 @@ class _ReadyBody extends StatelessWidget {
           ),
         ),
         if (state.mode == ScoreMode.draw)
-          PenColorPicker(
-            selectedColorId: state.selectedColorId,
+          DrawToolbar(
+            penColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
             eraserActive: state.eraserActive,
             canUndo: state.undoStack.isNotEmpty,
-            onColorSelected: (id) => bloc.add(PenColorSelected(id)),
             onEraserToggled: () => bloc.add(const EraserToggled()),
             onUndo: () => bloc.add(const UndoRequested()),
           ),
@@ -545,9 +541,7 @@ class _DrawGestureLayerState extends State<_DrawGestureLayer> {
                 size.height <= 0) {
               return;
             }
-            final own = bloc.state.currentRole == PieceRole.teacher
-                ? bloc.state.teacherStrokes
-                : bloc.state.studentStrokes;
+            final own = bloc.state.ownLayer?.strokes ?? const <InkStroke>[];
             final hit = _hitStroke(
               own,
               widget.pageIndex,
@@ -559,7 +553,7 @@ class _DrawGestureLayerState extends State<_DrawGestureLayer> {
           child: CustomPaint(
             painter: _LiveStrokePainter(
               points: _livePoints,
-              colorId: inkColorIdFor(bloc.state.selectedColorId),
+              colorId: bloc.state.ownLayer?.colorId ?? 'p0',
             ),
             size: Size.infinite,
           ),
