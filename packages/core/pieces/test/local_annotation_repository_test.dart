@@ -34,7 +34,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-    String? teacherName,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
@@ -45,23 +45,23 @@ class _FakePieceRepository implements PieceRepository {
       throw UnimplementedError();
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<Piece>> pairCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
-    String? teacherName,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
-    required String teacherId,
+    required String ownerId,
     required String sourcePath,
-    String? studentId,
-    String? teacherName,
-    String? studentName,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
   }) => throw UnimplementedError();
 
   @override
@@ -76,10 +76,10 @@ void main() {
     title: 'Clair de Lune',
     basePdfChecksum: 'abc',
     basePdfPath: '/pieces/piece-1.pdf',
-    teacherId: 'teacher-1',
+    ownerId: 'owner-1',
     collaborators: const [
-      Collaborator(uid: 'student-1'),
-      Collaborator(uid: 'student-2'),
+      Collaborator(uid: 'collaborator-1'),
+      Collaborator(uid: 'collaborator-2'),
     ],
     createdAt: DateTime(2024),
     updatedAt: DateTime(2024),
@@ -94,7 +94,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       storage = LocalStorageService(prefs);
-      currentUserId = 'teacher-1';
+      currentUserId = 'owner-1';
       repository = LocalAnnotationRepository(
         storage: storage,
         currentUserId: () => currentUserId,
@@ -102,7 +102,7 @@ void main() {
       );
     });
 
-    InkStroke stroke({String id = 's1', String authorId = 'teacher-1'}) =>
+    InkStroke stroke({String id = 's1', String authorId = 'owner-1'}) =>
         InkStroke(
           id: id,
           authorId: authorId,
@@ -111,7 +111,7 @@ void main() {
           points: const [InkPoint(x: 0.1, y: 0.2)],
         );
 
-    AudioNote note({String id = 'n1', String authorId = 'teacher-1'}) =>
+    AudioNote note({String id = 'n1', String authorId = 'owner-1'}) =>
         AudioNote(
           id: id,
           authorId: authorId,
@@ -133,24 +133,24 @@ void main() {
       expect(result, isA<Success<void>>());
 
       final annotations = await repository.watch(piece.id).first;
-      expect(annotations.layers.single.role, PieceRole.teacher);
+      expect(annotations.layers.single.role, PieceRole.owner);
       expect(annotations.layers.single.strokes.single.id, 's1');
     });
 
     test(
-      'addStroke resolves the student role for any current collaborator, '
-      'not just the first (AC-5)',
+      'addStroke resolves the collaborator role for any current '
+      'collaborator, not just the first (AC-5)',
       () async {
-        currentUserId = 'student-2';
+        currentUserId = 'collaborator-2';
         final result = await repository.addStroke(
           piece.id,
-          stroke(id: 's-second', authorId: 'student-2'),
+          stroke(id: 's-second', authorId: 'collaborator-2'),
         );
 
         expect(result, isA<Success<void>>());
         final annotations = await repository.watch(piece.id).first;
-        expect(annotations.layers.single.role, PieceRole.student);
-        expect(annotations.layers.single.ownerId, 'student-2');
+        expect(annotations.layers.single.role, PieceRole.collaborator);
+        expect(annotations.layers.single.ownerId, 'collaborator-2');
       },
     );
 
@@ -158,15 +158,15 @@ void main() {
       'two collaborators each get their own separate ink layer, without '
       'overwriting each other (AC-5)',
       () async {
-        currentUserId = 'student-1';
+        currentUserId = 'collaborator-1';
         await repository.addStroke(
           piece.id,
-          stroke(id: 'from-1', authorId: 'student-1'),
+          stroke(id: 'from-1', authorId: 'collaborator-1'),
         );
-        currentUserId = 'student-2';
+        currentUserId = 'collaborator-2';
         await repository.addStroke(
           piece.id,
-          stroke(id: 'from-2', authorId: 'student-2'),
+          stroke(id: 'from-2', authorId: 'collaborator-2'),
         );
 
         final annotations = await repository.watch(piece.id).first;
@@ -174,8 +174,8 @@ void main() {
         final byOwner = {
           for (final layer in annotations.layers) layer.ownerId: layer,
         };
-        expect(byOwner['student-1']!.strokes.single.id, 'from-1');
-        expect(byOwner['student-2']!.strokes.single.id, 'from-2');
+        expect(byOwner['collaborator-1']!.strokes.single.id, 'from-1');
+        expect(byOwner['collaborator-2']!.strokes.single.id, 'from-2');
       },
     );
 
@@ -185,7 +185,7 @@ void main() {
       () async {
         final result = await repository.addStroke(
           piece.id,
-          stroke(authorId: 'student-1'),
+          stroke(authorId: 'collaborator-1'),
         );
 
         expect(result, isA<ResultFailure<void>>());
@@ -197,10 +197,10 @@ void main() {
     );
 
     test("eraseStroke rejects erasing another author's stroke", () async {
-      currentUserId = 'teacher-1';
+      currentUserId = 'owner-1';
       await repository.addStroke(piece.id, stroke());
 
-      currentUserId = 'student-1';
+      currentUserId = 'collaborator-1';
       final result = await repository.eraseStroke(piece.id, 's1');
 
       expect(result, isA<ResultFailure<void>>());
@@ -223,7 +223,7 @@ void main() {
     test('addAudioNote rejects a note authored by someone else', () async {
       final result = await repository.addAudioNote(
         piece.id,
-        note(authorId: 'student-1'),
+        note(authorId: 'collaborator-1'),
       );
 
       expect(result, isA<ResultFailure<void>>());
@@ -233,7 +233,7 @@ void main() {
     test("deleteAudioNote rejects deleting another author's note", () async {
       await repository.addAudioNote(piece.id, note());
 
-      currentUserId = 'student-1';
+      currentUserId = 'collaborator-1';
       final result = await repository.deleteAudioNote(piece.id, 'n1');
 
       expect(result, isA<ResultFailure<void>>());
@@ -292,8 +292,8 @@ void main() {
         currentUserId = 'someone-applying-a-sync-import';
         final result = await repository.replaceAuthorSlice(
           piece.id,
-          'teacher-1',
-          role: PieceRole.teacher,
+          'owner-1',
+          role: PieceRole.owner,
           strokes: [stroke(id: 'new')],
           audioNotes: [note(id: 'new-note')],
         );
@@ -308,18 +308,20 @@ void main() {
     test(
       "replaceAuthorSlice only touches the given author's content",
       () async {
-        await repository.addStroke(piece.id, stroke(id: 'teacher-stroke'));
-        currentUserId = 'student-1';
+        await repository.addStroke(piece.id, stroke(id: 'owner-stroke'));
+        currentUserId = 'collaborator-1';
         await repository.addStroke(
           piece.id,
-          stroke(id: 'student-stroke', authorId: 'student-1'),
+          stroke(id: 'collaborator-stroke', authorId: 'collaborator-1'),
         );
 
         await repository.replaceAuthorSlice(
           piece.id,
-          'student-1',
-          role: PieceRole.student,
-          strokes: [stroke(id: 'student-stroke-v2', authorId: 'student-1')],
+          'collaborator-1',
+          role: PieceRole.collaborator,
+          strokes: [
+            stroke(id: 'collaborator-stroke-v2', authorId: 'collaborator-1'),
+          ],
           audioNotes: const [],
         );
 
@@ -328,7 +330,7 @@ void main() {
             .expand((l) => l.strokes)
             .map((s) => s.id)
             .toSet();
-        expect(strokeIds, {'teacher-stroke', 'student-stroke-v2'});
+        expect(strokeIds, {'owner-stroke', 'collaborator-stroke-v2'});
       },
     );
 
@@ -337,27 +339,27 @@ void main() {
       'leaving other authors untouched (backs removeCollaborator/leavePiece, '
       'AC-7)',
       () async {
-        await repository.addStroke(piece.id, stroke(id: 'teacher-stroke'));
-        await repository.addAudioNote(piece.id, note(id: 'teacher-note'));
-        currentUserId = 'student-1';
+        await repository.addStroke(piece.id, stroke(id: 'owner-stroke'));
+        await repository.addAudioNote(piece.id, note(id: 'owner-note'));
+        currentUserId = 'collaborator-1';
         await repository.addStroke(
           piece.id,
-          stroke(id: 'student-stroke', authorId: 'student-1'),
+          stroke(id: 'collaborator-stroke', authorId: 'collaborator-1'),
         );
         await repository.addAudioNote(
           piece.id,
-          note(id: 'student-note', authorId: 'student-1'),
+          note(id: 'collaborator-note', authorId: 'collaborator-1'),
         );
 
         final result = await repository.removeAuthorSlice(
           piece.id,
-          'student-1',
+          'collaborator-1',
         );
 
         expect(result, isA<Success<void>>());
         final annotations = await repository.watch(piece.id).first;
-        expect(annotations.layers.map((l) => l.ownerId), ['teacher-1']);
-        expect(annotations.audioNotes.map((n) => n.id), ['teacher-note']);
+        expect(annotations.layers.map((l) => l.ownerId), ['owner-1']);
+        expect(annotations.audioNotes.map((n) => n.id), ['owner-note']);
       },
     );
   });

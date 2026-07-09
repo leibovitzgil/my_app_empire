@@ -123,7 +123,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
                 label: 'Loading score…',
               ),
               ScoreStatus.failure => ErrorRetryView(
-                title: "Couldn't load this piece",
+                title: "Couldn't load this sheet",
                 message: state.error,
                 onRetry: () {
                   final pieceId = state.pieceId;

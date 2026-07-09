@@ -18,12 +18,12 @@ class MockMonetizationService extends Mock implements MonetizationService {}
 void main() {
   group('AcceptInviteScreen goldens', () {
     const token = 'tok-1';
-    const studentId = 'student-1';
+    const collaboratorId = 'collaborator-1';
     const details = InviteDetails(
       pieceId: 'p1',
       pieceTitle: 'Clair de Lune',
-      teacherId: 'teacher-1',
-      teacherName: 'Jane Doe',
+      ownerId: 'owner-1',
+      ownerName: 'Jane Doe',
     );
 
     late MockInviteService inviteService;
@@ -35,8 +35,8 @@ void main() {
       title: 'Clair de Lune',
       basePdfChecksum: 'c',
       basePdfPath: '/tmp/p.pdf',
-      teacherId: 'teacher-1',
-      teacherName: 'Jane Doe',
+      ownerId: 'owner-1',
+      ownerName: 'Jane Doe',
       collaborators: collaborators,
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
@@ -60,7 +60,7 @@ void main() {
             pieceRepository: pieceRepository,
             monetizationService: monetization,
             token: token,
-            studentId: studentId,
+            collaboratorId: collaboratorId,
             onAccepted: (_) {},
           ),
         ),
@@ -71,7 +71,7 @@ void main() {
     testWidgets('already-collaborator body (light)', (tester) async {
       when(() => pieceRepository.getPiece('p1')).thenAnswer(
         (_) async => Success(
-          piece(const [Collaborator(uid: studentId)]),
+          piece(const [Collaborator(uid: collaboratorId)]),
         ),
       );
 

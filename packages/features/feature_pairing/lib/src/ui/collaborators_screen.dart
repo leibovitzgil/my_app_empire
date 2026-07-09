@@ -16,6 +16,7 @@ class CollaboratorsPage extends StatelessWidget {
     required this.pieceRepository,
     required this.pieceId,
     required this.currentUserId,
+    this.onInvite,
     super.key,
   });
 
@@ -28,6 +29,11 @@ class CollaboratorsPage extends StatelessWidget {
   /// The viewing device's current user id.
   final String currentUserId;
 
+  /// Called when the owner taps "Invite a friend", to open the invite sheet.
+  /// A callback because the invite sheet's app-glue (services, owner name)
+  /// lives at the app layer. `null` hides the invite action.
+  final VoidCallback? onInvite;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<CollaboratorsCubit>(
@@ -36,7 +42,10 @@ class CollaboratorsPage extends StatelessWidget {
         pieceId: pieceId,
         currentUserId: currentUserId,
       ),
-      child: CollaboratorsScreen(currentUserId: currentUserId),
+      child: CollaboratorsScreen(
+        currentUserId: currentUserId,
+        onInvite: onInvite,
+      ),
     );
   }
 }
@@ -47,11 +56,18 @@ class CollaboratorsPage extends StatelessWidget {
 /// Reads [CollaboratorsCubit] from context (provided by [CollaboratorsPage]).
 class CollaboratorsScreen extends StatelessWidget {
   /// Creates a [CollaboratorsScreen].
-  const CollaboratorsScreen({required this.currentUserId, super.key});
+  const CollaboratorsScreen({
+    required this.currentUserId,
+    this.onInvite,
+    super.key,
+  });
 
   /// The viewing device's current user id — used to render "You" and to
   /// decide which row (if any) gets the "Leave" affordance.
   final String currentUserId;
+
+  /// See [CollaboratorsPage.onInvite].
+  final VoidCallback? onInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +78,7 @@ class CollaboratorsScreen extends StatelessWidget {
         if (state.error != null) AppSnackbar.error(context, state.error!);
       },
       builder: (context, state) {
+        final canInvite = state.viewerIsOwner && onInvite != null;
         return Scaffold(
           appBar: AppBar(title: const Text('Collaborators')),
           body: switch (state.status) {
@@ -73,14 +90,21 @@ class CollaboratorsScreen extends StatelessWidget {
                 context.read<CollaboratorsCubit>().retry(),
               ),
             ),
-            CollaboratorsStatus.empty => const EmptyStateView(
+            CollaboratorsStatus.empty => EmptyStateView(
               icon: Icons.group_outlined,
               title: 'No collaborators yet',
-              message: 'Invite someone to collaborate on this piece.',
+              message: 'Invite a friend to work on this sheet together.',
+              action: canInvite
+                  ? PrimaryButton(
+                      label: 'Invite a friend',
+                      onPressed: onInvite,
+                    )
+                  : null,
             ),
             CollaboratorsStatus.success => _CollaboratorsList(
               state: state,
               currentUserId: currentUserId,
+              onInvite: canInvite ? onInvite : null,
             ),
           },
         );
@@ -90,28 +114,49 @@ class CollaboratorsScreen extends StatelessWidget {
 }
 
 class _CollaboratorsList extends StatelessWidget {
-  const _CollaboratorsList({required this.state, required this.currentUserId});
+  const _CollaboratorsList({
+    required this.state,
+    required this.currentUserId,
+    this.onInvite,
+  });
 
   final CollaboratorsState state;
   final String currentUserId;
+  final VoidCallback? onInvite;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return Column(
       children: [
-        PersonTile(
-          initials: InviteFormat.initialsFor(state.ownerId),
-          color: Color(InviteFormat.colorValueFor(state.ownerId)),
-          name:
-              state.ownerName ??
-              'Owner ${InviteFormat.initialsFor(state.ownerId)}',
-          subtitle: 'Owner',
+        Expanded(
+          child: ListView(
+            children: [
+              PersonTile(
+                initials: InviteFormat.initialsFor(state.ownerId),
+                color: Color(InviteFormat.colorValueFor(state.ownerId)),
+                name:
+                    state.ownerName ??
+                    'Owner ${InviteFormat.initialsFor(state.ownerId)}',
+                subtitle: 'Owner',
+              ),
+              for (final collaborator in state.collaborators)
+                _CollaboratorRow(
+                  collaborator: collaborator,
+                  isViewer: collaborator.uid == currentUserId,
+                  viewerIsOwner: state.viewerIsOwner,
+                ),
+            ],
+          ),
         ),
-        for (final collaborator in state.collaborators)
-          _CollaboratorRow(
-            collaborator: collaborator,
-            isViewer: collaborator.uid == currentUserId,
-            viewerIsOwner: state.viewerIsOwner,
+        if (onInvite != null)
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: SecondaryButton(
+                label: 'Invite a friend',
+                onPressed: onInvite,
+              ),
+            ),
           ),
       ],
     );
@@ -147,9 +192,9 @@ class _CollaboratorRow extends StatelessWidget {
     if (isViewer) {
       return Semantics(
         button: true,
-        label: 'Leave this piece',
+        label: 'Leave this sheet',
         child: IconButton(
-          tooltip: 'Leave this piece',
+          tooltip: 'Leave this sheet',
           icon: const Icon(Icons.logout),
           onPressed: () => _confirmLeave(context),
         ),
@@ -177,7 +222,7 @@ class _CollaboratorRow extends StatelessWidget {
     final confirmed = await confirmDialog(
       context,
       title: 'Remove $name?',
-      message: 'They will lose access to this piece.',
+      message: 'They will lose access to this sheet.',
       confirmLabel: 'Remove',
       isDestructive: true,
     );
@@ -188,7 +233,7 @@ class _CollaboratorRow extends StatelessWidget {
     final cubit = context.read<CollaboratorsCubit>();
     final confirmed = await confirmDialog(
       context,
-      title: 'Leave this piece?',
+      title: 'Leave this sheet?',
       message: "You'll lose access until invited again.",
       confirmLabel: 'Leave',
       isDestructive: true,

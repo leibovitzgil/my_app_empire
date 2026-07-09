@@ -40,7 +40,7 @@ Future<void> _pump(
       home: Scaffold(
         body: Center(
           child: AudioPinMarker(
-            note: _note('teacher1'),
+            note: _note('owner1'),
             currentUserId: currentUserId,
             isPlaying: isPlaying,
             progress: progress,
@@ -56,7 +56,7 @@ Future<void> _pump(
 void main() {
   group('AudioPinMarker goldens', () {
     testWidgets('idle, owned by current user', (tester) async {
-      await _pump(tester, currentUserId: 'teacher1');
+      await _pump(tester, currentUserId: 'owner1');
       await expectLater(
         find.byType(AudioPinMarker),
         matchesGoldenFile('goldens/audio_pin_marker_idle_own.png'),
@@ -64,7 +64,7 @@ void main() {
     });
 
     testWidgets('idle, owned by the other participant', (tester) async {
-      await _pump(tester, currentUserId: 'student1');
+      await _pump(tester, currentUserId: 'collaborator1');
       await expectLater(
         find.byType(AudioPinMarker),
         matchesGoldenFile('goldens/audio_pin_marker_idle_other.png'),
@@ -74,7 +74,7 @@ void main() {
     testWidgets('playing, with progress', (tester) async {
       await _pump(
         tester,
-        currentUserId: 'teacher1',
+        currentUserId: 'owner1',
         isPlaying: true,
         progress: 0.4,
       );

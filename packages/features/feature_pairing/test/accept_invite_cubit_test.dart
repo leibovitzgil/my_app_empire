@@ -15,12 +15,12 @@ class MockMonetizationService extends Mock implements MonetizationService {}
 void main() {
   group('AcceptInviteCubit', () {
     const token = 'tok-1';
-    const studentId = 'student-1';
-    const studentEmail = 'student@example.com';
+    const collaboratorId = 'collaborator-1';
+    const collaboratorEmail = 'collaborator@example.com';
     const details = InviteDetails(
       pieceId: 'p1',
       pieceTitle: 'Nocturne',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
     );
 
     late MockInviteService inviteService;
@@ -32,7 +32,7 @@ void main() {
       title: 'Nocturne',
       basePdfChecksum: 'c',
       basePdfPath: '/tmp/p.pdf',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
       collaborators: collaborators,
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
@@ -49,8 +49,8 @@ void main() {
       pieceRepository: pieceRepository,
       monetizationService: monetization,
       token: token,
-      studentId: studentId,
-      studentEmail: studentEmail,
+      collaboratorId: collaboratorId,
+      collaboratorEmail: collaboratorEmail,
     );
 
     blocTest<AcceptInviteCubit, AcceptInviteState>(
@@ -110,7 +110,7 @@ void main() {
         ).thenAnswer((_) async => const Success(details));
         when(() => pieceRepository.getPiece('p1')).thenAnswer(
           (_) async => Success(
-            piece(collaborators: const [Collaborator(uid: studentId)]),
+            piece(collaborators: const [Collaborator(uid: collaboratorId)]),
           ),
         );
         return buildCubit();
@@ -165,9 +165,9 @@ void main() {
         when(
           () => inviteService.acceptInvite(
             token,
-            studentId: studentId,
-            studentName: any(named: 'studentName'),
-            studentEmail: studentEmail,
+            collaboratorId: collaboratorId,
+            collaboratorName: any(named: 'collaboratorName'),
+            collaboratorEmail: collaboratorEmail,
           ),
         ).thenAnswer((_) async => const Success<void>(null));
         return buildCubit();
@@ -193,9 +193,9 @@ void main() {
         verify(
           () => inviteService.acceptInvite(
             token,
-            studentId: studentId,
-            studentName: any(named: 'studentName'),
-            studentEmail: studentEmail,
+            collaboratorId: collaboratorId,
+            collaboratorName: any(named: 'collaboratorName'),
+            collaboratorEmail: collaboratorEmail,
           ),
         ).called(1);
       },
@@ -214,13 +214,13 @@ void main() {
         when(
           () => inviteService.acceptInvite(
             token,
-            studentId: studentId,
-            studentName: any(named: 'studentName'),
-            studentEmail: studentEmail,
+            collaboratorId: collaboratorId,
+            collaboratorName: any(named: 'collaboratorName'),
+            collaboratorEmail: collaboratorEmail,
           ),
         ).thenAnswer(
           (_) async => const ResultFailure<void>(
-            InviteException('This piece already has a student.'),
+            InviteException('This sheet already has a collaborator.'),
           ),
         );
         return buildCubit();
@@ -238,7 +238,11 @@ void main() {
         ),
         isA<AcceptInviteState>()
             .having((s) => s.status, 'status', AcceptInviteStatus.ready)
-            .having((s) => s.error, 'error', contains('already has a student')),
+            .having(
+              (s) => s.error,
+              'error',
+              contains('already has a collaborator'),
+            ),
       ],
     );
   });

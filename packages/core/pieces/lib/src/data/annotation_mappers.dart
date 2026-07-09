@@ -55,7 +55,7 @@ InkLayer inkLayerFromJson(Map<String, dynamic> json) => InkLayer(
 
 PieceRole _roleFromName(String? name) => PieceRole.values.firstWhere(
   (role) => role.name == name,
-  orElse: () => PieceRole.student,
+  orElse: () => PieceRole.collaborator,
 );
 
 /// Serializes [region] to JSON.

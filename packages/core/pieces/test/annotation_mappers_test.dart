@@ -6,7 +6,7 @@ void main() {
   test('inkStrokeToJson / inkStrokeFromJson round-trip', () {
     const stroke = InkStroke(
       id: 's1',
-      authorId: 'teacher-1',
+      authorId: 'owner-1',
       pageIndex: 2,
       colorId: 'blue',
       points: [InkPoint(x: 0.1, y: 0.2), InkPoint(x: 0.3, y: 0.4)],
@@ -17,12 +17,12 @@ void main() {
 
   test('inkLayerToJson / inkLayerFromJson round-trip', () {
     const layer = InkLayer(
-      ownerId: 'student-1',
-      role: PieceRole.student,
+      ownerId: 'collaborator-1',
+      role: PieceRole.collaborator,
       strokes: [
         InkStroke(
           id: 's1',
-          authorId: 'student-1',
+          authorId: 'collaborator-1',
           pageIndex: 0,
           colorId: 'green',
           points: [InkPoint(x: 0, y: 0)],
@@ -36,7 +36,7 @@ void main() {
   test('audioNoteToJson / audioNoteFromJson round-trip', () {
     final note = AudioNote(
       id: 'n1',
-      authorId: 'teacher-1',
+      authorId: 'owner-1',
       audioAssetId: 'asset-1',
       pageIndex: 1,
       durationMs: 4200,
@@ -58,12 +58,12 @@ void main() {
       pieceId: 'piece-1',
       layers: const [
         InkLayer(
-          ownerId: 'teacher-1',
-          role: PieceRole.teacher,
+          ownerId: 'owner-1',
+          role: PieceRole.owner,
           strokes: [
             InkStroke(
               id: 's1',
-              authorId: 'teacher-1',
+              authorId: 'owner-1',
               pageIndex: 0,
               colorId: 'red',
               points: [InkPoint(x: 0, y: 0)],
@@ -74,7 +74,7 @@ void main() {
       audioNotes: [
         AudioNote(
           id: 'n1',
-          authorId: 'teacher-1',
+          authorId: 'owner-1',
           audioAssetId: 'asset-1',
           pageIndex: 0,
           durationMs: 1000,

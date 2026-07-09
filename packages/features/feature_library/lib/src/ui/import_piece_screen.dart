@@ -16,7 +16,7 @@ class ImportPiecePage extends StatelessWidget {
     required this.pieceRepository,
     required this.renderService,
     this.filePicker,
-    this.teacherName,
+    this.ownerName,
     super.key,
   });
 
@@ -29,8 +29,8 @@ class ImportPiecePage extends StatelessWidget {
   /// See [ImportPieceBloc.new]'s `filePicker` parameter.
   final PdfFilePicker? filePicker;
 
-  /// See [ImportPieceBloc.teacherName].
-  final String? teacherName;
+  /// See [ImportPieceBloc.ownerName].
+  final String? ownerName;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +39,7 @@ class ImportPiecePage extends StatelessWidget {
         pieceRepository: pieceRepository,
         renderService: renderService,
         filePicker: filePicker,
-        teacherName: teacherName,
+        ownerName: ownerName,
       ),
       child: const ImportPieceScreen(),
     );
@@ -68,7 +68,7 @@ class ImportPieceScreen extends StatelessWidget {
       },
       builder: (context, state) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Import piece')),
+          appBar: AppBar(title: const Text('Import a sheet')),
           body: switch (state.status) {
             ImportStatus.awaitingPick => const _ChooseFileBody(),
             ImportStatus.validating => const LoadingView(
@@ -164,7 +164,7 @@ class _NamingBodyState extends State<_NamingBody> {
               ),
               const SizedBox(height: AppSpacing.md),
               PrimaryButton(
-                label: 'Create piece',
+                label: 'Add sheet',
                 isLoading: state.isSubmitting,
                 onPressed: state.canSubmit
                     ? () => context.read<ImportPieceBloc>().add(

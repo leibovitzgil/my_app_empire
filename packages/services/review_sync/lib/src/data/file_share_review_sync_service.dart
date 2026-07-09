@@ -74,7 +74,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
   // every export (wasteful) or never (breaks a fresh receiver), the *first*
   // bundle ever exported for a piece embeds the PDF + filename; every
   // export after that assumes the recipient already has it. This is scoped
-  // per-piece, not per-author, since only the teacher's export ever needs to
+  // per-piece, not per-author, since only the owner's export ever needs to
   // carry the PDF in the first place.
   String _baseSharedKey(String pieceId) => 'review_sync.base_shared.$pieceId';
 
@@ -151,10 +151,10 @@ class FileShareReviewSyncService implements ReviewSyncService {
     await tempFile.writeAsBytes(pdfEntries.first.content as List<int>);
 
     final currentUserId = _currentUserId();
-    // Only the teacher's export ever embeds the base PDF (see
+    // Only the owner's export ever embeds the base PDF (see
     // `_baseSharedKey`), so a first-share bundle's author is always the
-    // teacher; the receiving device belongs to the (currently signed-in)
-    // student, unless this is the teacher's own device re-importing their
+    // owner; the receiving device belongs to the (currently signed-in)
+    // collaborator, unless this is the owner's own device re-importing their
     // own bundle.
     final isSelfImport = currentUserId == manifest.authorId;
 
@@ -163,10 +163,10 @@ class FileShareReviewSyncService implements ReviewSyncService {
       piece = (await _pieceRepository.registerImportedPiece(
         pieceId: manifest.pieceId,
         title: manifest.pieceTitle,
-        teacherId: manifest.authorId,
-        teacherName: manifest.authorName,
-        studentId: isSelfImport ? null : currentUserId,
-        studentName: isSelfImport ? null : _currentUserName(),
+        ownerId: manifest.authorId,
+        ownerName: manifest.authorName,
+        collaboratorId: isSelfImport ? null : currentUserId,
+        collaboratorName: isSelfImport ? null : _currentUserName(),
         sourcePath: tempPath,
       )).orThrow();
     } finally {
@@ -183,7 +183,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
   }
 
   PieceRole _roleOf(Piece piece, String authorId) =>
-      piece.teacherId == authorId ? PieceRole.teacher : PieceRole.student;
+      piece.ownerId == authorId ? PieceRole.owner : PieceRole.collaborator;
 
   @override
   Future<Result<ExportedBundle>> exportBundle(

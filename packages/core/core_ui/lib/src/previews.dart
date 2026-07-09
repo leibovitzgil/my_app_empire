@@ -203,6 +203,16 @@ Widget emptyStateViewPreview() {
   );
 }
 
+@Preview(name: 'EmptyStateView • with action')
+Widget emptyStateViewWithActionPreview() {
+  return EmptyStateView(
+    icon: Icons.library_music_outlined,
+    title: 'Your library is empty',
+    message: 'Import a PDF to add your first sheet.',
+    action: PrimaryButton(label: 'Import a sheet', onPressed: () {}),
+  );
+}
+
 @Preview(name: 'ErrorRetryView')
 Widget errorRetryViewPreview() {
   return ErrorRetryView(

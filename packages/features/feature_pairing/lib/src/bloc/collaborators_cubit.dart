@@ -72,10 +72,10 @@ class CollaboratorsCubit extends Cubit<CollaboratorsState> {
         status: piece.collaborators.isEmpty
             ? CollaboratorsStatus.empty
             : CollaboratorsStatus.success,
-        ownerId: piece.teacherId,
-        ownerName: piece.teacherName,
+        ownerId: piece.ownerId,
+        ownerName: piece.ownerName,
         collaborators: piece.collaborators,
-        viewerIsOwner: piece.teacherId == currentUserId,
+        viewerIsOwner: piece.ownerId == currentUserId,
         clearError: true,
       ),
     );

@@ -14,12 +14,12 @@
 // Duet is a single-device app: `PieceRepository` persists to on-device
 // storage shared by every signed-in identity on that device (the same
 // convention `test/duet_flow_test.dart`/`duet_flow_harness.dart` use, where
-// "teacher" and "student" are simulated on one process) — so a piece the
-// teacher identity imports is still there once this test switches to the
-// student identity, exactly as it would be for, say, a shared family
+// the owner and a collaborator are simulated on one process) — so a sheet the
+// owner identity imports is still there once this test switches to the
+// collaborator identity, exactly as it would be for, say, a shared family
 // device. What's genuinely real here is the Auth sign-in and the
 // Firestore-backed directory lookup/invite-send/invite-read/accept-record
-// round trip, not cross-device piece sync (that's `services/review_sync`'s
+// round trip, not cross-device sheet sync (that's `services/review_sync`'s
 // job, unrelated to this feature).
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
@@ -38,8 +38,8 @@ import 'package:user_directory/user_directory.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  const teacherEmail = 'teacher.e2e@duet.dev';
-  const studentEmail = 'student.e2e@duet.dev';
+  const ownerEmail = 'owner.e2e@duet.dev';
+  const collaboratorEmail = 'collaborator.e2e@duet.dev';
   const password = 'correct horse battery staple';
 
   testWidgets(
@@ -63,78 +63,79 @@ void main() {
       await tester.pumpWidget(const App());
       await tester.pumpAndSettle();
 
-      // 1. The teacher signs in (the emulator accepts any never-before-seen
+      // 1. The owner signs in (the emulator accepts any never-before-seen
       // email/password pair as a fresh account) and publishes their own
       // directory entry (the auth-change `upsertSelf` listener wired in
       // `injection.dart`).
       await firebase_auth.FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: teacherEmail,
+        email: ownerEmail,
         password: password,
       );
-      await getIt<AuthRepository>().login(teacherEmail, password);
+      await getIt<AuthRepository>().login(ownerEmail, password);
       await tester.pumpAndSettle();
-      final teacherId = getIt<CurrentUser>().call();
+      final ownerId = getIt<CurrentUser>().call();
 
-      // Publish the student's directory entry directly (standing in for
-      // the student's own device having signed in at least once) so the
-      // teacher's invite can resolve it.
+      // Publish the collaborator's directory entry directly (standing in for
+      // the collaborator's own device having signed in at least once) so the
+      // owner's invite can resolve it.
       await firebase_auth.FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: studentEmail,
+        email: collaboratorEmail,
         password: password,
       );
-      final studentId = firebase_auth.FirebaseAuth.instance.currentUser!.uid;
+      final collaboratorId =
+          firebase_auth.FirebaseAuth.instance.currentUser!.uid;
       await getIt<UserDirectory>().upsertSelf(
         DirectoryUser(
-          uid: studentId,
-          email: studentEmail,
-          displayName: 'Student E2E',
+          uid: collaboratorId,
+          email: collaboratorEmail,
+          displayName: 'Collaborator E2E',
         ),
       );
-      // Sign back in as the teacher for the rest of this "device session".
+      // Sign back in as the owner for the rest of this "device session".
       await firebase_auth.FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: teacherEmail,
+        email: ownerEmail,
         password: password,
       );
       await tester.pumpAndSettle();
 
-      // 2. The teacher imports a piece and sends a real email invite —
+      // 2. The owner imports a sheet and sends a real email invite —
       // written to the live Firestore emulator, not an in-memory fake.
       final piece = (await getIt<PieceRepository>().importPiece(
         title: 'Clair de Lune',
         sourcePath: 'clair_de_lune.pdf',
-        teacherName: 'Teacher E2E',
+        ownerName: 'Owner E2E',
       )).orThrow();
 
       final sendResult = await getIt<CollaboratorInviteService>().sendInvite(
         pieceId: piece.id,
-        ownerId: teacherId,
-        email: studentEmail,
-        ownerName: 'Teacher E2E',
+        ownerId: ownerId,
+        email: collaboratorEmail,
+        ownerName: 'Owner E2E',
       );
       expect(sendResult.isSuccess, isTrue);
       expect((sendResult as Success<LookupOutcome>).value, isA<Resolved>());
 
-      // 3. The invite is really sitting in the student's Firestore inbox.
+      // 3. The invite is really sitting in the collaborator's Firestore inbox.
       final inboxSnapshot = await FirebaseFirestore.instance
           .collection('userInbox')
-          .doc(studentId)
+          .doc(collaboratorId)
           .collection('messages')
           .where('read', isEqualTo: false)
           .get();
       expect(inboxSnapshot.docs, isNotEmpty);
 
-      // 4. Switch this device's signed-in identity to the student and
-      // accept — the on-device `PieceRepository` already has the piece
+      // 4. Switch this device's signed-in identity to the collaborator and
+      // accept — the on-device `PieceRepository` already has the sheet
       // (see this file's top-of-file note), so `addCollaborator` succeeds.
       await getIt<AuthRepository>().logout();
       await firebase_auth.FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: studentEmail,
+        email: collaboratorEmail,
         password: password,
       );
       await tester.pumpAndSettle();
 
       final invites = await getIt<CollaboratorInviteService>()
-          .watchInvites(studentId)
+          .watchInvites(collaboratorId)
           .first;
       expect(invites, hasLength(1));
       expect(invites.single.pieceId, piece.id);
@@ -142,20 +143,20 @@ void main() {
       final acceptResult = await getIt<CollaboratorInviteService>()
           .acceptInvite(
             invites.single,
-            accepterId: studentId,
-            accepterName: 'Student E2E',
-            accepterEmail: studentEmail,
+            accepterId: collaboratorId,
+            accepterName: 'Collaborator E2E',
+            accepterEmail: collaboratorEmail,
           );
       expect(acceptResult.isSuccess, isTrue);
 
       final updated = (await getIt<PieceRepository>().getPiece(
         piece.id,
       )).orThrow();
-      expect(updated.isCollaborator(studentId), isTrue);
+      expect(updated.isCollaborator(collaboratorId), isTrue);
       final collaborator = updated.collaborators.firstWhere(
-        (c) => c.uid == studentId,
+        (c) => c.uid == collaboratorId,
       );
-      expect(collaborator.email, studentEmail);
+      expect(collaborator.email, collaboratorEmail);
     },
   );
 }

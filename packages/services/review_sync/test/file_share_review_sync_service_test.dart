@@ -34,7 +34,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-    String? teacherName,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
@@ -57,12 +57,12 @@ class _FakePieceRepository implements PieceRepository {
       throw UnimplementedError();
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<Piece>> pairCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
-    String? teacherName,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   /// A simple, deterministic, content-based "checksum" (sum of byte
@@ -77,11 +77,11 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
-    required String teacherId,
+    required String ownerId,
     required String sourcePath,
-    String? studentId,
-    String? teacherName,
-    String? studentName,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
   }) async {
     if (pieces.any((p) => p.id == pieceId)) {
       return ResultFailure<Piece>(
@@ -94,10 +94,11 @@ class _FakePieceRepository implements PieceRepository {
       title: title,
       basePdfChecksum: await _checksumOf(sourcePath),
       basePdfPath: sourcePath,
-      teacherId: teacherId,
-      teacherName: teacherName,
-      studentId: studentId,
-      studentName: studentName,
+      ownerId: ownerId,
+      ownerName: ownerName,
+      collaborators: collaboratorId == null
+          ? null
+          : [Collaborator(uid: collaboratorId, name: collaboratorName)],
       createdAt: now,
       updatedAt: now,
     );
@@ -222,15 +223,15 @@ void main() {
     title: 'Clair de Lune',
     basePdfChecksum: 'checksum-abc',
     basePdfPath: '',
-    teacherId: 'teacher-1',
-    studentId: 'student-1',
+    ownerId: 'owner-1',
+    collaborators: const [Collaborator(uid: 'collaborator-1')],
     createdAt: DateTime(2024),
     updatedAt: DateTime(2024),
   );
 
   InkStroke stroke(String id) => InkStroke(
     id: id,
-    authorId: 'teacher-1',
+    authorId: 'owner-1',
     pageIndex: 0,
     colorId: 'red',
     points: const [InkPoint(x: 0.1, y: 0.1)],
@@ -238,7 +239,7 @@ void main() {
 
   AudioNote note(String id, {required String audioAssetId}) => AudioNote(
     id: id,
-    authorId: 'teacher-1',
+    authorId: 'owner-1',
     audioAssetId: audioAssetId,
     pageIndex: 0,
     durationMs: 3000,
@@ -289,8 +290,8 @@ void main() {
           pieceId: piece.id,
           layers: [
             InkLayer(
-              ownerId: 'teacher-1',
-              role: PieceRole.teacher,
+              ownerId: 'owner-1',
+              role: PieceRole.owner,
               strokes: [stroke('s1'), stroke('s2')],
             ),
           ],
@@ -303,7 +304,7 @@ void main() {
         annotationRepository: senderAnnotations,
         audioAssetStore: senderAudioStore,
         storage: storage,
-        currentUserId: () => 'teacher-1',
+        currentUserId: () => 'owner-1',
         bundlesDirectory: () async => tempDir,
       );
     });
@@ -335,8 +336,8 @@ void main() {
           title: piece.title,
           basePdfChecksum: piece.basePdfChecksum,
           basePdfPath: pdfPath,
-          teacherId: piece.teacherId,
-          studentId: piece.studentId,
+          ownerId: piece.ownerId,
+          collaborators: piece.collaborators,
           createdAt: piece.createdAt,
           updatedAt: piece.updatedAt,
         );
@@ -345,7 +346,7 @@ void main() {
           annotationRepository: senderAnnotations,
           audioAssetStore: senderAudioStore,
           storage: storage,
-          currentUserId: () => 'teacher-1',
+          currentUserId: () => 'owner-1',
           bundlesDirectory: () async => tempDir,
         );
 
@@ -371,7 +372,7 @@ void main() {
         annotationRepository: senderAnnotations,
         audioAssetStore: senderAudioStore,
         storage: storage,
-        currentUserId: () => 'teacher-1',
+        currentUserId: () => 'owner-1',
         bundlesDirectory: () async => tempDir,
         shareInvoker: (params) async {
           capturedParams = params;
@@ -405,7 +406,7 @@ void main() {
           annotationRepository: receiverAnnotations,
           audioAssetStore: receiverAudioStore,
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
         );
 
@@ -459,12 +460,12 @@ void main() {
             pieceId: piece.id,
             layers: const [
               InkLayer(
-                ownerId: 'teacher-1',
-                role: PieceRole.teacher,
+                ownerId: 'owner-1',
+                role: PieceRole.owner,
                 strokes: [
                   InkStroke(
                     id: 'precise-stroke',
-                    authorId: 'teacher-1',
+                    authorId: 'owner-1',
                     pageIndex: 0,
                     colorId: 'red',
                     points: precisePoints,
@@ -475,7 +476,7 @@ void main() {
             audioNotes: [
               AudioNote(
                 id: 'precise-note',
-                authorId: 'teacher-1',
+                authorId: 'owner-1',
                 audioAssetId: senderAssetId,
                 pageIndex: 0,
                 durationMs: 2500,
@@ -498,7 +499,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
         );
 
@@ -519,8 +520,8 @@ void main() {
         final exportResult = await senderService.exportBundle(piece.id);
         final bundle = (exportResult as Success<ExportedBundle>).value;
 
-        // The receiver (student) already has their own annotations before
-        // importing the teacher's bundle.
+        // The receiver (collaborator) already has their own annotations
+        // before importing the owner's bundle.
         final receiverAnnotations = _FakeAnnotationRepository()
           ..seed(
             piece.id,
@@ -528,12 +529,12 @@ void main() {
               pieceId: piece.id,
               layers: const [
                 InkLayer(
-                  ownerId: 'student-1',
-                  role: PieceRole.student,
+                  ownerId: 'collaborator-1',
+                  role: PieceRole.collaborator,
                   strokes: [
                     InkStroke(
-                      id: 'students-own-stroke',
-                      authorId: 'student-1',
+                      id: 'collaborators-own-stroke',
+                      authorId: 'collaborator-1',
                       pageIndex: 0,
                       colorId: 'blue',
                       points: [InkPoint(x: 0.5, y: 0.5)],
@@ -543,9 +544,9 @@ void main() {
               ],
               audioNotes: [
                 AudioNote(
-                  id: 'students-own-note',
-                  authorId: 'student-1',
-                  audioAssetId: 'student-asset-0',
+                  id: 'collaborators-own-note',
+                  authorId: 'collaborator-1',
+                  audioAssetId: 'collaborator-asset-0',
                   pageIndex: 0,
                   durationMs: 1500,
                   region: const Region(
@@ -568,27 +569,29 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
         );
 
         await receiverService.importBundle(bundle.filePath);
 
         final receiverState = await receiverAnnotations.watch(piece.id).first;
-        // The student's own layer/notes are untouched, sitting alongside
-        // the freshly-imported teacher layer.
-        final studentLayer = receiverState.layers.firstWhere(
-          (l) => l.ownerId == 'student-1',
+        // The collaborator's own layer/notes are untouched, sitting
+        // alongside the freshly-imported owner layer.
+        final collaboratorLayer = receiverState.layers.firstWhere(
+          (l) => l.ownerId == 'collaborator-1',
         );
-        expect(studentLayer.strokes.map((s) => s.id), ['students-own-stroke']);
+        expect(collaboratorLayer.strokes.map((s) => s.id), [
+          'collaborators-own-stroke',
+        ]);
         expect(
           receiverState.audioNotes.map((n) => n.id),
-          contains('students-own-note'),
+          contains('collaborators-own-note'),
         );
-        final teacherLayer = receiverState.layers.firstWhere(
-          (l) => l.ownerId == 'teacher-1',
+        final ownerLayer = receiverState.layers.firstWhere(
+          (l) => l.ownerId == 'owner-1',
         );
-        expect(teacherLayer.strokes.map((s) => s.id).toSet(), {'s1', 's2'});
+        expect(ownerLayer.strokes.map((s) => s.id).toSet(), {'s1', 's2'});
       },
     );
 
@@ -608,7 +611,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
         );
 
@@ -630,8 +633,8 @@ void main() {
               pieceId: piece.id,
               layers: [
                 InkLayer(
-                  ownerId: 'teacher-1',
-                  role: PieceRole.teacher,
+                  ownerId: 'owner-1',
+                  role: PieceRole.owner,
                   strokes: [stroke('only-one')],
                 ),
               ],
@@ -643,7 +646,7 @@ void main() {
           annotationRepository: staleSenderAnnotations,
           audioAssetStore: senderAudioStore,
           storage: LocalStorageService(await SharedPreferences.getInstance()),
-          currentUserId: () => 'teacher-1',
+          currentUserId: () => 'owner-1',
           bundlesDirectory: () async => tempDir,
           clock: () => DateTime(2020), // deliberately before the first export
         );
@@ -687,7 +690,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
           onImported: ({required title, required body}) async {
             notifyCalls++;
@@ -712,7 +715,7 @@ void main() {
           annotationRepository: senderAnnotations,
           audioAssetStore: senderAudioStore,
           storage: storage,
-          currentUserId: () => 'teacher-1',
+          currentUserId: () => 'owner-1',
           currentUserName: () => 'Jane Doe',
           bundlesDirectory: () async => tempDir,
         );
@@ -729,7 +732,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
           onImported: ({required title, required body}) async {
             capturedTitle = title;
@@ -763,7 +766,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
           onImported: ({required title, required body}) async {
             capturedTitle = title;
@@ -789,7 +792,7 @@ void main() {
             title: 'Other',
             basePdfChecksum: 'x',
             basePdfPath: '',
-            teacherId: 'someone-else',
+            ownerId: 'someone-else',
             createdAt: DateTime(2024),
             updatedAt: DateTime(2024),
           ),
@@ -800,7 +803,7 @@ void main() {
           label: 'receiver-asset',
         ),
         storage: storage,
-        currentUserId: () => 'student-1',
+        currentUserId: () => 'collaborator-1',
         bundlesDirectory: () async => tempDir,
       );
 
@@ -828,8 +831,8 @@ void main() {
           title: piece.title,
           basePdfChecksum: expectedChecksum,
           basePdfPath: pdfPath,
-          teacherId: piece.teacherId,
-          studentId: piece.studentId,
+          ownerId: piece.ownerId,
+          collaborators: piece.collaborators,
           createdAt: piece.createdAt,
           updatedAt: piece.updatedAt,
         );
@@ -838,7 +841,7 @@ void main() {
           annotationRepository: senderAnnotations,
           audioAssetStore: senderAudioStore,
           storage: storage,
-          currentUserId: () => 'teacher-1',
+          currentUserId: () => 'owner-1',
           bundlesDirectory: () async => tempDir,
         );
 
@@ -859,7 +862,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
         );
 
@@ -878,8 +881,8 @@ void main() {
         expect(registered, isA<Success<Piece>>());
         final registeredPiece = (registered as Success<Piece>).value;
         expect(registeredPiece.title, piece.title);
-        expect(registeredPiece.teacherId, 'teacher-1');
-        expect(registeredPiece.studentId, 'student-1');
+        expect(registeredPiece.ownerId, 'owner-1');
+        expect(registeredPiece.collaboratorIds, ['collaborator-1']);
         // The extracted PDF's checksum matches the manifest's declared
         // basePdfChecksum — proof the transferred bytes are intact.
         expect(registeredPiece.basePdfChecksum, expectedChecksum);
@@ -894,8 +897,8 @@ void main() {
     );
 
     test(
-      "importBundle attaches the sender's real teacherName (captured in "
-      "the manifest at export time) and the receiver's own studentName to "
+      "importBundle attaches the sender's real ownerName (captured in the "
+      "manifest at export time) and the receiver's own collaboratorName to "
       'a brand-new first-share Piece',
       () async {
         final pdfBytes = utf8.encode('%PDF-1.4 real bytes');
@@ -909,8 +912,8 @@ void main() {
           title: piece.title,
           basePdfChecksum: expectedChecksum,
           basePdfPath: pdfPath,
-          teacherId: piece.teacherId,
-          studentId: piece.studentId,
+          ownerId: piece.ownerId,
+          collaborators: piece.collaborators,
           createdAt: piece.createdAt,
           updatedAt: piece.updatedAt,
         );
@@ -919,7 +922,7 @@ void main() {
           annotationRepository: senderAnnotations,
           audioAssetStore: senderAudioStore,
           storage: storage,
-          currentUserId: () => 'teacher-1',
+          currentUserId: () => 'owner-1',
           currentUserName: () => 'Jane Doe',
           bundlesDirectory: () async => tempDir,
         );
@@ -938,7 +941,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           currentUserName: () => 'Sam Smith',
           bundlesDirectory: () async => tempDir,
         );
@@ -947,8 +950,8 @@ void main() {
 
         final registered = await receiverPieceRepository.getPiece(piece.id);
         final registeredPiece = (registered as Success<Piece>).value;
-        expect(registeredPiece.teacherName, 'Jane Doe');
-        expect(registeredPiece.studentName, 'Sam Smith');
+        expect(registeredPiece.ownerName, 'Jane Doe');
+        expect(registeredPiece.collaborators.single.name, 'Sam Smith');
       },
     );
 
@@ -965,8 +968,8 @@ void main() {
           title: piece.title,
           basePdfChecksum: 'a-completely-different-checksum',
           basePdfPath: piece.basePdfPath,
-          teacherId: piece.teacherId,
-          studentId: piece.studentId,
+          ownerId: piece.ownerId,
+          collaborators: piece.collaborators,
           createdAt: piece.createdAt,
           updatedAt: piece.updatedAt,
         );
@@ -979,7 +982,7 @@ void main() {
             label: 'receiver-asset',
           ),
           storage: storage,
-          currentUserId: () => 'student-1',
+          currentUserId: () => 'collaborator-1',
           bundlesDirectory: () async => tempDir,
         );
 

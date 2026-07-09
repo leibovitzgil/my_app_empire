@@ -10,15 +10,17 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 void main() {
   group('LibraryBloc', () {
-    const teacherId = 'teacher-1';
-    const studentId = 'student-1';
+    const ownerId = 'owner-1';
+    const collaboratorId = 'collaborator-1';
 
     late MockPieceRepository repository;
     late StreamController<List<Piece>> piecesController;
 
     Piece piece({
       String id = 'p1',
-      String? student = studentId,
+      List<Collaborator> collaborators = const [
+        Collaborator(uid: collaboratorId),
+      ],
       DateTime? createdAt,
       DateTime? updatedAt,
     }) {
@@ -28,8 +30,8 @@ void main() {
         title: 'Nocturne',
         basePdfChecksum: 'checksum',
         basePdfPath: '/tmp/$id.pdf',
-        teacherId: teacherId,
-        studentId: student,
+        ownerId: ownerId,
+        collaborators: collaborators,
         createdAt: created,
         updatedAt: updatedAt ?? created,
       );
@@ -47,15 +49,14 @@ void main() {
       await piecesController.close();
     });
 
-    test('initial state carries the resolved role and no pieces', () {
+    test('initial state carries the given currentUserId and no pieces', () {
       final bloc = LibraryBloc(
         pieceRepository: repository,
-        currentUserId: teacherId,
-        currentRole: PieceRole.teacher,
+        currentUserId: ownerId,
       );
       addTearDown(bloc.close);
       expect(bloc.state.status, LibraryStatus.loading);
-      expect(bloc.state.currentRole, PieceRole.teacher);
+      expect(bloc.state.currentUserId, ownerId);
       expect(bloc.state.pieces, isEmpty);
     });
 
@@ -63,8 +64,7 @@ void main() {
       'emits ready with pieces once the repository stream emits',
       build: () => LibraryBloc(
         pieceRepository: repository,
-        currentUserId: teacherId,
-        currentRole: PieceRole.teacher,
+        currentUserId: ownerId,
       ),
       act: (bloc) async {
         bloc.add(const LibraryStarted());
@@ -87,8 +87,7 @@ void main() {
       'emits failure when the repository stream errors',
       build: () => LibraryBloc(
         pieceRepository: repository,
-        currentUserId: teacherId,
-        currentRole: PieceRole.teacher,
+        currentUserId: ownerId,
       ),
       act: (bloc) async {
         bloc.add(const LibraryStarted());
@@ -109,17 +108,13 @@ void main() {
       'PieceViewed clears the unread indicator for that piece',
       build: () => LibraryBloc(
         pieceRepository: repository,
-        currentUserId: teacherId,
-        currentRole: PieceRole.teacher,
+        currentUserId: ownerId,
       ),
       act: (bloc) async {
         bloc.add(const LibraryStarted());
         await Future<void>.delayed(Duration.zero);
         piecesController.add([
-          piece(
-            createdAt: DateTime(2024),
-            updatedAt: DateTime(2024, 1, 2),
-          ),
+          piece(createdAt: DateTime(2024), updatedAt: DateTime(2024, 1, 2)),
         ]);
         await Future<void>.delayed(Duration.zero);
         bloc.add(const PieceViewed('p1'));
@@ -139,110 +134,90 @@ void main() {
       ],
     );
 
-    group('role-aware grouping', () {
-      test("piecesByStudent groups a teacher's pieces by student id", () {
-        final state =
-            const LibraryState.initial(
-              currentUserId: teacherId,
-              currentRole: PieceRole.teacher,
-            ).copyWith(
+    group('ownership partitioning', () {
+      test('myPieces returns every piece this user owns', () {
+        final state = const LibraryState.initial(currentUserId: ownerId)
+            .copyWith(
               status: LibraryStatus.ready,
               pieces: [
                 piece(),
-                piece(id: 'p2', student: 'student-2'),
-                piece(id: 'p3', student: null),
+                piece(id: 'p2', collaborators: const []),
               ],
             );
 
-        final grouped = state.piecesByStudent;
-        expect(grouped[studentId]!.map((p) => p.id), ['p1']);
-        expect(grouped['student-2']!.map((p) => p.id), ['p2']);
-        expect(grouped[null]!.map((p) => p.id), ['p3']);
-        expect(state.unpairedPieces.map((p) => p.id), ['p3']);
-      });
-
-      test('sharedWithMe returns only pieces paired with this student', () {
-        final state =
-            const LibraryState.initial(
-              currentUserId: studentId,
-              currentRole: PieceRole.student,
-            ).copyWith(
-              status: LibraryStatus.ready,
-              pieces: [
-                piece(),
-                piece(id: 'p2', student: 'someone-else'),
-              ],
-            );
-
-        expect(state.sharedWithMe.map((p) => p.id), ['p1']);
+        expect(state.myPieces.map((p) => p.id), ['p1', 'p2']);
+        // The owner is never their own collaborator.
+        expect(state.sharedWithMe, isEmpty);
       });
 
       test(
-        'piecesByStudent groups a piece under EVERY one of its '
-        'collaborators (AC-4)',
+        'sharedWithMe returns only pieces this user collaborates on, not '
+        'ones they own',
         () {
-          final shared = Piece(
-            id: 'p1',
-            title: 'Nocturne',
-            basePdfChecksum: 'checksum',
-            basePdfPath: '/tmp/p1.pdf',
-            teacherId: teacherId,
-            collaborators: const [
-              Collaborator(uid: 'student-1'),
-              Collaborator(uid: 'student-2'),
-            ],
-            createdAt: DateTime(2024),
-            updatedAt: DateTime(2024),
-          );
-          final state = const LibraryState.initial(
-            currentUserId: teacherId,
-            currentRole: PieceRole.teacher,
-          ).copyWith(status: LibraryStatus.ready, pieces: [shared]);
+          final state =
+              const LibraryState.initial(
+                currentUserId: collaboratorId,
+              ).copyWith(
+                status: LibraryStatus.ready,
+                pieces: [
+                  piece(),
+                  piece(
+                    id: 'p2',
+                    collaborators: const [
+                      Collaborator(uid: 'someone-else'),
+                    ],
+                  ),
+                ],
+              );
 
-          final grouped = state.piecesByStudent;
-          expect(grouped['student-1']!.map((p) => p.id), ['p1']);
-          expect(grouped['student-2']!.map((p) => p.id), ['p1']);
+          expect(state.sharedWithMe.map((p) => p.id), ['p1']);
+          expect(state.myPieces, isEmpty);
         },
       );
 
       test(
         'sharedWithMe sees a piece even as its SECOND collaborator (AC-4)',
         () {
-          final shared = Piece(
-            id: 'p1',
-            title: 'Nocturne',
-            basePdfChecksum: 'checksum',
-            basePdfPath: '/tmp/p1.pdf',
-            teacherId: teacherId,
+          final shared = piece(
             collaborators: const [
-              Collaborator(uid: 'student-1'),
-              Collaborator(uid: 'student-2'),
+              Collaborator(uid: 'collaborator-a'),
+              Collaborator(uid: 'collaborator-b'),
             ],
-            createdAt: DateTime(2024),
-            updatedAt: DateTime(2024),
           );
           final state = const LibraryState.initial(
-            currentUserId: 'student-2',
-            currentRole: PieceRole.student,
+            currentUserId: 'collaborator-b',
           ).copyWith(status: LibraryStatus.ready, pieces: [shared]);
 
           expect(state.sharedWithMe.map((p) => p.id), ['p1']);
         },
       );
+
+      test(
+        'a piece with multiple collaborators is owned by neither, so it '
+        'never appears in the owner-only-viewer myPieces for a third party',
+        () {
+          final shared = piece(
+            collaborators: const [
+              Collaborator(uid: 'collaborator-a'),
+              Collaborator(uid: 'collaborator-b'),
+            ],
+          );
+          final state = const LibraryState.initial(
+            currentUserId: 'collaborator-a',
+          ).copyWith(status: LibraryStatus.ready, pieces: [shared]);
+
+          expect(state.myPieces, isEmpty);
+        },
+      );
     });
 
-    test('empty-state expectations per role are reachable via state', () {
-      final teacherState = const LibraryState.initial(
-        currentUserId: teacherId,
-        currentRole: PieceRole.teacher,
+    test('myPieces/sharedWithMe are both empty with no pieces', () {
+      final state = const LibraryState.initial(
+        currentUserId: ownerId,
       ).copyWith(status: LibraryStatus.ready);
-      expect(teacherState.piecesByStudent, isEmpty);
 
-      final studentState = const LibraryState.initial(
-        currentUserId: studentId,
-        currentRole: PieceRole.student,
-      ).copyWith(status: LibraryStatus.ready);
-      expect(studentState.sharedWithMe, isEmpty);
+      expect(state.myPieces, isEmpty);
+      expect(state.sharedWithMe, isEmpty);
     });
   });
 }

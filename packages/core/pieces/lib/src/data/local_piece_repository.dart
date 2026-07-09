@@ -78,7 +78,8 @@ class LocalPieceRepository implements PieceRepository {
   );
 
   List<Piece> _visibleTo(String userId) =>
-      _pieces.where((piece) => piece.isParticipant(userId)).toList();
+      _pieces.where((piece) => piece.isParticipant(userId)).toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
   Future<void> _emit() async {
     await _persist();
@@ -148,7 +149,7 @@ class LocalPieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-    String? teacherName,
+    String? ownerName,
   }) => Result.guard<Piece>(() async {
     final id = _nextId();
     final copied = await _copyIntoPiecesStorage(id, sourcePath);
@@ -159,8 +160,8 @@ class LocalPieceRepository implements PieceRepository {
       title: title,
       basePdfChecksum: copied.checksum,
       basePdfPath: copied.destPath,
-      teacherId: _currentUserId(),
-      teacherName: teacherName,
+      ownerId: _currentUserId(),
+      ownerName: ownerName,
       createdAt: now,
       updatedAt: now,
     );
@@ -173,11 +174,11 @@ class LocalPieceRepository implements PieceRepository {
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
-    required String teacherId,
+    required String ownerId,
     required String sourcePath,
-    String? studentId,
-    String? teacherName,
-    String? studentName,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
   }) => Result.guard<Piece>(() async {
     if (_findOrNull(pieceId) != null) {
       throw StateError('Piece already exists locally: $pieceId');
@@ -190,10 +191,11 @@ class LocalPieceRepository implements PieceRepository {
       title: title,
       basePdfChecksum: copied.checksum,
       basePdfPath: copied.destPath,
-      teacherId: teacherId,
-      teacherName: teacherName,
-      studentId: studentId,
-      studentName: studentName,
+      ownerId: ownerId,
+      ownerName: ownerName,
+      collaborators: collaboratorId == null
+          ? null
+          : [Collaborator(uid: collaboratorId, name: collaboratorName)],
       createdAt: now,
       updatedAt: now,
     );
@@ -214,7 +216,7 @@ class LocalPieceRepository implements PieceRepository {
   Future<Result<void>> deletePiece(String pieceId) =>
       Result.guard<void>(() async {
         final piece = _require(pieceId);
-        if (_currentUserId() != piece.teacherId) {
+        if (_currentUserId() != piece.ownerId) {
           throw OwnershipViolation(
             pieceId,
             reason: 'only the owner may delete a piece',
@@ -237,9 +239,9 @@ class LocalPieceRepository implements PieceRepository {
     () async {
       final piece = _require(pieceId);
       final userId = _currentUserId();
-      if (userId == piece.teacherId) {
+      if (userId == piece.ownerId) {
         throw StateError(
-          'The teacher owns this piece and cannot leave it; delete it instead.',
+          'The owner of this piece cannot leave it; delete it instead.',
         );
       }
       if (!piece.isCollaborator(userId)) {
@@ -301,7 +303,7 @@ class LocalPieceRepository implements PieceRepository {
   Future<Result<void>> removeCollaborator(String pieceId, String userId) =>
       Result.guard<void>(() async {
         final piece = _require(pieceId);
-        if (_currentUserId() != piece.teacherId) {
+        if (_currentUserId() != piece.ownerId) {
           throw OwnershipViolation(
             pieceId,
             reason: 'only the owner may remove a collaborator',
@@ -326,27 +328,27 @@ class LocalPieceRepository implements PieceRepository {
       });
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<Piece>> pairCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
-    String? teacherName,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
   }) => Result.guard<Piece>(() async {
     final piece = _require(pieceId);
-    // `teacherName` is a *backfill*: it only ever fills in a piece that
+    // `ownerName` is a *backfill*: it only ever fills in a piece that
     // doesn't already have one (e.g. one imported before this field
-    // existed) — an existing `Piece.teacherName` (set by `importPiece`) is
+    // existed) — an existing `Piece.ownerName` (set by `importPiece`) is
     // never clobbered here, regardless of what's passed.
-    final resolvedTeacherName = piece.teacherName ?? teacherName;
-    if (resolvedTeacherName != piece.teacherName) {
-      _replace(piece.copyWith(teacherName: resolvedTeacherName));
+    final resolvedOwnerName = piece.ownerName ?? ownerName;
+    if (resolvedOwnerName != piece.ownerName) {
+      _replace(piece.copyWith(ownerName: resolvedOwnerName));
     }
     (await addCollaborator(
       pieceId,
-      userId: studentId,
-      name: studentName,
-      email: studentEmail,
+      userId: collaboratorId,
+      name: collaboratorName,
+      email: collaboratorEmail,
     )).orThrow();
     return _require(pieceId);
   });

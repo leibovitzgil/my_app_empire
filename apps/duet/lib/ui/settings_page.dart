@@ -2,23 +2,19 @@ import 'dart:async';
 
 import 'package:core_ui/core_ui.dart';
 import 'package:duet/injection.dart';
-import 'package:feature_library/feature_library.dart' show DuetPermissions;
 import 'package:feature_paywall/feature_paywall.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:monetization/monetization.dart';
-import 'package:user_roles/user_roles.dart';
 
 /// Hosts `feature_settings`'s Settings screen, plus the app-glue this
-/// package can't own directly: a Teacher-only "Manage plan" row that opens
+/// package can't own directly: a "Manage plan" row that opens
 /// `feature_paywall`'s `PaywallScreen`, the same construction pattern already
 /// used for the invite-flow paywall gate (see `showInviteSheet`).
 ///
-/// Gated with [PermissionGate] (`DuetPermissions.importPiece`) rather than
-/// [RoleGate]: Teacher and Student are peers sharing the same [AppRole.rank]
-/// (see `DuetRoles`'s doc), so a rank-based gate can't tell them apart — only
-/// the permission token can.
+/// Shown to every user: going Pro is per-account (it raises the per-sheet
+/// collaborator cap), so there's no role to gate it on.
 class DuetSettingsPage extends StatefulWidget {
   /// Creates a [DuetSettingsPage].
   const DuetSettingsPage({super.key});
@@ -56,15 +52,11 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
         gateway: gateway,
       )..add(const SettingsReconcileRequested()),
       child: SettingsScreen(
-        extraTile: PermissionGate(
-          repository: getIt<UserRoleRepository>(),
-          permission: DuetPermissions.importPiece,
-          child: ListTile(
-            leading: const Icon(Icons.workspace_premium_outlined),
-            title: const Text('Manage plan'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _openPaywall(context),
-          ),
+        extraTile: ListTile(
+          leading: const Icon(Icons.workspace_premium_outlined),
+          title: const Text('Manage plan'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _openPaywall(context),
         ),
       ),
     );

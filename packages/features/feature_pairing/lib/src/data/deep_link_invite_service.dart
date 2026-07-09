@@ -12,7 +12,7 @@ import 'package:pieces/pieces.dart';
 /// [InviteDeepLinks]), persists pending/consumed invites locally via
 /// [LocalStorageService] (JSON-encoded, mirroring `LocalPieceRepository`'s
 /// own persistence style), and completes acceptance via
-/// [PieceRepository.pairStudent].
+/// [PieceRepository.pairCollaborator].
 class DeepLinkInviteService implements InviteService {
   /// Creates a [DeepLinkInviteService]. [tokenGenerator] defaults to a
   /// cryptographically random 20-character token; inject a fake in tests for
@@ -83,14 +83,14 @@ class DeepLinkInviteService implements InviteService {
 
   @override
   Future<Result<InviteLink>> createInvite({
-    required String teacherId,
+    required String ownerId,
     required String pieceId,
-    String? teacherName,
+    String? ownerName,
   }) => Result.guard<InviteLink>(() async {
     final piece = (await _pieceRepository.getPiece(pieceId)).orThrow();
-    if (piece.teacherId != teacherId) {
+    if (piece.ownerId != ownerId) {
       throw const InviteException(
-        'Only the teacher who owns this piece can invite for it.',
+        'Only the owner of this piece can invite for it.',
       );
     }
 
@@ -112,8 +112,8 @@ class DeepLinkInviteService implements InviteService {
         _StoredInvite(
           token: token,
           pieceId: pieceId,
-          teacherId: teacherId,
-          teacherName: teacherName,
+          ownerId: ownerId,
+          ownerName: ownerName,
           createdAtMillis: _now().millisecondsSinceEpoch,
         ),
       );
@@ -122,7 +122,7 @@ class DeepLinkInviteService implements InviteService {
       token: token,
       uri: InviteDeepLinks.buildUri(token),
       pieceId: pieceId,
-      teacherId: teacherId,
+      ownerId: ownerId,
     );
   });
 
@@ -136,17 +136,17 @@ class DeepLinkInviteService implements InviteService {
         return InviteDetails(
           pieceId: piece.id,
           pieceTitle: piece.title,
-          teacherId: invite.teacherId,
-          teacherName: piece.teacherName ?? invite.teacherName,
+          ownerId: invite.ownerId,
+          ownerName: piece.ownerName ?? invite.ownerName,
         );
       });
 
   @override
   Future<Result<void>> acceptInvite(
     String token, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
   }) => Result.guard<void>(() async {
     final invites = _load();
     final invite = _requireValid(invites, token);
@@ -157,11 +157,12 @@ class DeepLinkInviteService implements InviteService {
     // guards against this piece already being at cap *at creation time* —
     // it can't see a sibling invite (for the SAME piece) accepted
     // concurrently. Re-checking the piece's current collaborator count
-    // right before `pairStudent` closes that gap for the sequential case:
-    // accepting invite A lands a collaborator, so a subsequently-accepted
-    // invite B for the same piece sees that fresh count and is rejected if
-    // it would exceed the cap. This is deliberately per-piece, not a
-    // library-wide count across the teacher's other pieces.
+    // right before `pairCollaborator` closes that gap for the sequential
+    // case: accepting invite A lands a collaborator, so a
+    // subsequently-accepted invite B for the same piece sees that fresh
+    // count and is rejected if it would exceed the cap. This is
+    // deliberately per-piece, not a library-wide count across the owner's
+    // other pieces.
     final piece = (await _pieceRepository.getPiece(invite.pieceId)).orThrow();
     final isPro = await _monetization.isProUser();
     if (CollaboratorLimits.isAtCap(piece, isPro)) {
@@ -170,16 +171,16 @@ class DeepLinkInviteService implements InviteService {
       );
     }
 
-    (await _pieceRepository.pairStudent(
+    (await _pieceRepository.pairCollaborator(
       invite.pieceId,
-      studentId: studentId,
-      studentName: studentName,
-      studentEmail: studentEmail,
-      // `pairStudent` only ever uses this to backfill a piece that has no
-      // `teacherName` yet (e.g. imported before that field existed) —
+      collaboratorId: collaboratorId,
+      collaboratorName: collaboratorName,
+      collaboratorEmail: collaboratorEmail,
+      // `pairCollaborator` only ever uses this to backfill a piece that has
+      // no `ownerName` yet (e.g. imported before that field existed) —
       // `importPiece` is otherwise the source of truth, so it's always
       // safe to pass the invite's captured name through unconditionally.
-      teacherName: invite.teacherName,
+      ownerName: invite.ownerName,
     )).orThrow();
     await _persist([
       for (final stored in invites)
@@ -194,33 +195,33 @@ class _StoredInvite {
   const _StoredInvite({
     required this.token,
     required this.pieceId,
-    required this.teacherId,
+    required this.ownerId,
     required this.createdAtMillis,
-    this.teacherName,
+    this.ownerName,
     this.consumed = false,
   });
 
   factory _StoredInvite.fromJson(Map<String, dynamic> json) => _StoredInvite(
     token: json['token'] as String,
     pieceId: json['pieceId'] as String,
-    teacherId: json['teacherId'] as String,
-    teacherName: json['teacherName'] as String?,
+    ownerId: json['ownerId'] as String,
+    ownerName: json['ownerName'] as String?,
     createdAtMillis: json['createdAtMillis'] as int,
     consumed: json['consumed'] as bool? ?? false,
   );
 
   final String token;
   final String pieceId;
-  final String teacherId;
-  final String? teacherName;
+  final String ownerId;
+  final String? ownerName;
   final int createdAtMillis;
   final bool consumed;
 
   _StoredInvite copyWith({bool? consumed}) => _StoredInvite(
     token: token,
     pieceId: pieceId,
-    teacherId: teacherId,
-    teacherName: teacherName,
+    ownerId: ownerId,
+    ownerName: ownerName,
     createdAtMillis: createdAtMillis,
     consumed: consumed ?? this.consumed,
   );
@@ -228,8 +229,8 @@ class _StoredInvite {
   Map<String, dynamic> toJson() => {
     'token': token,
     'pieceId': pieceId,
-    'teacherId': teacherId,
-    'teacherName': teacherName,
+    'ownerId': ownerId,
+    'ownerName': ownerName,
     'createdAtMillis': createdAtMillis,
     'consumed': consumed,
   };

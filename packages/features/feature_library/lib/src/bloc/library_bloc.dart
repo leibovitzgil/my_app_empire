@@ -7,26 +7,17 @@ import 'package:pieces/pieces.dart';
 part 'library_event.dart';
 part 'library_state.dart';
 
-/// Drives the Home / Piece List screen: subscribes to
-/// [PieceRepository.watchPieces] and exposes a role-aware view over the
-/// result — grouped by student for a teacher, flat for a student — mirroring
-/// how `ScoreBloc` resolves [PieceRole] from `currentUserId` rather than
-/// depending on `user_roles` directly.
+/// Drives the Home / Sheet Library screen: subscribes to
+/// [PieceRepository.watchPieces] and exposes the result partitioned into the
+/// user's own sheets ([LibraryState.myPieces]) and sheets shared with them
+/// ([LibraryState.sharedWithMe]).
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
-  /// Creates a [LibraryBloc] for [currentUserId], already resolved to
-  /// [currentRole] by the caller (the app-glue layer, typically from
-  /// `user_roles`' `UserRoleRepository`).
+  /// Creates a [LibraryBloc] for [currentUserId].
   LibraryBloc({
     required PieceRepository pieceRepository,
     required String currentUserId,
-    required PieceRole currentRole,
   }) : _repository = pieceRepository,
-       super(
-         LibraryState.initial(
-           currentUserId: currentUserId,
-           currentRole: currentRole,
-         ),
-       ) {
+       super(LibraryState.initial(currentUserId: currentUserId)) {
     on<LibraryStarted>(_onStarted);
     on<LibraryPiecesUpdated>(_onPiecesUpdated);
     on<LibraryFailed>(_onFailed);

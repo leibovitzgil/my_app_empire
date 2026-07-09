@@ -10,7 +10,8 @@ import 'package:monetization/monetization.dart';
 import 'package:pieces/pieces.dart';
 
 /// Entry widget for the Accept Invite screen (opened via deep link): builds
-/// an [AcceptInviteCubit] for [token]/[studentId] and loads it immediately.
+/// an [AcceptInviteCubit] for [token]/[collaboratorId] and loads it
+/// immediately.
 class AcceptInvitePage extends StatelessWidget {
   /// Creates an [AcceptInvitePage].
   const AcceptInvitePage({
@@ -18,10 +19,10 @@ class AcceptInvitePage extends StatelessWidget {
     required this.pieceRepository,
     required this.monetizationService,
     required this.token,
-    required this.studentId,
+    required this.collaboratorId,
     required this.onAccepted,
-    this.studentName,
-    this.studentEmail,
+    this.collaboratorName,
+    this.collaboratorEmail,
     super.key,
   });
 
@@ -41,16 +42,16 @@ class AcceptInvitePage extends StatelessWidget {
   /// this from.
   final String token;
 
-  /// The accepting (signed-in) student's id.
-  final String studentId;
+  /// The accepting (signed-in) collaborator's id.
+  final String collaboratorId;
 
-  /// The accepting student's display name, if known — passed through to
+  /// The accepting collaborator's display name, if known — passed through to
   /// [AcceptInviteCubit].
-  final String? studentName;
+  final String? collaboratorName;
 
-  /// The accepting student's email, if known — passed through to
+  /// The accepting collaborator's email, if known — passed through to
   /// [AcceptInviteCubit] (AC-2: acceptance records uid+email).
-  final String? studentEmail;
+  final String? collaboratorEmail;
 
   /// Called once the invite is accepted, with the now-paired piece's id, so
   /// the app-glue layer can navigate into it (e.g. via `feature_library`'s
@@ -66,9 +67,9 @@ class AcceptInvitePage extends StatelessWidget {
           pieceRepository: pieceRepository,
           monetizationService: monetizationService,
           token: token,
-          studentId: studentId,
-          studentName: studentName,
-          studentEmail: studentEmail,
+          collaboratorId: collaboratorId,
+          collaboratorName: collaboratorName,
+          collaboratorEmail: collaboratorEmail,
         );
         unawaited(cubit.load());
         return cubit;
@@ -78,7 +79,7 @@ class AcceptInvitePage extends StatelessWidget {
   }
 }
 
-/// The Accept Invite body: piece title + teacher, Accept/Decline (or an
+/// The Accept Invite body: piece title + owner, Accept/Decline (or an
 /// already-collaborator/at-cap body instead). Reads [AcceptInviteCubit] from
 /// context (provided by [AcceptInvitePage]).
 class AcceptInviteScreen extends StatelessWidget {
@@ -97,7 +98,7 @@ class AcceptInviteScreen extends StatelessWidget {
           (current.error != null && current.error != previous.error),
       listener: (context, state) {
         if (state.status == AcceptInviteStatus.accepted) {
-          AppSnackbar.success(context, "You're paired! Enjoy the piece.");
+          AppSnackbar.success(context, "You're in! Enjoy the sheet.");
           final pieceId = state.details?.pieceId;
           if (pieceId != null) onAccepted(pieceId);
         } else if (state.error != null) {
@@ -153,11 +154,9 @@ class _ReadyBody extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           PersonTile(
-            initials: InviteFormat.initialsFor(details.teacherId),
-            color: Color(InviteFormat.colorValueFor(details.teacherId)),
-            name:
-                details.teacherName ??
-                'Teacher ${InviteFormat.initialsFor(details.teacherId)}',
+            initials: InviteFormat.initialsFor(details.ownerId),
+            color: Color(InviteFormat.colorValueFor(details.ownerId)),
+            name: details.ownerName ?? 'Owner',
           ),
           const SizedBox(height: AppSpacing.lg),
           PrimaryButton(
@@ -206,7 +205,7 @@ class _AlreadyCollaboratorBody extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text(
             "You're already a collaborator on "
-            '${details?.pieceTitle ?? 'this piece'}.',
+            '${details?.pieceTitle ?? 'this sheet'}.',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
@@ -249,7 +248,7 @@ class _AtCapBody extends StatelessWidget {
           const Icon(Icons.lock_outline, size: 48),
           const SizedBox(height: AppSpacing.md),
           Text(
-            details?.pieceTitle ?? 'This piece',
+            details?.pieceTitle ?? 'This sheet',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),

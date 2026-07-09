@@ -23,8 +23,6 @@ dependencies:
     path: ../../services/pdf_rendering
   pieces:
     path: ../../core/pieces
-  user_roles:
-    path: ../../core/user_roles
 
 dev_dependencies:
   bloc_test: ^10.0.0

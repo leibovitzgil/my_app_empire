@@ -63,32 +63,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:monetization/monetization.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
-import 'package:user_roles/user_roles.dart';
 
-const teacherId = 'teacher-e2e';
-
-/// Grants every permission — this flow only cares about the teacher-only
-/// actions actually being reachable, not permission-gating itself (that's
-/// `user_roles`' own suite).
-class _AllowAllUserRoleRepository implements UserRoleRepository {
-  final _controller = StreamController<AppRole>.broadcast();
-
-  @override
-  Stream<AppRole> get currentRole => _controller.stream;
-
-  @override
-  Future<Result<AppRole>> getRole() async => const Success(AppRole.member);
-
-  @override
-  bool hasPermission(Permission permission) => true;
-
-  @override
-  bool hasMinimumRole(AppRole role) => true;
-
-  @override
-  Future<Result<void>> assignRole(String userId, AppRole role) async =>
-      const Success<void>(null);
-}
+const ownerId = 'owner-e2e';
 
 /// A tiny, deterministic [PdfRenderService]: `open` always succeeds with a
 /// single page, and `renderPage` returns a fixed, fully-opaque 4x4 RGBA
@@ -229,7 +205,7 @@ class FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-    String? teacherName,
+    String? ownerName,
   }) async {
     final now = DateTime(2024);
     final piece = Piece(
@@ -237,8 +213,8 @@ class FakePieceRepository implements PieceRepository {
       title: title,
       basePdfChecksum: 'checksum-$sourcePath',
       basePdfPath: sourcePath,
-      teacherId: teacherId,
-      teacherName: teacherName,
+      ownerId: ownerId,
+      ownerName: ownerName,
       createdAt: now,
       updatedAt: now,
     );
@@ -300,23 +276,23 @@ class FakePieceRepository implements PieceRepository {
   }
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<Piece>> pairCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
-    String? teacherName,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
-    required String teacherId,
+    required String ownerId,
     required String sourcePath,
-    String? studentId,
-    String? teacherName,
-    String? studentName,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
   }) => throw UnimplementedError();
 }
 
@@ -358,9 +334,9 @@ class FakeAnnotationRepository implements AnnotationRepository {
     final layer = existing.isEmpty
         ? InkLayer(
             ownerId: stroke.authorId,
-            role: stroke.authorId == teacherId
-                ? PieceRole.teacher
-                : PieceRole.student,
+            role: stroke.authorId == ownerId
+                ? PieceRole.owner
+                : PieceRole.collaborator,
             strokes: [stroke],
           )
         : existing.first.copyWith(
@@ -537,9 +513,7 @@ Future<DuetImportFlowResult> runDuetImportFlow(
       home: LibraryPage(
         pieceRepository: pieceRepository,
         renderService: renderService,
-        userRoleRepository: _AllowAllUserRoleRepository(),
-        currentUserId: teacherId,
-        currentRole: PieceRole.teacher,
+        currentUserId: ownerId,
         onOpenScore: (piece) => importedPiece = piece,
         filePicker: () async => const PickedPdfFile(
           path: 'nocturne.pdf',
@@ -551,18 +525,18 @@ Future<DuetImportFlowResult> runDuetImportFlow(
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 1));
 
-  // Library starts empty; import a piece.
-  expect(find.text('No pieces yet'), findsOneWidget);
+  // Library starts empty; import a sheet.
+  expect(find.text('Your library is empty'), findsOneWidget);
   await maybeShot('01_library_empty');
 
-  await tester.tap(find.byTooltip('Import piece'));
+  await tester.tap(find.byTooltip('Import a sheet'));
   await settle(tester);
   await tester.tap(find.text('Choose PDF'));
   await settle(tester);
   expect(find.text('Nocturne'), findsOneWidget); // pre-filled title
   await maybeShot('02_import_naming');
 
-  await tester.tap(find.text('Create piece'));
+  await tester.tap(find.text('Add sheet'));
   await settle(tester);
 
   final piece = importedPiece;

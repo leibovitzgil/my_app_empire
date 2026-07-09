@@ -15,11 +15,11 @@ class MockMonetizationService extends Mock implements MonetizationService {}
 void main() {
   group('AcceptInviteScreen', () {
     const token = 'tok-1';
-    const studentId = 'student-1';
+    const collaboratorId = 'collaborator-1';
     const details = InviteDetails(
       pieceId: 'p1',
       pieceTitle: 'Clair de Lune',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
     );
 
     late MockInviteService inviteService;
@@ -31,7 +31,7 @@ void main() {
       title: 'Clair de Lune',
       basePdfChecksum: 'c',
       basePdfPath: '/tmp/p.pdf',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
       collaborators: collaborators,
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
@@ -54,13 +54,13 @@ void main() {
           pieceRepository: pieceRepository,
           monetizationService: monetization,
           token: token,
-          studentId: studentId,
+          collaboratorId: collaboratorId,
           onAccepted: onAccepted ?? (_) {},
         ),
       );
     }
 
-    testWidgets('shows the piece title and teacher once resolved', (
+    testWidgets('shows the piece title and owner once resolved', (
       tester,
     ) async {
       when(
@@ -79,23 +79,23 @@ void main() {
       expect(find.text('Clair de Lune'), findsOneWidget);
       expect(find.text('Accept'), findsOneWidget);
       expect(find.text('Decline'), findsOneWidget);
-      // `details` above carries no `teacherName`, so the screen must fall
-      // back to the initials-from-id placeholder rather than showing
+      // `details` above carries no `ownerName`, so the screen must fall
+      // back to the fixed "Owner" placeholder rather than showing
       // nothing/crashing.
-      expect(find.textContaining('Teacher '), findsOneWidget);
+      expect(find.text('Owner'), findsOneWidget);
     });
 
     testWidgets(
-      'shows the real teacherName when the invite carries one, rather '
-      'than an initials-from-id placeholder',
+      'shows the real ownerName when the invite carries one, rather '
+      'than the "Owner" fallback',
       (tester) async {
         when(() => inviteService.resolveInvite(token)).thenAnswer(
           (_) async => const Success(
             InviteDetails(
               pieceId: 'p1',
               pieceTitle: 'Clair de Lune',
-              teacherId: 'teacher-1',
-              teacherName: 'Jane Doe',
+              ownerId: 'owner-1',
+              ownerName: 'Jane Doe',
             ),
           ),
         );
@@ -106,7 +106,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 1));
 
         expect(find.text('Jane Doe'), findsOneWidget);
-        expect(find.textContaining('Teacher '), findsNothing);
+        expect(find.text('Owner'), findsNothing);
       },
     );
 
@@ -137,9 +137,9 @@ void main() {
       when(
         () => inviteService.acceptInvite(
           token,
-          studentId: studentId,
-          studentName: any(named: 'studentName'),
-          studentEmail: any(named: 'studentEmail'),
+          collaboratorId: collaboratorId,
+          collaboratorName: any(named: 'collaboratorName'),
+          collaboratorEmail: any(named: 'collaboratorEmail'),
         ),
       ).thenAnswer((_) async => const Success<void>(null));
 
@@ -167,7 +167,7 @@ void main() {
         ).thenAnswer((_) async => const Success(details));
         when(() => pieceRepository.getPiece('p1')).thenAnswer(
           (_) async => Success(
-            piece(collaborators: const [Collaborator(uid: studentId)]),
+            piece(collaborators: const [Collaborator(uid: collaboratorId)]),
           ),
         );
 

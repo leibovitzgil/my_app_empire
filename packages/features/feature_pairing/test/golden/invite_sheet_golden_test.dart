@@ -23,7 +23,7 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 void main() {
   group('InviteSheet goldens', () {
-    const teacherId = 'teacher-1';
+    const ownerId = 'owner-1';
     const pieceId = 'p1';
     const email = 'student@example.com';
 
@@ -46,7 +46,7 @@ void main() {
             title: 'Nocturne',
             basePdfChecksum: 'c',
             basePdfPath: '/tmp/p.pdf',
-            teacherId: teacherId,
+            ownerId: ownerId,
             createdAt: DateTime(2024),
             updatedAt: DateTime(2024),
           ),
@@ -73,7 +73,7 @@ void main() {
                   inviteService: inviteService,
                   monetizationService: monetization,
                   pieceRepository: pieceRepository,
-                  teacherId: teacherId,
+                  ownerId: ownerId,
                   pieceId: pieceId,
                 ),
                 child: const Text('open'),

@@ -24,7 +24,7 @@ class ImportPieceBloc extends Bloc<ImportPieceEvent, ImportPieceState> {
     required PieceRepository pieceRepository,
     required PdfRenderService renderService,
     PdfFilePicker? filePicker,
-    this.teacherName,
+    this.ownerName,
   }) : _repository = pieceRepository,
        _renderService = renderService,
        _filePicker = filePicker ?? pickPdfFile,
@@ -34,9 +34,9 @@ class ImportPieceBloc extends Bloc<ImportPieceEvent, ImportPieceState> {
     on<ImportSubmitted>(_onSubmitted);
   }
 
-  /// The importing teacher's display name, if known — sourced from auth
+  /// The importing user's display name, if known — sourced from auth
   /// identity by the caller and stored on the created [Piece].
-  final String? teacherName;
+  final String? ownerName;
 
   final PieceRepository _repository;
   final PdfRenderService _renderService;
@@ -81,7 +81,7 @@ class ImportPieceBloc extends Bloc<ImportPieceEvent, ImportPieceState> {
     final result = await _repository.importPiece(
       title: state.title.trim(),
       sourcePath: sourcePath,
-      teacherName: teacherName,
+      ownerName: ownerName,
     );
     switch (result) {
       case Success<Piece>(:final value):

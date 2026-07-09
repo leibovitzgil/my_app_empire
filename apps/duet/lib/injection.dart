@@ -13,7 +13,6 @@ import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
-import 'package:duet/domain/duet_roles.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_pairing/feature_pairing.dart';
 import 'package:feature_settings/feature_settings.dart';
@@ -25,7 +24,6 @@ import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:review_sync/review_sync.dart';
 import 'package:user_directory/user_directory.dart';
-import 'package:user_roles/user_roles.dart';
 
 /// The app's service locator.
 final GetIt getIt = GetIt.instance;
@@ -79,26 +77,6 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt<AuthAccountProvider>().account.map((account) => account?.email),
   );
   getIt.registerSingleton<CurrentUserEmail>(currentUserEmail);
-
-  if (useFirebase) {
-    getIt.registerLazySingleton<UserRoleRepository>(
-      () => FirestoreUserRoleRepository(
-        firestore: FirebaseFirestore.instance,
-        userIdStream: getIt<AuthRepository>().user,
-        rolePermissions: DuetRoles.rolePermissions,
-        knownRoles: DuetRoles.knownRoles,
-      ),
-    );
-  } else {
-    getIt.registerSingleton<UserRoleRepository>(
-      LocalUserRoleRepository(
-        storage: getIt<LocalStorageService>(),
-        userIdStream: getIt<AuthRepository>().user,
-        rolePermissions: DuetRoles.rolePermissions,
-        knownRoles: DuetRoles.knownRoles,
-      ),
-    );
-  }
 
   getIt.registerLazySingleton<MonetizationService>(
     SimulatedMonetizationService.new,

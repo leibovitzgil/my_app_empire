@@ -44,7 +44,7 @@ void main() {
         final bloc = ScoreBloc(
           pieceRepository: pieceRepository,
           annotationRepository: annotationRepository,
-          currentUserId: teacherId,
+          currentUserId: ownerId,
         )..add(ScoreOpened(piece.id));
         scoreBloc = bloc;
         return BlocProvider<ScoreBloc>.value(
@@ -69,8 +69,8 @@ void main() {
       expect(bloc.state.status, ScoreStatus.ready);
       await shot('03_score_viewer_empty');
 
-      // 2. Teacher draws a stroke with a real drag gesture; ink lands on
-      // the teacher's own layer only.
+      // 2. Owner draws a stroke with a real drag gesture; ink lands on
+      // the owner's own layer only.
       final canvasCenter = tester.getCenter(find.byType(InteractiveViewer));
 
       await tester.tap(find.byIcon(Icons.edit_outlined));
@@ -79,11 +79,11 @@ void main() {
 
       await _dragIncrementally(tester, canvasCenter, const Offset(-48, -36));
       await tester.pumpAndSettle();
-      // On an unpaired piece there is exactly one participant layer — the
-      // owner's — and the stroke lands on it.
+      // On a sheet with no collaborators there is exactly one participant
+      // layer — the owner's — and the stroke lands on it.
       expect(bloc.state.layers, hasLength(1));
       expect(bloc.state.ownLayer!.strokes, hasLength(1));
-      expect(bloc.state.ownLayer!.strokes.single.authorId, teacherId);
+      expect(bloc.state.ownLayer!.strokes.single.authorId, ownerId);
       await shot('04_stroke_drawn');
 
       // Turn drawing mode back off before region-select (mutually
@@ -119,7 +119,7 @@ void main() {
 
       expect(bloc.state.notes, hasLength(1));
       final recordedNote = bloc.state.notes.single;
-      expect(recordedNote.authorId, teacherId);
+      expect(recordedNote.authorId, ownerId);
       expect(recordedNote.region.left, inInclusiveRange(0.0, 1.0));
       expect(recordedNote.region.width, greaterThan(0));
       await shot('06_audio_note_saved');
@@ -160,7 +160,7 @@ void main() {
       expect(bloc.state.audioPinsVisible, isFalse);
       await shot('09_clean_workspace_restored');
 
-      // 6. Close the piece and reopen it: the stroke and the audio note (at
+      // 6. Close the sheet and reopen it: the stroke and the audio note (at
       // the same fractional position) both survive, via a brand-new
       // `ScoreBloc` reading the same repository-backed annotations.
       navigatorKey.currentState!.pop();

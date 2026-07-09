@@ -9,9 +9,11 @@ void main() {
       title: 'Clair de Lune',
       basePdfChecksum: 'abc123',
       basePdfPath: '/pieces/p1.pdf',
-      teacherId: 'teacher-1',
-      collaborators: const [Collaborator(uid: 'student-1', name: 'Sam Smith')],
-      teacherName: 'Jane Doe',
+      ownerId: 'owner-1',
+      collaborators: const [
+        Collaborator(uid: 'collaborator-1', name: 'Sam Smith'),
+      ],
+      ownerName: 'Jane Doe',
       createdAt: DateTime(2024, 1, 2, 3),
       updatedAt: DateTime(2024, 1, 3, 4),
     );
@@ -19,29 +21,31 @@ void main() {
     final roundTripped = pieceFromJson(pieceToJson(piece));
 
     expect(roundTripped, piece);
-    expect(roundTripped.teacherName, 'Jane Doe');
-    expect(roundTripped.studentName, 'Sam Smith');
+    expect(roundTripped.ownerName, 'Jane Doe');
     expect(roundTripped.collaborators, piece.collaborators);
   });
 
-  test('pieceToJson dual-writes legacy studentId/studentName', () {
+  test('pieceToJson writes ownerId/ownerName and collaborators', () {
     final piece = Piece(
       id: 'p1',
       title: 'Clair de Lune',
       basePdfChecksum: 'abc123',
       basePdfPath: '/pieces/p1.pdf',
-      teacherId: 'teacher-1',
-      collaborators: const [Collaborator(uid: 'student-1', name: 'Sam Smith')],
+      ownerId: 'owner-1',
+      ownerName: 'Jane Doe',
+      collaborators: const [
+        Collaborator(uid: 'collaborator-1', name: 'Sam Smith'),
+      ],
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
     );
 
     final json = pieceToJson(piece);
 
-    expect(json['studentId'], 'student-1');
-    expect(json['studentName'], 'Sam Smith');
+    expect(json['ownerId'], 'owner-1');
+    expect(json['ownerName'], 'Jane Doe');
     expect(json['collaborators'], [
-      {'uid': 'student-1', 'name': 'Sam Smith', 'email': null},
+      {'uid': 'collaborator-1', 'name': 'Sam Smith', 'email': null},
     ]);
   });
 
@@ -51,121 +55,65 @@ void main() {
       title: 'Solo piece',
       basePdfChecksum: 'abc123',
       basePdfPath: '/pieces/p1.pdf',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
     );
 
     final roundTripped = pieceFromJson(pieceToJson(piece));
 
-    expect(roundTripped.studentId, isNull);
     expect(roundTripped.collaborators, isEmpty);
     expect(roundTripped, piece);
   });
 
   test(
-    'pieceFromJson decodes an old, pre-name JSON record without '
-    'teacherName/studentName as null rather than throwing',
+    'pieceFromJson decodes a JSON record without ownerName as null rather '
+    'than throwing',
     () {
       final json = <String, dynamic>{
         'id': 'p1',
         'title': 'Persisted before names existed',
         'basePdfChecksum': 'abc123',
         'basePdfPath': '/pieces/p1.pdf',
-        'teacherId': 'teacher-1',
-        'studentId': 'student-1',
+        'ownerId': 'owner-1',
         'createdAt': DateTime(2024).toIso8601String(),
         'updatedAt': DateTime(2024).toIso8601String(),
-        // Deliberately no `teacherName`/`studentName`/`collaborators` keys
-        // at all, mirroring a record persisted before those fields existed.
+        // Deliberately no `ownerName`/`collaborators` keys at all, mirroring
+        // a record persisted before those fields existed.
       };
 
       final decoded = pieceFromJson(json);
 
       expect(decoded.id, 'p1');
-      expect(decoded.studentId, 'student-1');
-      expect(decoded.teacherName, isNull);
-      expect(decoded.studentName, isNull);
-    },
-  );
-
-  test(
-    'legacy JSON (studentId only, no collaborators key) decodes to '
-    'exactly one collaborator, losing no data (AC-10)',
-    () {
-      final json = <String, dynamic>{
-        'id': 'p1',
-        'title': 'Pre-migration piece',
-        'basePdfChecksum': 'abc123',
-        'basePdfPath': '/pieces/p1.pdf',
-        'teacherId': 'teacher-1',
-        'studentId': 'student-1',
-        'studentName': 'Sam Smith',
-        'createdAt': DateTime(2024).toIso8601String(),
-        'updatedAt': DateTime(2024).toIso8601String(),
-      };
-
-      final decoded = pieceFromJson(json);
-
-      expect(decoded.collaborators, [
-        const Collaborator(uid: 'student-1', name: 'Sam Smith'),
-      ]);
-      expect(decoded.collaboratorCount, 1);
-    },
-  );
-
-  test(
-    'legacy JSON with no studentId at all decodes to an empty '
-    'collaborators list',
-    () {
-      final json = <String, dynamic>{
-        'id': 'p1',
-        'title': 'Unpaired piece',
-        'basePdfChecksum': 'abc123',
-        'basePdfPath': '/pieces/p1.pdf',
-        'teacherId': 'teacher-1',
-        'createdAt': DateTime(2024).toIso8601String(),
-        'updatedAt': DateTime(2024).toIso8601String(),
-      };
-
-      final decoded = pieceFromJson(json);
-
+      expect(decoded.ownerName, isNull);
       expect(decoded.collaborators, isEmpty);
     },
   );
 
-  test(
-    'new JSON (collaborators key present) is read from collaborators, '
-    'ignoring any stale legacy studentId shim',
-    () {
-      final json = <String, dynamic>{
-        'id': 'p1',
-        'title': 'Multi-collaborator piece',
-        'basePdfChecksum': 'abc123',
-        'basePdfPath': '/pieces/p1.pdf',
-        'teacherId': 'teacher-1',
-        'collaborators': [
-          {'uid': 'student-1', 'name': 'Sam', 'email': 'sam@example.com'},
-          {'uid': 'student-2', 'name': 'Alex', 'email': null},
-        ],
-        // A stale legacy shim naming only the first collaborator: proves
-        // `collaborators` wins over it rather than the two conflicting.
-        'studentId': 'student-1',
-        'studentName': 'Sam',
-        'createdAt': DateTime(2024).toIso8601String(),
-        'updatedAt': DateTime(2024).toIso8601String(),
-      };
+  test('pieceFromJson decodes multiple collaborators', () {
+    final json = <String, dynamic>{
+      'id': 'p1',
+      'title': 'Multi-collaborator piece',
+      'basePdfChecksum': 'abc123',
+      'basePdfPath': '/pieces/p1.pdf',
+      'ownerId': 'owner-1',
+      'collaborators': [
+        {'uid': 'collaborator-1', 'name': 'Sam', 'email': 'sam@example.com'},
+        {'uid': 'collaborator-2', 'name': 'Alex', 'email': null},
+      ],
+      'createdAt': DateTime(2024).toIso8601String(),
+      'updatedAt': DateTime(2024).toIso8601String(),
+    };
 
-      final decoded = pieceFromJson(json);
+    final decoded = pieceFromJson(json);
 
-      expect(decoded.collaborators, [
-        const Collaborator(
-          uid: 'student-1',
-          name: 'Sam',
-          email: 'sam@example.com',
-        ),
-        const Collaborator(uid: 'student-2', name: 'Alex'),
-      ]);
-    },
-  );
+    expect(decoded.collaborators, [
+      const Collaborator(
+        uid: 'collaborator-1',
+        name: 'Sam',
+        email: 'sam@example.com',
+      ),
+      const Collaborator(uid: 'collaborator-2', name: 'Alex'),
+    ]);
+  });
 }

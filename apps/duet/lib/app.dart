@@ -7,20 +7,17 @@ import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/injection.dart';
-import 'package:duet/ui/role_selection/role_selection_cubit.dart';
-import 'package:duet/ui/role_selection_screen.dart';
 import 'package:duet/ui/score_page.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_library/feature_library.dart';
-import 'package:feature_pairing/feature_pairing.dart' hide DuetPermissions;
+import 'package:feature_pairing/feature_pairing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:monetization/monetization.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
-import 'package:user_roles/user_roles.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -45,10 +42,8 @@ class _AppViewState extends State<AppView> {
   final DeepLinkService _deepLinks = getIt<DeepLinkService>();
   late final StreamSubscription<Result<DeepLinkIntent>> _intentSubscription;
   late final StreamSubscription<AuthState> _authSubscription;
-  late final StreamSubscription<AppRole> _roleSubscription;
   late final GoRouter _router;
   DeepLinkIntent? _pendingIntent;
-  AppRole _currentRole = AppRole.guest;
 
   @override
   void initState() {
@@ -57,18 +52,6 @@ class _AppViewState extends State<AppView> {
       redirect: _redirect,
       routes: [
         GoRoute(path: '/', builder: (context, state) => const _RootScreen()),
-        GoRoute(
-          path: '/role-selection',
-          builder: (context, state) => BlocProvider<RoleSelectionCubit>(
-            create: (_) => RoleSelectionCubit(
-              userRoleRepository: getIt<UserRoleRepository>(),
-              currentUserId: getIt<CurrentUser>().call,
-            ),
-            child: RoleSelectionScreen(
-              onConfirmed: () => context.go('/home'),
-            ),
-          ),
-        ),
         GoRoute(
           path: '/home',
           builder: (context, state) => const HomeScreen(),
@@ -84,13 +67,13 @@ class _AppViewState extends State<AppView> {
             pieceRepository: getIt<PieceRepository>(),
             monetizationService: getIt<MonetizationService>(),
             token: state.pathParameters['token']!,
-            studentId: getIt<CurrentUser>().call(),
-            studentName: getIt<CurrentUserName>().call(),
-            studentEmail: getIt<CurrentUserEmail>().call(),
+            collaboratorId: getIt<CurrentUser>().call(),
+            collaboratorName: getIt<CurrentUserName>().call(),
+            collaboratorEmail: getIt<CurrentUserEmail>().call(),
             // Kept deliberately simple: land back on the (now-updated)
-            // library rather than deep-navigating into the freshly-paired
-            // piece, so a failed/edge-case navigation here can never strand
-            // the student outside the app.
+            // library rather than deep-navigating into the freshly-joined
+            // sheet, so a failed/edge-case navigation here can never strand
+            // the user outside the app.
             onAccepted: (_) => context.go('/home'),
           ),
         ),
@@ -109,18 +92,12 @@ class _AppViewState extends State<AppView> {
         _router.refresh();
       }
     });
-    // Auth and role changes don't otherwise tell go_router to re-evaluate
-    // `_redirect` (nothing navigates on their own), so each gets its own
-    // refresh-triggering subscription, mirroring the deep-link one above.
+    // Auth changes don't otherwise tell go_router to re-evaluate `_redirect`
+    // (nothing navigates on their own), so this refresh-triggering
+    // subscription mirrors the deep-link one above.
     _authSubscription = context.read<AuthBloc>().stream.listen(
       (_) => _router.refresh(),
     );
-    _roleSubscription = getIt<UserRoleRepository>().currentRole.listen((
-      role,
-    ) {
-      setState(() => _currentRole = role);
-      _router.refresh();
-    });
     unawaited(_seedInitialIntent());
   }
 
@@ -132,12 +109,10 @@ class _AppViewState extends State<AppView> {
     }
   }
 
-  // The factory's reference redirect-wiring pattern for deep links, extended
-  // with Duet's post-signup role-selection gate: an authenticated user with
-  // no role yet is always sent to `/role-selection` (except a pending deep
-  // link, which always wins — e.g. an invite link arriving mid-session
-  // shouldn't be swallowed by the role gate), and a role-selected user never
-  // lingers on `/role-selection` or the bare `/` root.
+  // The factory's reference redirect-wiring pattern for deep links: a pending
+  // deep link always wins (e.g. an invite link arriving mid-session), and an
+  // authenticated user never lingers on the bare `/` root — they land on the
+  // library. No role gate anymore: sign-in leads straight to the library.
   String? _redirect(BuildContext context, GoRouterState state) {
     final pending = _pendingIntent;
     if (pending != null && pending.location != state.matchedLocation) {
@@ -146,13 +121,7 @@ class _AppViewState extends State<AppView> {
     }
     final authStatus = context.read<AuthBloc>().state.status;
     if (authStatus != AuthStatus.authenticated) return null;
-    final onRoleSelection = state.matchedLocation == '/role-selection';
-    if (_currentRole == AppRole.guest) {
-      return onRoleSelection ? null : '/role-selection';
-    }
-    if (onRoleSelection || state.matchedLocation == '/') {
-      return '/home';
-    }
+    if (state.matchedLocation == '/') return '/home';
     return null;
   }
 
@@ -160,7 +129,6 @@ class _AppViewState extends State<AppView> {
   void dispose() {
     unawaited(_intentSubscription.cancel());
     unawaited(_authSubscription.cancel());
-    unawaited(_roleSubscription.cancel());
     super.dispose();
   }
 
@@ -182,9 +150,9 @@ class _RootScreen extends StatelessWidget {
     final authState = context.watch<AuthBloc>().state;
     if (authState.status == AuthStatus.authenticated) {
       // `AppView`'s redirect always diverts an authenticated user away from
-      // `/` (to role-selection or home) before this would otherwise render;
-      // this is just a safe placeholder for the brief frame in between the
-      // auth state changing and the next redirect evaluation.
+      // `/` (to home) before this would otherwise render; this is just a safe
+      // placeholder for the brief frame in between the auth state changing and
+      // the next redirect evaluation.
       return const LoadingView();
     }
     return const LoginScreen(
@@ -194,24 +162,18 @@ class _RootScreen extends StatelessWidget {
   }
 }
 
-/// The signed-in, role-selected Home screen: `feature_library`'s Home /
-/// Piece List, wired with the cross-feature navigation callbacks it can't
-/// own directly.
+/// The signed-in Home screen: `feature_library`'s unified Sheet Library,
+/// wired with the cross-feature navigation callbacks it can't own directly.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final currentUserId = getIt<CurrentUser>().call();
-    final isTeacher = getIt<UserRoleRepository>().hasPermission(
-      DuetPermissions.importPiece,
-    );
     return LibraryPage(
       pieceRepository: getIt<PieceRepository>(),
       renderService: getIt<PdfRenderService>(),
-      userRoleRepository: getIt<UserRoleRepository>(),
       currentUserId: currentUserId,
-      currentRole: isTeacher ? PieceRole.teacher : PieceRole.student,
       onOpenScore: (piece) => _openScore(context, piece),
       onInvitePiece: (piece) => _openInvite(context, piece, currentUserId),
       onOpenCollaborators: (piece) =>
@@ -231,7 +193,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _openInvite(BuildContext context, Piece piece, String teacherId) {
+  void _openInvite(BuildContext context, Piece piece, String ownerId) {
     unawaited(
       showInviteSheet(
         context,
@@ -239,9 +201,9 @@ class HomeScreen extends StatelessWidget {
         inviteService: getIt<InviteService>(),
         monetizationService: getIt<MonetizationService>(),
         pieceRepository: getIt<PieceRepository>(),
-        teacherId: teacherId,
+        ownerId: ownerId,
         pieceId: piece.id,
-        teacherName: getIt<CurrentUserName>().call(),
+        ownerName: getIt<CurrentUserName>().call(),
       ),
     );
   }
@@ -258,6 +220,7 @@ class HomeScreen extends StatelessWidget {
             pieceRepository: getIt<PieceRepository>(),
             pieceId: piece.id,
             currentUserId: currentUserId,
+            onInvite: () => _openInvite(context, piece, currentUserId),
           ),
         ),
       ),

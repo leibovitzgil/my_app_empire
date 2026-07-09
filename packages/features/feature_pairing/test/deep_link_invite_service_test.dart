@@ -62,25 +62,25 @@ class _FakePieceRepository implements PieceRepository {
   }
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<Piece>> pairCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
-    String? teacherName,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
   }) async {
     final piece = pieces.firstWhere((p) => p.id == pieceId);
-    if (teacherName != null && piece.teacherName == null) {
+    if (ownerName != null && piece.ownerName == null) {
       pieces = [
         for (final p in pieces)
-          if (p.id == pieceId) p.copyWith(teacherName: teacherName) else p,
+          if (p.id == pieceId) p.copyWith(ownerName: ownerName) else p,
       ];
     }
     await addCollaborator(
       pieceId,
-      userId: studentId,
-      name: studentName,
-      email: studentEmail,
+      userId: collaboratorId,
+      name: collaboratorName,
+      email: collaboratorEmail,
     );
     return Success(pieces.firstWhere((p) => p.id == pieceId));
   }
@@ -93,7 +93,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-    String? teacherName,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
@@ -107,18 +107,18 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
-    required String teacherId,
+    required String ownerId,
     required String sourcePath,
-    String? studentId,
-    String? teacherName,
-    String? studentName,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
   }) => throw UnimplementedError();
 }
 
 void main() {
   group('DeepLinkInviteService', () {
-    const teacherId = 'teacher-1';
-    const studentId = 'student-1';
+    const ownerId = 'owner-1';
+    const collaboratorId = 'collaborator-1';
 
     late Piece piece;
     late _FakePieceRepository pieceRepository;
@@ -137,7 +137,7 @@ void main() {
         title: 'Nocturne',
         basePdfChecksum: 'checksum',
         basePdfPath: '/tmp/p1.pdf',
-        teacherId: teacherId,
+        ownerId: ownerId,
         createdAt: DateTime(2024),
         updatedAt: DateTime(2024),
       );
@@ -153,7 +153,7 @@ void main() {
 
     test('createInvite mints a link with the expected shareable uri', () async {
       final result = await service.createInvite(
-        teacherId: teacherId,
+        ownerId: ownerId,
         pieceId: 'p1',
       );
 
@@ -161,14 +161,14 @@ void main() {
       final link = (result as Success<InviteLink>).value;
       expect(link.uri.toString(), 'https://duet.app/invite/token-0');
       expect(link.pieceId, 'p1');
-      expect(link.teacherId, teacherId);
+      expect(link.ownerId, ownerId);
     });
 
     test(
       'createInvite fails when the caller does not own the piece',
       () async {
         final result = await service.createInvite(
-          teacherId: 'someone-else',
+          ownerId: 'someone-else',
           pieceId: 'p1',
         );
         expect(result, isA<ResultFailure<InviteLink>>());
@@ -180,11 +180,13 @@ void main() {
       'collaborator cap (FIX-1/FIX-2: per-piece, not library-wide)',
       () async {
         pieceRepository.pieces = [
-          piece.copyWith(studentId: 'existing-student'),
+          piece.copyWith(
+            collaborators: const [Collaborator(uid: 'existing-collaborator')],
+          ),
         ];
 
         final result = await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
         );
 
@@ -193,7 +195,7 @@ void main() {
     );
 
     test(
-      'createInvite succeeds for a free teacher even when a DIFFERENT '
+      'createInvite succeeds for a free owner even when a DIFFERENT '
       'piece is already paired — the cap is per-piece, never a library-wide '
       'total (FIX-1/FIX-2 regression guard)',
       () async {
@@ -204,15 +206,15 @@ void main() {
             title: 'Already paired',
             basePdfChecksum: 'c',
             basePdfPath: '/tmp/p2.pdf',
-            teacherId: teacherId,
-            studentId: 'existing-student',
+            ownerId: ownerId,
+            collaborators: const [Collaborator(uid: 'existing-collaborator')],
             createdAt: DateTime(2024),
             updatedAt: DateTime(2024),
           ),
         ];
 
         final result = await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
         );
 
@@ -220,14 +222,16 @@ void main() {
       },
     );
 
-    test('createInvite succeeds over the cap for a pro teacher', () async {
+    test('createInvite succeeds over the cap for a pro owner', () async {
       pieceRepository.pieces = [
-        piece.copyWith(studentId: 'existing-student'),
+        piece.copyWith(
+          collaborators: const [Collaborator(uid: 'existing-collaborator')],
+        ),
       ];
       monetization.setProStatus(true);
 
       final result = await service.createInvite(
-        teacherId: teacherId,
+        ownerId: ownerId,
         pieceId: 'p1',
       );
 
@@ -235,9 +239,9 @@ void main() {
     });
 
     test(
-      'resolveInvite returns the piece/teacher for a pending invite',
+      'resolveInvite returns the piece/owner for a pending invite',
       () async {
-        await service.createInvite(teacherId: teacherId, pieceId: 'p1');
+        await service.createInvite(ownerId: ownerId, pieceId: 'p1');
 
         final result = await service.resolveInvite('token-0');
 
@@ -245,31 +249,31 @@ void main() {
         final details = (result as Success<InviteDetails>).value;
         expect(details.pieceId, 'p1');
         expect(details.pieceTitle, 'Nocturne');
-        expect(details.teacherId, teacherId);
+        expect(details.ownerId, ownerId);
       },
     );
 
     test(
-      'resolveInvite surfaces the real teacherName captured at '
+      'resolveInvite surfaces the real ownerName captured at '
       "createInvite time, when the piece doesn't already have one",
       () async {
         await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
-          teacherName: 'Jane Doe',
+          ownerName: 'Jane Doe',
         );
 
         final result = await service.resolveInvite('token-0');
 
         expect(
-          (result as Success<InviteDetails>).value.teacherName,
+          (result as Success<InviteDetails>).value.ownerName,
           'Jane Doe',
         );
       },
     );
 
     test(
-      "resolveInvite prefers the piece's own teacherName over the invite's "
+      "resolveInvite prefers the piece's own ownerName over the invite's "
       'captured one, when the piece already has one',
       () async {
         pieceRepository.pieces = [
@@ -278,23 +282,23 @@ void main() {
             title: piece.title,
             basePdfChecksum: piece.basePdfChecksum,
             basePdfPath: piece.basePdfPath,
-            teacherId: piece.teacherId,
-            teacherName: 'Piece-level teacher name',
+            ownerId: piece.ownerId,
+            ownerName: 'Piece-level owner name',
             createdAt: piece.createdAt,
             updatedAt: piece.updatedAt,
           ),
         ];
         await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
-          teacherName: 'Invite-time teacher name',
+          ownerName: 'Invite-time owner name',
         );
 
         final result = await service.resolveInvite('token-0');
 
         expect(
-          (result as Success<InviteDetails>).value.teacherName,
-          'Piece-level teacher name',
+          (result as Success<InviteDetails>).value.ownerName,
+          'Piece-level owner name',
         );
       },
     );
@@ -304,52 +308,58 @@ void main() {
       expect(result, isA<ResultFailure<InviteDetails>>());
     });
 
-    test('acceptInvite pairs the student and consumes the invite', () async {
-      await service.createInvite(teacherId: teacherId, pieceId: 'p1');
+    test(
+      'acceptInvite pairs the collaborator and consumes the invite',
+      () async {
+        await service.createInvite(ownerId: ownerId, pieceId: 'p1');
 
-      final result = await service.acceptInvite(
-        'token-0',
-        studentId: studentId,
-      );
-      expect(result, isA<Success<void>>());
+        final result = await service.acceptInvite(
+          'token-0',
+          collaboratorId: collaboratorId,
+        );
+        expect(result, isA<Success<void>>());
 
-      final fetched = await pieceRepository.getPiece('p1');
-      expect((fetched as Success<Piece>).value.studentId, studentId);
+        final fetched = await pieceRepository.getPiece('p1');
+        expect((fetched as Success<Piece>).value.collaboratorIds, [
+          collaboratorId,
+        ]);
 
-      final secondAttempt = await service.acceptInvite(
-        'token-0',
-        studentId: 'someone-else',
-      );
-      expect(secondAttempt, isA<ResultFailure<void>>());
-    });
+        final secondAttempt = await service.acceptInvite(
+          'token-0',
+          collaboratorId: 'someone-else',
+        );
+        expect(secondAttempt, isA<ResultFailure<void>>());
+      },
+    );
 
     test(
-      "acceptInvite stores the accepting student's real studentName, and "
-      'backfills teacherName from the invite when the piece has none',
+      "acceptInvite stores the accepting collaborator's real "
+      'collaboratorName, and backfills ownerName from the invite when the '
+      'piece has none',
       () async {
         await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
-          teacherName: 'Jane Doe',
+          ownerName: 'Jane Doe',
         );
 
         await service.acceptInvite(
           'token-0',
-          studentId: studentId,
-          studentName: 'Sam Smith',
+          collaboratorId: collaboratorId,
+          collaboratorName: 'Sam Smith',
         );
 
         final fetched = await pieceRepository.getPiece('p1');
         final paired = (fetched as Success<Piece>).value;
-        expect(paired.studentName, 'Sam Smith');
-        expect(paired.teacherName, 'Jane Doe');
+        expect(paired.collaborators.single.name, 'Sam Smith');
+        expect(paired.ownerName, 'Jane Doe');
       },
     );
 
     test('acceptInvite fails for an invalid token', () async {
       final result = await service.acceptInvite(
         'bogus',
-        studentId: studentId,
+        collaboratorId: collaboratorId,
       );
       expect(result, isA<ResultFailure<void>>());
     });
@@ -361,11 +371,11 @@ void main() {
       'rejected',
       () async {
         final firstInvite = await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
         );
         final secondInvite = await service.createInvite(
-          teacherId: teacherId,
+          ownerId: ownerId,
           pieceId: 'p1',
         );
         expect(firstInvite, isA<Success<InviteLink>>());
@@ -378,7 +388,7 @@ void main() {
 
         final firstAccept = await service.acceptInvite(
           'token-0',
-          studentId: 'student-1',
+          collaboratorId: 'collaborator-1',
         );
         expect(firstAccept, isA<Success<void>>());
 
@@ -386,7 +396,7 @@ void main() {
         // piece now exceeds the free-tier cap of 1 and must be rejected.
         final secondAccept = await service.acceptInvite(
           'token-1',
-          studentId: 'student-2',
+          collaboratorId: 'collaborator-2',
         );
         expect(secondAccept, isA<ResultFailure<void>>());
 
@@ -396,21 +406,21 @@ void main() {
     );
 
     test(
-      'acceptInvite succeeds over the free-tier cap for a pro teacher '
+      'acceptInvite succeeds over the free-tier cap for a pro owner '
       '(same piece, second collaborator)',
       () async {
         monetization.setProStatus(true);
 
-        await service.createInvite(teacherId: teacherId, pieceId: 'p1');
-        await service.createInvite(teacherId: teacherId, pieceId: 'p1');
+        await service.createInvite(ownerId: ownerId, pieceId: 'p1');
+        await service.createInvite(ownerId: ownerId, pieceId: 'p1');
 
         final firstAccept = await service.acceptInvite(
           'token-0',
-          studentId: 'student-1',
+          collaboratorId: 'collaborator-1',
         );
         final secondAccept = await service.acceptInvite(
           'token-1',
-          studentId: 'student-2',
+          collaboratorId: 'collaborator-2',
         );
 
         expect(firstAccept, isA<Success<void>>());

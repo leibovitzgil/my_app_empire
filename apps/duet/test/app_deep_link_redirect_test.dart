@@ -17,7 +17,6 @@ import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
-import 'package:duet/domain/duet_roles.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,7 +24,6 @@ import 'package:local_storage/local_storage.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:user_roles/user_roles.dart';
 
 void main() {
   late Directory tempDir;
@@ -54,15 +52,6 @@ void main() {
 
     final currentUserName = CurrentUserName(mockAuthRepository.displayName);
     getIt.registerSingleton<CurrentUserName>(currentUserName);
-
-    getIt.registerSingleton<UserRoleRepository>(
-      LocalUserRoleRepository(
-        storage: getIt<LocalStorageService>(),
-        userIdStream: getIt<AuthRepository>().user,
-        rolePermissions: DuetRoles.rolePermissions,
-        knownRoles: DuetRoles.knownRoles,
-      ),
-    );
 
     getIt.registerLazySingleton<PdfRenderService>(PdfxRenderService.new);
     getIt.registerLazySingleton<AudioRecorderService>(
