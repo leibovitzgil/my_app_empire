@@ -13,7 +13,7 @@ import 'dart:async';
 ///
 /// Consumed by `feature_library`'s import flow and `feature_pairing`'s
 /// invite/accept flow to attach a real display name to a `Piece` instead of
-/// leaving `teacherName`/`studentName` null (which falls back to an
+/// leaving `ownerName`/`collaboratorName` null (which falls back to an
 /// initials-from-id placeholder in the UI).
 class CurrentUserName {
   /// Creates a [CurrentUserName], subscribing to [nameStream] immediately.

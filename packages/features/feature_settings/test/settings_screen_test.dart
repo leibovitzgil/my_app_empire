@@ -149,8 +149,8 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
     });
 
-    // extraTile is the app-glue slot for e.g. Duet's Teacher-only
-    // "Manage plan" row — absent by default, rendered when supplied.
+    // extraTile is the app-glue slot for e.g. Duet's "Manage plan"
+    // row — absent by default, rendered when supplied.
     testWidgets('renders no extra row by default', (tester) async {
       await pump(tester, const SettingsState.loaded(pushEnabled: false));
 

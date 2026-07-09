@@ -152,7 +152,7 @@ class _ReadyBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Invite a collaborator by email to work on this piece together.',
+          'Invite a collaborator by email to work on this sheet together.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

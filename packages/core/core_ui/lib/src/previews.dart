@@ -98,8 +98,8 @@ Widget labeledDividerPreview() {
 @Preview(name: 'LabeledToggleChip • unselected')
 Widget labeledToggleChipUnselectedPreview() {
   return LabeledToggleChip(
-    label: 'Teacher',
-    icon: Icons.school_outlined,
+    label: 'Alex',
+    icon: Icons.person_outline,
     selected: false,
     onTap: () {},
   );
@@ -108,8 +108,8 @@ Widget labeledToggleChipUnselectedPreview() {
 @Preview(name: 'LabeledToggleChip • selected + owned')
 Widget labeledToggleChipSelectedOwnedPreview() {
   return LabeledToggleChip(
-    label: 'Teacher',
-    icon: Icons.school_outlined,
+    label: 'You',
+    icon: Icons.person_outline,
     selected: true,
     owned: true,
     onTap: () {},

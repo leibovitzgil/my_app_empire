@@ -25,7 +25,7 @@ void main() {
   group('InviteSheet goldens', () {
     const ownerId = 'owner-1';
     const pieceId = 'p1';
-    const email = 'student@example.com';
+    const email = 'friend@example.com';
 
     late MockCollaboratorInviteService collaboratorInviteService;
     late MockInviteService inviteService;

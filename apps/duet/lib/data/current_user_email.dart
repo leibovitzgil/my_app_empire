@@ -7,9 +7,9 @@ import 'dart:async';
 /// but for an email rather than an id or display name.
 ///
 /// Consumed by `feature_pairing`'s accept-invite flow
-/// (`PieceRepository.addCollaborator`/`AcceptInvitePage.studentEmail`) so an
-/// accepted collaborator's email is recorded on the piece instead of left
-/// `null`.
+/// (`PieceRepository.addCollaborator`/`AcceptInvitePage.collaboratorEmail`)
+/// so an accepted collaborator's email is recorded on the piece instead of
+/// left `null`.
 class CurrentUserEmail {
   /// Creates a [CurrentUserEmail], subscribing to [emailStream] immediately.
   CurrentUserEmail(Stream<String?> emailStream) {

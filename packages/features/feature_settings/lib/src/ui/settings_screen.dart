@@ -7,8 +7,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 /// persisted and reconciled against the OS permission on mount and resume.
 class SettingsScreen extends StatefulWidget {
   /// Creates a [SettingsScreen]. [extraTile] renders below the notifications
-  /// row — a slot for an app-specific settings row (e.g. a Teacher-only
-  /// "Manage plan" entry) without this package taking a direct dependency on
+  /// row — a slot for an app-specific settings row (e.g. a "Manage plan"
+  /// entry) without this package taking a direct dependency on
   /// whatever feature that row navigates to.
   const SettingsScreen({super.key, this.extraTile});
 

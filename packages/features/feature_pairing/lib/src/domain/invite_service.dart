@@ -82,9 +82,8 @@ abstract class InviteService {
   /// Creates an invite for a collaborator-to-be to join [pieceId], owned by
   /// [ownerId]. Fails with an [InviteException] if [ownerId] doesn't own
   /// [pieceId], or if the account is at its free-tier collaborator limit
-  /// (see `isAtFreeTierCollaboratorLimit`, which callers should check
-  /// *before* even showing the invite sheet — this is a defense-in-depth
-  /// backstop, not the primary gate).
+  /// (callers should check the cap *before* even showing the invite sheet —
+  /// this is a defense-in-depth backstop, not the primary gate).
   ///
   /// [ownerName] is the inviting owner's display name, captured at
   /// invite-creation time so it can flow through to [InviteDetails] (and,

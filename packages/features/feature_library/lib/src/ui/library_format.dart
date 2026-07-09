@@ -16,7 +16,7 @@ abstract final class LibraryFormat {
   /// Initials derived from an opaque id, used as an avatar placeholder.
   ///
   /// GAP: there is no identity/profile lookup service yet to resolve a
-  /// teacher/student id to a real display name or avatar colour (unlike
+  /// owner/collaborator id to a real display name or avatar colour (unlike
   /// `feature_grocery_list`'s `Collaborator`, which carries name/colour
   /// directly on the domain model it fetches from Firestore). A later phase
   /// should add a small `UserProfile`/directory service (e.g. alongside

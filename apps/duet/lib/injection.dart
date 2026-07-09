@@ -145,9 +145,9 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       () => InMemoryUserDirectory(
         seed: const [
           DirectoryUser(
-            uid: 'demo_student_1',
-            email: 'student@duet.dev',
-            displayName: 'Demo Student',
+            uid: 'demo_friend_1',
+            email: 'friend@duet.dev',
+            displayName: 'Demo Friend',
           ),
         ],
       ),
@@ -210,7 +210,7 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   // `PieceRepository`/`AnnotationRepository` have a constructor cycle:
   // `LocalPieceRepository` needs an `AnnotationRepository` (to purge a
   // deleted piece's annotations) and `LocalAnnotationRepository` needs a
-  // `PieceRepository` (to resolve a new author's teacher/student role). The
+  // `PieceRepository` (to resolve a new author's owner/collaborator role).
   // Piece side takes a *lazy provider* rather than a direct instance,
   // breaking the cycle: whichever of the two get_it resolves first fully
   // constructs (caching itself as the singleton) before the other's factory
