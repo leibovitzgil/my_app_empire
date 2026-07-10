@@ -45,3 +45,33 @@ final class PieceViewed extends LibraryEvent {
   @override
   List<Object?> get props => [pieceId];
 }
+
+/// Changes which shelf/grid the Stage gallery shows.
+final class LibraryFilterChanged extends LibraryEvent {
+  const LibraryFilterChanged(this.filter);
+
+  final LibraryFilter filter;
+
+  @override
+  List<Object?> get props => [filter];
+}
+
+/// Updates the current search query, e.g. as the user types.
+final class LibrarySearchChanged extends LibraryEvent {
+  const LibrarySearchChanged(this.query);
+
+  final String query;
+
+  @override
+  List<Object?> get props => [query];
+}
+
+/// Changes how the gallery orders pieces.
+final class LibrarySortChanged extends LibraryEvent {
+  const LibrarySortChanged(this.sort);
+
+  final LibrarySort sort;
+
+  @override
+  List<Object?> get props => [sort];
+}

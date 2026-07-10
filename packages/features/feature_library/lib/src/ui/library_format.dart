@@ -44,4 +44,27 @@ abstract final class LibraryFormat {
     }
     return palette[hash];
   }
+
+  /// A time-of-day greeting, e.g. "Good morning".
+  static String greeting({DateTime? now}) {
+    final hour = (now ?? DateTime.now()).hour;
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  /// [greeting] personalized with [name], e.g. "Good morning, Gil" — falls
+  /// back to the bare [greeting] when [name] is `null` or blank.
+  static String greetingFor(String? name, {DateTime? now}) {
+    if (name == null || name.trim().isEmpty) return greeting(now: now);
+    return '${greeting(now: now)}, $name';
+  }
+
+  /// A time-independent welcome used by the empty-library state, e.g.
+  /// "Welcome, Gil" — falls back to bare "Welcome" when [name] is `null` or
+  /// blank.
+  static String welcome(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Welcome';
+    return 'Welcome, $name';
+  }
 }

@@ -78,6 +78,7 @@ void main() {
             pieceRepository: repository,
             renderService: renderService,
             currentUserId: currentUserId,
+            appName: 'Duet',
             onOpenScore: onOpenScore ?? (_) {},
             onOpenSettings: onOpenSettings,
             onInvitePiece: onInvitePiece,
@@ -87,15 +88,15 @@ void main() {
       );
       await tester.pump();
       // Flushes flutter_animate's initial delayed-start future for the
-      // loading state's `SkeletonList` shimmer (see core_ui's
+      // loading state's skeleton grid shimmer (see core_ui's
       // `skeleton_test.dart`); a zero-duration pump leaves it pending, which
       // trips the test binding's "no pending timers" invariant at teardown.
       await tester.pump(const Duration(milliseconds: 1));
     }
 
     testWidgets(
-      'with no sheets at all shows the My sheets empty state and an '
-      'Import a sheet action',
+      'with no sheets at all shows the empty-library state and an Import '
+      'a sheet action',
       (tester) async {
         await pumpScreen(tester);
         piecesController.add(const []);
@@ -107,23 +108,16 @@ void main() {
       },
     );
 
-    testWidgets(
-      'the import action is always present in the app bar, regardless of '
-      'tab or content',
-      (tester) async {
-        await pumpScreen(tester);
-        piecesController.add([myPiece(), sharedPiece()]);
-        await tester.pump();
-        await tester.pump();
+    testWidgets('the Import FAB is present once content has loaded', (
+      tester,
+    ) async {
+      await pumpScreen(tester);
+      piecesController.add([myPiece(), sharedPiece()]);
+      await tester.pump();
+      await tester.pump();
 
-        expect(find.byTooltip('Import a sheet'), findsOneWidget);
-
-        await tester.tap(find.text('Shared with me'));
-        await tester.pumpAndSettle();
-
-        expect(find.byTooltip('Import a sheet'), findsOneWidget);
-      },
-    );
+      expect(find.byTooltip('Import a sheet'), findsOneWidget);
+    });
 
     testWidgets('hides the settings action when onOpenSettings is null', (
       tester,
@@ -154,42 +148,41 @@ void main() {
     );
 
     testWidgets(
-      'owned sheets show under My sheets, not under Shared with me',
+      'tapping the My sheets chip shows owned sheets, not shared ones',
       (tester) async {
         await pumpScreen(tester);
         piecesController.add([myPiece(), sharedPiece()]);
         await tester.pump();
         await tester.pump();
 
-        // "My sheets" is the default (first) tab.
-        expect(find.text('Clair de Lune'), findsOneWidget);
+        await tester.tap(find.widgetWithText(ChoiceChip, 'My sheets'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Clair de Lune'), findsWidgets);
         expect(find.text('Nocturne'), findsNothing);
       },
     );
 
     testWidgets(
-      'shared sheets show under Shared with me, with the owner in the '
-      'subtitle, not under My sheets',
+      'tapping the Shared with me chip shows shared sheets (with the owner '
+      "in the card's caption), not owned ones",
       (tester) async {
         await pumpScreen(tester);
-        piecesController.add([
-          myPiece(),
-          sharedPiece(ownerName: 'Jane Doe'),
-        ]);
+        piecesController.add([myPiece(), sharedPiece(ownerName: 'Jane Doe')]);
         await tester.pump();
         await tester.pump();
 
-        await tester.tap(find.text('Shared with me'));
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Shared with me'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Nocturne'), findsOneWidget);
-        expect(find.textContaining('Shared by Jane Doe'), findsOneWidget);
+        expect(find.text('Nocturne'), findsWidgets);
+        expect(find.text('from Jane Doe'), findsOneWidget);
         expect(find.text('Clair de Lune'), findsNothing);
       },
     );
 
     testWidgets(
-      'shows "Nothing shared yet" on the Shared with me tab when nothing '
+      'shows "Nothing shared yet" on the Shared with me chip when nothing '
       'is shared',
       (tester) async {
         await pumpScreen(tester);
@@ -197,14 +190,14 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        await tester.tap(find.text('Shared with me'));
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Shared with me'));
         await tester.pumpAndSettle();
 
         expect(find.text('Nothing shared yet'), findsOneWidget);
       },
     );
 
-    testWidgets('tapping a row opens the score for that piece', (
+    testWidgets('tapping a cover card opens the score for that piece', (
       tester,
     ) async {
       Piece? opened;
@@ -213,15 +206,15 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      await tester.tap(find.text('Clair de Lune'));
+      await tester.tap(find.text('Clair de Lune').first);
       await tester.pump();
 
       expect(opened?.id, 'p1');
     });
 
     testWidgets(
-      'tapping the trailing info button opens Piece Detail instead of the '
-      'score',
+      'long-pressing a cover card opens quick actions, and Details opens '
+      'Piece Detail instead of the score',
       (tester) async {
         when(
           () => repository.getPiece('p1'),
@@ -232,14 +225,158 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.byTooltip('Clair de Lune details'), findsOneWidget);
+        await tester.longPress(find.text('Clair de Lune').first);
+        await tester.pumpAndSettle();
 
-        await tester.tap(find.byTooltip('Clair de Lune details'));
+        expect(find.text('Details'), findsOneWidget);
+        await tester.tap(find.text('Details'));
         await tester.pumpAndSettle();
 
         expect(find.byType(PieceDetailScreen), findsOneWidget);
-        // The row tap's own onOpenScore never fired for the info tap.
+        // The card's own onOpenScore never fired for the Details tap.
         expect(opened, isNull);
+      },
+    );
+
+    testWidgets(
+      'quick actions on an owned sheet offer Invite a partner, which fires '
+      'the callback',
+      (tester) async {
+        Piece? invited;
+        await pumpScreen(tester, onInvitePiece: (p) => invited = p);
+        piecesController.add([myPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.longPress(find.text('Clair de Lune').first);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Invite a partner'), findsOneWidget);
+        await tester.tap(find.text('Invite a partner'));
+        await tester.pumpAndSettle();
+
+        expect(invited?.id, 'p1');
+      },
+    );
+
+    testWidgets(
+      'quick actions on a shared sheet are owner-gated: no Invite a partner, '
+      'but a Leave action',
+      (tester) async {
+        await pumpScreen(tester, onInvitePiece: (_) {});
+        piecesController.add([sharedPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.longPress(find.text('Nocturne').first);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Invite a partner'), findsNothing);
+        expect(find.text('Leave sheet'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'quick actions on an owned sheet: Delete, after confirming, calls '
+      'deletePiece',
+      (tester) async {
+        when(
+          () => repository.deletePiece('p1'),
+        ).thenAnswer((_) async => const Success<void>(null));
+        await pumpScreen(tester);
+        piecesController.add([myPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.longPress(find.text('Clair de Lune').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete sheet'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Delete this sheet?'), findsOneWidget);
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+
+        verify(() => repository.deletePiece('p1')).called(1);
+        // Flush the success snackbar's auto-dismiss timer so teardown sees
+        // no pending timers.
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'quick actions on a shared sheet: Leave, after confirming, calls '
+      'leavePiece',
+      (tester) async {
+        when(
+          () => repository.leavePiece('p2'),
+        ).thenAnswer((_) async => const Success<void>(null));
+        await pumpScreen(tester);
+        piecesController.add([sharedPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.longPress(find.text('Nocturne').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Leave sheet'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Leave this sheet?'), findsOneWidget);
+        await tester.tap(find.text('Leave'));
+        await tester.pumpAndSettle();
+
+        verify(() => repository.leavePiece('p2')).called(1);
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'tapping the Favorites chip shows the coming-soon placeholder',
+      (tester) async {
+        await pumpScreen(tester);
+        piecesController.add([myPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        // Favorites is the last chip in a horizontally-scrollable row, so
+        // bring it into view before tapping (the narrow test surface scrolls
+        // it off the right edge).
+        final favoritesChip = find.widgetWithText(ChoiceChip, 'Favorites');
+        await tester.ensureVisible(favoritesChip);
+        await tester.pumpAndSettle();
+        await tester.tap(favoritesChip);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Favorites coming soon'), findsOneWidget);
+        expect(find.text('Clair de Lune'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'typing in the search field filters by title and shows a no-matches '
+      'message when nothing matches',
+      (tester) async {
+        await pumpScreen(tester);
+        piecesController.add([
+          myPiece(),
+          myPiece(id: 'p3', title: 'Nocturne'),
+        ]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.enterText(find.byType(TextField), 'clair');
+        await tester.pumpAndSettle();
+
+        // The non-matching sheet is filtered out; no empty message yet.
+        expect(find.text('Nocturne'), findsNothing);
+        expect(find.textContaining('No matches for'), findsNothing);
+
+        await tester.enterText(find.byType(TextField), 'zzz');
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('No matches for'), findsOneWidget);
       },
     );
   });

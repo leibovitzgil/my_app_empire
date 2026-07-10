@@ -22,6 +22,9 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     on<LibraryPiecesUpdated>(_onPiecesUpdated);
     on<LibraryFailed>(_onFailed);
     on<PieceViewed>(_onPieceViewed);
+    on<LibraryFilterChanged>(_onFilterChanged);
+    on<LibrarySearchChanged>(_onSearchChanged);
+    on<LibrarySortChanged>(_onSortChanged);
   }
 
   final PieceRepository _repository;
@@ -57,6 +60,24 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         viewedPieceIds: {...state.viewedPieceIds, event.pieceId},
       ),
     );
+  }
+
+  void _onFilterChanged(
+    LibraryFilterChanged event,
+    Emitter<LibraryState> emit,
+  ) {
+    emit(state.copyWith(filter: event.filter));
+  }
+
+  void _onSearchChanged(
+    LibrarySearchChanged event,
+    Emitter<LibraryState> emit,
+  ) {
+    emit(state.copyWith(query: event.query));
+  }
+
+  void _onSortChanged(LibrarySortChanged event, Emitter<LibraryState> emit) {
+    emit(state.copyWith(sort: event.sort));
   }
 
   @override
