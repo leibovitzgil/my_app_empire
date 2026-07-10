@@ -180,6 +180,7 @@ class HomeScreen extends StatelessWidget {
           _openCollaborators(context, piece, currentUserId),
       onOpenSettings: () => context.push('/settings'),
       currentUserName: getIt<CurrentUserName>().call(),
+      appName: 'Duet',
     );
   }
 

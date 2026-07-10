@@ -514,6 +514,7 @@ Future<DuetImportFlowResult> runDuetImportFlow(
         pieceRepository: pieceRepository,
         renderService: renderService,
         currentUserId: ownerId,
+        appName: 'Duet',
         onOpenScore: (piece) => importedPiece = piece,
         filePicker: () async => const PickedPdfFile(
           path: 'nocturne.pdf',
@@ -525,11 +526,13 @@ Future<DuetImportFlowResult> runDuetImportFlow(
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 1));
 
-  // Library starts empty; import a sheet.
+  // Library starts empty; import a sheet. The Import FAB is hidden on the
+  // empty state (the redesigned gallery surfaces import via the empty-state
+  // primary button instead), so drive the flow from that button.
   expect(find.text('Your library is empty'), findsOneWidget);
   await maybeShot('01_library_empty');
 
-  await tester.tap(find.byTooltip('Import a sheet'));
+  await tester.tap(find.text('Import a sheet'));
   await settle(tester);
   await tester.tap(find.text('Choose PDF'));
   await settle(tester);
