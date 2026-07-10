@@ -32,3 +32,15 @@ packages/**/pubspec.lock
 *-debug.log
 firebase-export-*/
 .firebase/
+
+# Duet local dev (apps/duet/dev.sh): generated, regenerable platform
+# scaffolding (the factory commits no platform dirs).
+apps/duet/web/
+apps/duet/android/
+apps/duet/ios/
+apps/duet/macos/
+apps/duet/linux/
+apps/duet/windows/
+# Scaffold metadata `flutter create` regenerates alongside the platform dirs.
+apps/duet/.metadata
+apps/duet/.gitignore
