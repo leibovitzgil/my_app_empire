@@ -2,6 +2,7 @@
 library;
 
 import 'package:audio/audio.dart';
+import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:feature_score/feature_score.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +12,14 @@ import 'package:mocktail/mocktail.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 
-// A network-free theme (AppTheme pulls google_fonts, which fetches at
-// runtime and fails in tests).
-final _theme = ThemeData(useMaterial3: true);
+// AppTheme.testTheme() is network-free (skips google_fonts) but still
+// exercises the real token-driven sub-themes. `ScoreViewerScreen` forces its
+// own dark `Theme` regardless of the host's brightness (see
+// `score_viewer_screen.dart`), so the outer theme's *brightness* doesn't
+// change the reader's own look — this still uses the dark test theme so any
+// inherited (non-overridden) sub-theme, like button/card styling, matches
+// what `AppTheme.darkTheme` would produce in production.
+final ThemeData _theme = AppTheme.testTheme(brightness: Brightness.dark);
 
 class MockPieceRepository extends Mock implements PieceRepository {}
 

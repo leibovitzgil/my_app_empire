@@ -6,13 +6,19 @@ import 'package:core_utils/core_utils.dart';
 import 'package:feature_score/src/bloc/audio_playback_cubit.dart';
 import 'package:feature_score/src/bloc/record_audio_cubit.dart';
 import 'package:feature_score/src/bloc/score_bloc.dart';
+import 'package:feature_score/src/participant_layer.dart';
 import 'package:feature_score/src/ui/practice_view.dart';
 import 'package:feature_score/src/ui/widgets/audio_pin_marker.dart';
 import 'package:feature_score/src/ui/widgets/draw_toolbar.dart';
 import 'package:feature_score/src/ui/widgets/fractional_region_align.dart';
 import 'package:feature_score/src/ui/widgets/ink_overlay.dart';
 import 'package:feature_score/src/ui/widgets/ink_palette.dart';
-import 'package:feature_score/src/ui/widgets/layer_toggle_bar.dart';
+import 'package:feature_score/src/ui/widgets/layers_panel.dart';
+import 'package:feature_score/src/ui/widgets/mode_segmented_control.dart';
+import 'package:feature_score/src/ui/widgets/page_thumbnail_rail.dart';
+import 'package:feature_score/src/ui/widgets/passage_popover.dart';
+import 'package:feature_score/src/ui/widgets/playback_chip.dart';
+import 'package:feature_score/src/ui/widgets/reader_top_bar.dart';
 import 'package:feature_score/src/ui/widgets/region_selector.dart';
 import 'package:feature_score/src/ui/widgets/score_page_canvas.dart';
 import 'package:feature_score/src/ui/widgets/sync_status_badge.dart';
@@ -21,10 +27,29 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 
+/// Below this width the rail hides and Layers moves to a bottom sheet.
+const double _kMediumBreakpoint = 600;
+
+/// At/above this width the Layers panel docks inline; below it (down to
+/// [_kMediumBreakpoint]) Layers moves to an `endDrawer`.
+const double _kWideBreakpoint = 840;
+
+/// The reader's forced-dark colour scheme (the app runs `ThemeMode.system`,
+/// but this screen is unconditionally dark). Computed once — `fromSeed` is a
+/// pure function of its inputs, so it never needs re-deriving per rebuild.
+final ColorScheme _readerDarkScheme = ColorScheme.fromSeed(
+  seedColor: Colors.blue,
+  brightness: Brightness.dark,
+);
+
 /// The Score Viewer: the app's core screen. Wired to [ScoreBloc] (read from
 /// context) for the heavy-lift annotation/state logic, and owns its own
 /// [RecordAudioCubit]/[AudioPlaybackCubit] for the screen-scoped
 /// recording/playback flows.
+///
+/// Unconditionally dark (a forced [Theme] override), tablet-first, and
+/// multi-panel — see [_ReaderCanvas] for the responsive rail/canvas/Layers
+/// composition.
 class ScoreViewerScreen extends StatefulWidget {
   /// Creates a [ScoreViewerScreen].
   const ScoreViewerScreen({
@@ -55,20 +80,22 @@ class ScoreViewerScreen extends StatefulWidget {
 
   /// Resolves a durable id for a just-recorded file (see
   /// `_saveAudioNote`) and resolves a saved [AudioNote.audioAssetId] back to
-  /// a playable path (see `_ReadyBody._playNote`) — an audio note's
+  /// a playable path (see `_ReaderCanvasState._playNote`) — an audio note's
   /// `audioAssetId` must never be treated as a raw filesystem path.
   final AudioAssetStore audioAssetStore;
 
-  /// The review-sync status to show in the app bar's badge. This package
-  /// deliberately doesn't own a live sync source (that's `review_sync`,
-  /// app-glue's dependency, not this package's) — callers pass whatever they
-  /// track, defaulting to [ScoreSyncStatus.notSynced].
+  /// The review-sync status to show in the top bar's badge and the Layers
+  /// panel's share prompt. This package deliberately doesn't own a live sync
+  /// source (that's `review_sync`, app-glue's dependency, not this
+  /// package's) — callers pass whatever they track, defaulting to
+  /// [ScoreSyncStatus.notSynced].
   final ScoreSyncStatus syncStatus;
 
-  /// Invoked when "Share my annotations" is selected from the overflow menu,
-  /// if provided; `null` hides the action. A callback rather than a direct
-  /// `review_sync` dependency, for the same cross-package reason as
-  /// `feature_library`'s `onOpenScore`/`onInvitePiece`.
+  /// Invoked when "Share" is selected (overflow menu or the Layers panel's
+  /// prompt), if provided; `null` hides every share affordance. A callback
+  /// rather than a direct `review_sync` dependency, for the same
+  /// cross-package reason as `feature_library`'s
+  /// `onOpenScore`/`onInvitePiece`.
   final Future<void> Function()? onShareRequested;
 
   /// Invoked when "Import review bundle" is selected from the overflow menu,
@@ -82,6 +109,7 @@ class ScoreViewerScreen extends StatefulWidget {
 class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   late final RecordAudioCubit _recordCubit;
   late final AudioPlaybackCubit _playbackCubit;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _openedPdfPath;
 
   @override
@@ -111,40 +139,177 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
             previous.regionIntent != current.regionIntent,
         listener: _onRegionSelectionChanged,
         builder: (context, state) {
-          final path = state.piece?.basePdfPath;
-          if (path != null && path != _openedPdfPath) {
-            _openedPdfPath = path;
-            unawaited(widget.renderService.open(path));
-          }
-          return Scaffold(
-            appBar: _buildAppBar(context, state),
-            body: switch (state.status) {
-              ScoreStatus.loading => const LoadingView(
-                label: 'Loading score…',
+          _maybeOpenPdf(state);
+          return Theme(
+            data: Theme.of(context).copyWith(
+              brightness: Brightness.dark,
+              colorScheme: _readerDarkScheme,
+            ),
+            child: Scaffold(
+              key: _scaffoldKey,
+              endDrawer: _buildEndDrawer(context, state),
+              body: Column(
+                children: [
+                  _buildTopBar(context, state),
+                  Expanded(child: _buildBody(context, state)),
+                ],
               ),
-              ScoreStatus.failure => ErrorRetryView(
-                title: "Couldn't load this sheet",
-                message: state.error,
-                onRetry: () {
-                  final pieceId = state.pieceId;
-                  if (pieceId != null) {
-                    context.read<ScoreBloc>().add(ScoreOpened(pieceId));
-                  }
-                },
-              ),
-              ScoreStatus.ready => _ReadyBody(
-                state: state,
-                renderService: widget.renderService,
-                audioAssetStore: widget.audioAssetStore,
-              ),
-            },
-            floatingActionButton: state.status == ScoreStatus.ready
-                ? _ModeButtons(state: state)
-                : null,
+            ),
           );
         },
       ),
     );
+  }
+
+  /// Opens [state]'s piece PDF exactly once per path (keyed on
+  /// [_openedPdfPath], as before), now awaiting the result so a successful
+  /// open can resolve the piece's real page count via [PageCountResolved].
+  void _maybeOpenPdf(ScoreState state) {
+    final path = state.piece?.basePdfPath;
+    if (path == null || path == _openedPdfPath) return;
+    _openedPdfPath = path;
+    unawaited(_openPdf(path));
+  }
+
+  Future<void> _openPdf(String path) async {
+    final result = await widget.renderService.open(path);
+    // Ignore a late result for a path we've since moved off of.
+    if (!mounted || path != _openedPdfPath) return;
+    switch (result) {
+      case Success<int>(:final value):
+        context.read<ScoreBloc>().add(PageCountResolved(value));
+      case ResultFailure<int>():
+        // `ScorePageCanvas` surfaces its own render error with a retry
+        // affordance; page count simply stays at its default (1) so
+        // pagination doesn't break.
+        break;
+    }
+  }
+
+  Widget _buildTopBar(BuildContext context, ScoreState state) {
+    if (state.status != ScoreStatus.ready) {
+      return _MinimalTopBar(
+        title: state.piece?.title ?? 'Score',
+        onBack: () => Navigator.of(context).maybePop(),
+      );
+    }
+    final bloc = context.read<ScoreBloc>();
+    final width = MediaQuery.sizeOf(context).width;
+    return ReaderTopBar(
+      title: state.piece?.title ?? 'Score',
+      mode: state.mode,
+      currentPage: state.currentPage,
+      pageCount: state.pageCount,
+      syncStatus: widget.syncStatus,
+      cleanWorkspace: state.cleanWorkspace,
+      compact: width < _kMediumBreakpoint,
+      collaborators: _collaboratorAvatars(state),
+      collaboratorNames: _collaboratorNames(state),
+      ownInkColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
+      onBack: () => Navigator.of(context).maybePop(),
+      onPreviousPage: state.isFirstPage
+          ? null
+          : () => bloc.add(PageChanged(state.currentPage - 1)),
+      onNextPage: state.isLastPage
+          ? null
+          : () => bloc.add(PageChanged(state.currentPage + 1)),
+      onOpenLayers: _onOpenLayers(context, state, bloc, width),
+      onShare: widget.onShareRequested,
+      onImport: widget.onImportRequested,
+      onPracticePage: () => bloc
+        ..add(const RegionSelectStarted(RegionIntent.practice))
+        ..add(
+          RegionSelectCompleted(
+            Region(
+              pageIndex: state.currentPage,
+              left: 0,
+              top: 0,
+              width: 1,
+              height: 1,
+            ),
+          ),
+        ),
+    );
+  }
+
+  /// The top bar's Layers button: hidden in draw/passage mode and whenever
+  /// the panel is already docked inline (≥[_kWideBreakpoint]); opens the
+  /// `endDrawer` at medium widths, or a bottom sheet below
+  /// [_kMediumBreakpoint].
+  VoidCallback? _onOpenLayers(
+    BuildContext context,
+    ScoreState state,
+    ScoreBloc bloc,
+    double width,
+  ) {
+    if (state.mode != ScoreMode.view) return null;
+    if (width >= _kWideBreakpoint) return null;
+    if (width >= _kMediumBreakpoint) {
+      return () => _scaffoldKey.currentState?.openEndDrawer();
+    }
+    return () => unawaited(_showLayersBottomSheet(context, state, bloc));
+  }
+
+  Future<void> _showLayersBottomSheet(
+    BuildContext context,
+    ScoreState state,
+    ScoreBloc bloc,
+  ) {
+    return AppBottomSheet.show<void>(
+      context,
+      builder: (sheetContext) => SizedBox(
+        height: 420,
+        child: _buildLayersPanel(
+          bloc,
+          state,
+          syncStatus: widget.syncStatus,
+          onShareRequested: widget.onShareRequested,
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildEndDrawer(BuildContext context, ScoreState state) {
+    if (state.status != ScoreStatus.ready || state.mode != ScoreMode.view) {
+      return null;
+    }
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < _kMediumBreakpoint || width >= _kWideBreakpoint) return null;
+    final bloc = context.read<ScoreBloc>();
+    return Drawer(
+      width: 300,
+      child: _buildLayersPanel(
+        bloc,
+        state,
+        syncStatus: widget.syncStatus,
+        onShareRequested: widget.onShareRequested,
+        onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, ScoreState state) {
+    return switch (state.status) {
+      ScoreStatus.loading => const LoadingView(label: 'Loading score…'),
+      ScoreStatus.failure => ErrorRetryView(
+        title: "Couldn't load this sheet",
+        message: state.error,
+        onRetry: () {
+          final pieceId = state.pieceId;
+          if (pieceId != null) {
+            context.read<ScoreBloc>().add(ScoreOpened(pieceId));
+          }
+        },
+      ),
+      ScoreStatus.ready => _ReaderCanvas(
+        state: state,
+        renderService: widget.renderService,
+        audioAssetStore: widget.audioAssetStore,
+        syncStatus: widget.syncStatus,
+        onShareRequested: widget.onShareRequested,
+      ),
+    };
   }
 
   void _onRegionSelectionChanged(BuildContext context, ScoreState state) {
@@ -238,212 +403,480 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
           .then((_) => scoreBloc.add(const RegionSelectionCleared())),
     );
   }
-
-  AppBar _buildAppBar(BuildContext context, ScoreState state) {
-    final bloc = context.read<ScoreBloc>();
-    return AppBar(
-      title: Text(state.piece?.title ?? 'Score'),
-      actions: [
-        SyncStatusBadge(status: widget.syncStatus),
-        const SizedBox(width: AppSpacing.sm),
-        Semantics(
-          button: true,
-          label: state.cleanWorkspace
-              ? 'Clean workspace on. Double tap to show annotations again.'
-              : 'Clean workspace off. Double tap to hide all annotations.',
-          child: SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              isSelected: state.cleanWorkspace,
-              icon: const Icon(Icons.layers_outlined),
-              selectedIcon: const Icon(Icons.layers_clear_outlined),
-              onPressed: () => bloc.add(const CleanWorkspaceToggled()),
-            ),
-          ),
-        ),
-        PopupMenuButton<void>(
-          icon: const Icon(Icons.more_vert),
-          itemBuilder: (context) => [
-            PopupMenuItem<void>(
-              onTap: () => bloc
-                ..add(const RegionSelectStarted(RegionIntent.practice))
-                ..add(
-                  RegionSelectCompleted(
-                    Region(
-                      pageIndex: state.currentPage,
-                      left: 0,
-                      top: 0,
-                      width: 1,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              child: const Text('Practice this page'),
-            ),
-            if (widget.onShareRequested != null)
-              PopupMenuItem<void>(
-                onTap: () => unawaited(widget.onShareRequested!()),
-                child: const Text('Share my annotations'),
-              ),
-            if (widget.onImportRequested != null)
-              PopupMenuItem<void>(
-                onTap: () => unawaited(widget.onImportRequested!()),
-                child: const Text('Import review bundle'),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
 }
 
-class _ModeButtons extends StatelessWidget {
-  const _ModeButtons({required this.state});
+/// The minimal top bar shown while [ScoreStatus] isn't `ready`: back + title
+/// only, no page-nav pill, status badge, or avatars — there's nothing yet to
+/// show them about.
+class _MinimalTopBar extends StatelessWidget {
+  const _MinimalTopBar({required this.title, required this.onBack});
 
-  final ScoreState state;
+  final String title;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<ScoreBloc>();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Semantics(
-          button: true,
-          label: state.mode == ScoreMode.draw
-              ? 'Drawing mode on. Double tap to turn off.'
-              : 'Drawing mode off. Double tap to draw.',
-          child: FloatingActionButton(
-            heroTag: 'score_draw_mode',
-            backgroundColor: state.mode == ScoreMode.draw
-                ? Theme.of(context).colorScheme.primaryContainer
-                : null,
-            onPressed: () => bloc.add(
-              ModeChanged(
-                state.mode == ScoreMode.draw ? ScoreMode.view : ScoreMode.draw,
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Row(
+        children: [
+          Semantics(
+            button: true,
+            label: 'Back',
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: onBack,
               ),
             ),
-            child: const Icon(Icons.edit_outlined),
           ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Semantics(
-          button: true,
-          label: state.mode == ScoreMode.regionSelect
-              ? 'Region select mode on. Double tap to turn off.'
-              : 'Region select mode off. Double tap to select a passage.',
-          child: FloatingActionButton(
-            heroTag: 'score_region_select_mode',
-            backgroundColor: state.mode == ScoreMode.regionSelect
-                ? Theme.of(context).colorScheme.primaryContainer
-                : null,
-            onPressed: () => bloc.add(
-              ModeChanged(
-                state.mode == ScoreMode.regionSelect
-                    ? ScoreMode.view
-                    : ScoreMode.regionSelect,
-              ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: scheme.onSurface),
             ),
-            child: const Icon(Icons.crop_free),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({
+/// Builds the Layers panel content shared by the docked/`endDrawer`/bottom
+/// sheet hosts — only [onClose]'s behaviour differs between them.
+Widget _buildLayersPanel(
+  ScoreBloc bloc,
+  ScoreState state, {
+  required ScoreSyncStatus syncStatus,
+  required Future<void> Function()? onShareRequested,
+  VoidCallback? onClose,
+}) {
+  final pageIndex = state.currentPage;
+  return LayersPanel(
+    layers: state.layers,
+    audioPinsVisible: state.audioPinsVisible,
+    audioPinCountOnPage: state.notes
+        .where((note) => note.pageIndex == pageIndex)
+        .length,
+    cleanWorkspace: state.cleanWorkspace,
+    onInkToggle: (ownerId) => bloc.add(InkLayerToggled(ownerId)),
+    onAudioToggle: () => bloc.add(const AudioPinsToggled()),
+    onCleanWorkspaceToggle: () => bloc.add(const CleanWorkspaceToggled()),
+    onClose: onClose,
+    onShare: onShareRequested == null
+        ? null
+        : () => unawaited(onShareRequested()),
+    annotationsShared: syncStatus == ScoreSyncStatus.synced,
+  );
+}
+
+/// Word-initials from a participant's real display name, e.g. "Maya K." ->
+/// "MK" — never a fabricated/placeholder identity.
+String _initialsFor(String label) {
+  final words = label
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+  if (words.isEmpty) return '?';
+  if (words.length == 1) {
+    final word = words.single;
+    return word.substring(0, word.length < 2 ? 1 : 2).toUpperCase();
+  }
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+// keep in sync with LibraryFormat.colorValueFor
+const List<int> _kAvatarPalette = [
+  0xFF8B5CF6,
+  0xFFF59E0B,
+  0xFF14B8A6,
+  0xFFEF4444,
+  0xFF6366F1,
+  0xFF84CC16,
+];
+
+/// A stable avatar colour derived from a participant id — mirrors
+/// `LibraryFormat.colorValueFor` (see [_kAvatarPalette]) so the same person
+/// reads as the same colour in the gallery and the reader, without this
+/// package depending on `feature_library`.
+Color _avatarColorFor(String id) {
+  var hash = 0;
+  for (final unit in id.codeUnits) {
+    hash = (hash + unit) % _kAvatarPalette.length;
+  }
+  return Color(_kAvatarPalette[hash]);
+}
+
+List<AvatarStackPerson> _collaboratorAvatars(ScoreState state) {
+  return [
+    for (final layer in state.layers)
+      if (!layer.isOwn)
+        (
+          initials: _initialsFor(layer.label),
+          color: _avatarColorFor(layer.ownerId),
+        ),
+  ];
+}
+
+List<String> _collaboratorNames(ScoreState state) {
+  return [
+    for (final layer in state.layers)
+      if (!layer.isOwn) layer.label,
+  ];
+}
+
+/// `mm:ss`, matching the design's playback-chip format (no leading zero on
+/// minutes).
+String _formatDuration(Duration duration) {
+  final minutes = duration.inMinutes;
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
+
+/// The Score Viewer's ready-state content: a responsive
+/// rail/canvas/Layers-panel composition (see `build` for the three
+/// breakpoints), plus the mode segmented control, draw toolbar, playback
+/// chip, and passage popover that float over the page.
+///
+/// Stateful only for `_completedRegion` (the just-finished region-select
+/// drag awaiting a Practice/Record/Cancel decision) and
+/// `_layersPanelCollapsed` (the ≥[_kWideBreakpoint] docked panel's own
+/// collapse toggle).
+class _ReaderCanvas extends StatefulWidget {
+  const _ReaderCanvas({
     required this.state,
     required this.renderService,
     required this.audioAssetStore,
+    required this.syncStatus,
+    required this.onShareRequested,
   });
 
   final ScoreState state;
   final PdfRenderService renderService;
   final AudioAssetStore audioAssetStore;
+  final ScoreSyncStatus syncStatus;
+  final Future<void> Function()? onShareRequested;
+
+  @override
+  State<_ReaderCanvas> createState() => _ReaderCanvasState();
+}
+
+class _ReaderCanvasState extends State<_ReaderCanvas> {
+  Region? _completedRegion;
+  bool _layersPanelCollapsed = false;
+
+  @override
+  void didUpdateWidget(covariant _ReaderCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Leaving passage mode any way other than resolve/cancel (e.g. tapping
+    // the segmented control, which sits above the popover's tap-catcher) must
+    // drop the just-dragged region — otherwise re-entering passage mode
+    // resurrects a phantom popover anchored to it with no fresh drag.
+    if (oldWidget.state.mode == ScoreMode.regionSelect &&
+        widget.state.mode != ScoreMode.regionSelect) {
+      _completedRegion = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final bloc = context.read<ScoreBloc>();
-    final pageIndex = state.currentPage;
-    return Column(
-      children: [
-        LayerToggleBar(
-          layers: state.layers,
-          audioPinsVisible: state.audioPinsVisible,
-          onInkToggle: (ownerId) => bloc.add(InkLayerToggled(ownerId)),
-          onAudioToggle: () => bloc.add(const AudioPinsToggled()),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final showRail =
+            width >= _kMediumBreakpoint && state.mode != ScoreMode.regionSelect;
+        final dockPanel =
+            width >= _kWideBreakpoint &&
+            state.mode == ScoreMode.view &&
+            !_layersPanelCollapsed;
+        return Row(
+          children: [
+            // TODO(reader-redesign): render real PDF thumbnails once a
+            // cheap per-page thumbnail render path exists; stylized cards
+            // are golden-safe and match the design in the meantime (see
+            // `PageThumbnailRail`'s class doc).
+            if (showRail)
+              PageThumbnailRail(
+                pageCount: state.pageCount,
+                currentPage: state.currentPage,
+                presence: _pagePresence(state),
+                onSelectPage: (page) => bloc.add(PageChanged(page)),
+                dimmed: state.mode == ScoreMode.draw,
+              ),
+            Expanded(child: _canvasStack(context, state, bloc, width)),
+            if (dockPanel)
+              SizedBox(
+                width: 300,
+                child: _buildLayersPanel(
+                  bloc,
+                  state,
+                  syncStatus: widget.syncStatus,
+                  onShareRequested: widget.onShareRequested,
+                  onClose: () => setState(() => _layersPanelCollapsed = true),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<PageInkPresence> _pagePresence(ScoreState state) {
+    return [
+      for (var page = 0; page < state.pageCount; page++)
+        (
+          hasAudio: state.notes.any((note) => note.pageIndex == page),
+          inkColors: [
+            for (final layer in state.layers)
+              if (layer.strokes.any((stroke) => stroke.pageIndex == page))
+                inkColorForId(layer.colorId),
+          ].take(5).toList(),
         ),
-        Expanded(
-          child: Stack(
-            children: [
-              ScorePageCanvas(
-                renderService: renderService,
-                pageIndex: pageIndex,
-                overlays: [
-                  for (final layer in state.layers)
-                    if (state.effectiveInkVisible(layer))
-                      InkOverlay(
-                        strokes: layer.strokes,
-                        pageIndex: pageIndex,
-                        color: inkColorForId(layer.colorId),
-                      ),
-                  if (state.mode == ScoreMode.draw)
-                    _DrawGestureLayer(pageIndex: pageIndex),
-                  if (state.mode == ScoreMode.regionSelect)
-                    RegionSelector(
-                      pageIndex: pageIndex,
-                      onRegionPreview: (region) =>
-                          bloc.add(RegionDragUpdated(region)),
-                      onRegionChosen: (region, intent) => bloc
-                        ..add(RegionSelectStarted(intent))
-                        ..add(RegionSelectCompleted(region)),
+    ];
+  }
+
+  Widget _canvasStack(
+    BuildContext context,
+    ScoreState state,
+    ScoreBloc bloc,
+    double width,
+  ) {
+    final pageIndex = state.currentPage;
+    return Stack(
+      children: [
+        Center(
+          child: ScorePageCanvas(
+            renderService: widget.renderService,
+            pageIndex: pageIndex,
+            overlays: [
+              for (final layer in state.layers)
+                if (state.effectiveInkVisible(layer))
+                  InkOverlay(
+                    strokes: layer.strokes,
+                    pageIndex: pageIndex,
+                    color: inkColorForId(layer.colorId),
+                  ),
+              if (state.mode == ScoreMode.draw)
+                _DrawGestureLayer(pageIndex: pageIndex),
+              if (state.mode == ScoreMode.regionSelect)
+                RegionSelector(
+                  pageIndex: pageIndex,
+                  onRegionPreview: (region) =>
+                      bloc.add(RegionDragUpdated(region)),
+                  onRegionCompleted: (region) {
+                    setState(() => _completedRegion = region);
+                    if (width < _kMediumBreakpoint) {
+                      unawaited(
+                        _showPassageBottomSheet(context, bloc, region),
+                      );
+                    }
+                  },
+                ),
+              if (state.effectiveAudioPinsVisible)
+                for (final note in state.notes.where(
+                  (n) => n.pageIndex == pageIndex,
+                ))
+                  FractionalRegionAlign(
+                    region: note.region,
+                    child: BlocBuilder<AudioPlaybackCubit, AudioPlaybackState>(
+                      builder: (context, playback) {
+                        return AudioPinMarker(
+                          note: note,
+                          currentUserId: state.currentUserId,
+                          isPlaying: playback.isPlaying(note.id),
+                          progress: _progressValue(playback, note.id),
+                          onTap: () => _onPinTap(context, note, playback),
+                          onDelete: () => context.read<ScoreBloc>().add(
+                            AudioNoteDeleteRequested(note.id),
+                          ),
+                        );
+                      },
                     ),
-                  if (state.effectiveAudioPinsVisible)
-                    for (final note in state.notes.where(
-                      (n) => n.pageIndex == pageIndex,
-                    ))
-                      FractionalRegionAlign(
-                        region: note.region,
-                        child:
-                            BlocBuilder<AudioPlaybackCubit, AudioPlaybackState>(
-                              builder: (context, playback) {
-                                return AudioPinMarker(
-                                  note: note,
-                                  currentUserId: state.currentUserId,
-                                  isPlaying: playback.isPlaying(note.id),
-                                  progress: _progressValue(playback, note.id),
-                                  onTap: () =>
-                                      _onPinTap(context, note, playback),
-                                  onDelete: () => context.read<ScoreBloc>().add(
-                                    AudioNoteDeleteRequested(note.id),
-                                  ),
-                                );
-                              },
-                            ),
-                      ),
-                ],
-              ),
-              Positioned(
-                right: AppSpacing.md,
-                top: AppSpacing.md,
-                child: Chip(label: Text('Page ${pageIndex + 1}')),
-              ),
+                  ),
             ],
           ),
         ),
-        if (state.mode == ScoreMode.draw)
-          DrawToolbar(
-            penColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
-            eraserActive: state.eraserActive,
-            canUndo: state.undoStack.isNotEmpty,
-            onEraserToggled: () => bloc.add(const EraserToggled()),
-            onUndo: () => bloc.add(const UndoRequested()),
+        if (state.mode == ScoreMode.regionSelect &&
+            _completedRegion != null &&
+            width >= _kMediumBreakpoint)
+          Positioned.fill(
+            child: _passagePopoverOverlay(bloc, _completedRegion!),
           ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: AppSpacing.lg,
+          child: Center(
+            child: ModeSegmentedControl(
+              mode: state.mode,
+              onModeSelected: (mode) => bloc.add(ModeChanged(mode)),
+            ),
+          ),
+        ),
+        if (state.mode == ScoreMode.draw)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 88,
+            child: Center(
+              child: DrawToolbar(
+                penColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
+                eraserActive: state.eraserActive,
+                canUndo: state.undoStack.isNotEmpty,
+                onEraserToggled: () => bloc.add(const EraserToggled()),
+                onUndo: () => bloc.add(const UndoRequested()),
+                onDone: () => bloc.add(const ModeChanged(ScoreMode.view)),
+              ),
+            ),
+          ),
+        if (width >= _kWideBreakpoint &&
+            state.mode == ScoreMode.view &&
+            _layersPanelCollapsed)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Semantics(
+                button: true,
+                label: 'Open layers panel',
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: IconButton.filled(
+                    icon: const Icon(Icons.layers_outlined),
+                    onPressed: () =>
+                        setState(() => _layersPanelCollapsed = false),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        _PlayingChip(state: state),
       ],
     );
+  }
+
+  /// Anchored via `FractionalRegionAlign` at [region]'s centroid, plus a
+  /// page-area-scoped tap-catcher behind it so tapping outside dismisses
+  /// like Cancel.
+  Widget _passagePopoverOverlay(ScoreBloc bloc, Region region) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _cancelRegionSelection(bloc),
+          ),
+        ),
+        FractionalRegionAlign(
+          region: region,
+          child: PassagePopover(
+            onPractice: () =>
+                _resolveRegionSelection(bloc, region, RegionIntent.practice),
+            onRecord: () => _resolveRegionSelection(
+              bloc,
+              region,
+              RegionIntent.recordAudio,
+            ),
+            onCancel: () => _cancelRegionSelection(bloc),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The <[_kMediumBreakpoint] fallback: the existing chooser, restyled
+  /// (Practice first).
+  Future<void> _showPassageBottomSheet(
+    BuildContext context,
+    ScoreBloc bloc,
+    Region region,
+  ) async {
+    await AppBottomSheet.show<void>(
+      context,
+      title: 'This passage',
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            button: true,
+            label: 'Practice this passage',
+            child: ListTile(
+              leading: const Icon(Icons.piano),
+              title: const Text('Practice this passage'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _resolveRegionSelection(bloc, region, RegionIntent.practice);
+              },
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: 'Record an audio note for this passage',
+            child: ListTile(
+              leading: const Icon(Icons.mic_none_outlined),
+              title: const Text('Record an audio note'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _resolveRegionSelection(
+                  bloc,
+                  region,
+                  RegionIntent.recordAudio,
+                );
+              },
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: 'Cancel region selection',
+            child: ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.of(sheetContext).pop(),
+            ),
+          ),
+        ],
+      ),
+    );
+    // An explicit Practice/Record tap already resolved (and cleared)
+    // above; only a barrier/back/drag dismissal reaches here with
+    // `_completedRegion` still set.
+    if (mounted && _completedRegion != null) {
+      _cancelRegionSelection(bloc);
+    }
+  }
+
+  void _resolveRegionSelection(
+    ScoreBloc bloc,
+    Region region,
+    RegionIntent intent,
+  ) {
+    bloc
+      ..add(RegionSelectStarted(intent))
+      ..add(RegionSelectCompleted(region));
+    setState(() => _completedRegion = null);
+  }
+
+  void _cancelRegionSelection(ScoreBloc bloc) {
+    bloc.add(const RegionSelectionCleared());
+    setState(() => _completedRegion = null);
   }
 
   double? _progressValue(AudioPlaybackState playback, String noteId) {
@@ -468,12 +901,15 @@ class _ReadyBody extends StatelessWidget {
 
   /// Resolves [AudioNote.audioAssetId] to a playable path via
   /// [AudioAssetStore.pathFor] before starting playback — the id is never
-  /// itself a path (see [_ScoreViewerScreenState._saveAudioNote]).
+  /// itself a path (see
+  /// `_ScoreViewerScreenState._saveAudioNote`).
   Future<void> _playNote(
     AudioPlaybackCubit playbackCubit,
     AudioNote note,
   ) async {
-    final pathResult = await audioAssetStore.pathFor(note.audioAssetId);
+    final pathResult = await widget.audioAssetStore.pathFor(
+      note.audioAssetId,
+    );
     final path = switch (pathResult) {
       Success<String>(:final value) => value,
       // Falls back to treating the id as a path directly — covers a note
@@ -481,6 +917,59 @@ class _ReadyBody extends StatelessWidget {
       ResultFailure<String>() => note.audioAssetId,
     };
     await playbackCubit.play(note.id, path);
+  }
+}
+
+/// The top-right [PlaybackChip], shown whenever a note is playing —
+/// resolves the author's name/colour from [state]'s layers and formats
+/// `mm:ss` from the cubit's real playback progress (never a fake waveform).
+class _PlayingChip extends StatelessWidget {
+  const _PlayingChip({required this.state});
+
+  final ScoreState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AudioPlaybackCubit, AudioPlaybackState>(
+      builder: (context, playback) {
+        final noteId = playback.noteId;
+        if (playback.status != AudioPlaybackStatus.playing || noteId == null) {
+          return const SizedBox.shrink();
+        }
+        AudioNote? note;
+        for (final candidate in state.notes) {
+          if (candidate.id == noteId) {
+            note = candidate;
+            break;
+          }
+        }
+        if (note == null) return const SizedBox.shrink();
+        ParticipantLayer? author;
+        for (final layer in state.layers) {
+          if (layer.ownerId == note.authorId) {
+            author = layer;
+            break;
+          }
+        }
+        final authorName = author?.label ?? 'Someone';
+        final progress = playback.progress;
+        return Positioned(
+          right: AppSpacing.md,
+          top: AppSpacing.md,
+          child: PlaybackChip(
+            authorInitials: _initialsFor(authorName),
+            authorColor: _avatarColorFor(note.authorId),
+            authorName: authorName,
+            positionLabel: _formatDuration(progress?.position ?? Duration.zero),
+            durationLabel: _formatDuration(progress?.duration ?? Duration.zero),
+            progress: progress == null || progress.duration == Duration.zero
+                ? null
+                : progress.position.inMilliseconds /
+                      progress.duration.inMilliseconds,
+          ),
+        );
+      },
+    );
   }
 }
 

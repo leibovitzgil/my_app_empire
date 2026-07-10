@@ -524,6 +524,61 @@ void main() {
       );
     });
 
+    group('pageCount', () {
+      blocTest<ScoreBloc, ScoreState>(
+        'PageCountResolved sets pageCount, flooring non-positive counts at 1',
+        build: buildBloc,
+        act: (bloc) => bloc
+          ..add(const PageCountResolved(6))
+          ..add(const PageCountResolved(0)),
+        expect: () => [
+          isA<ScoreState>().having((s) => s.pageCount, 'pageCount', 6),
+          isA<ScoreState>().having((s) => s.pageCount, 'pageCount', 1),
+        ],
+      );
+
+      blocTest<ScoreBloc, ScoreState>(
+        'PageChanged clamps into [0, pageCount - 1]',
+        build: buildBloc,
+        act: (bloc) => bloc
+          ..add(const PageCountResolved(3))
+          ..add(const PageChanged(10))
+          ..add(const PageChanged(-2)),
+        skip: 1,
+        expect: () => [
+          isA<ScoreState>().having((s) => s.currentPage, 'currentPage', 2),
+          isA<ScoreState>().having((s) => s.currentPage, 'currentPage', 0),
+        ],
+      );
+
+      blocTest<ScoreBloc, ScoreState>(
+        'a smaller pageCount re-clamps an out-of-range currentPage',
+        build: buildBloc,
+        act: (bloc) => bloc
+          ..add(const PageCountResolved(6))
+          ..add(const PageChanged(5))
+          ..add(const PageCountResolved(2)),
+        skip: 2,
+        expect: () => [
+          isA<ScoreState>()
+              .having((s) => s.pageCount, 'pageCount', 2)
+              .having((s) => s.currentPage, 'currentPage', 1),
+        ],
+      );
+
+      test('isFirstPage/isLastPage reflect currentPage against pageCount', () {
+        const state = ScoreState.initial(currentUserId: ownerId);
+        final middle = state.copyWith(pageCount: 3, currentPage: 1);
+        expect(middle.isFirstPage, isFalse);
+        expect(middle.isLastPage, isFalse);
+        expect(middle.copyWith(currentPage: 0).isFirstPage, isTrue);
+        expect(middle.copyWith(currentPage: 2).isLastPage, isTrue);
+        // The default pageCount (1) makes page 0 both first and last.
+        expect(state.isFirstPage, isTrue);
+        expect(state.isLastPage, isTrue);
+      });
+    });
+
     group('region select', () {
       blocTest<ScoreBloc, ScoreState>(
         'routes to the recordAudio intent',

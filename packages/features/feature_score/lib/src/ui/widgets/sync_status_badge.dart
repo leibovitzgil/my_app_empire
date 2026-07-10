@@ -18,7 +18,84 @@ enum ScoreSyncStatus {
   notSynced,
 }
 
-/// A small, subtle badge showing [status].
+/// The reader top bar's shared status-badge shell: an outlined pill
+/// (transparent fill, `outlineVariant` border) fronted by either an [icon]
+/// or a colour [dotColor] (never both), followed by [label].
+///
+/// [SyncStatusBadge] and `ReaderTopBar`'s "Drawing in your layer"/"Clean
+/// workspace" badges all share this one shell so the three read as one
+/// visual family instead of drifting apart.
+class StatusPill extends StatelessWidget {
+  /// Creates a [StatusPill].
+  const StatusPill({required this.label, this.icon, this.dotColor, super.key})
+    : assert(
+        icon == null || dotColor == null,
+        'StatusPill takes an icon or a dot, never both.',
+      );
+
+  /// The pill's text.
+  final String label;
+
+  /// A leading glyph, mutually exclusive with [dotColor].
+  final IconData? icon;
+
+  /// A leading colour dot (e.g. a participant's own ink colour), mutually
+  /// exclusive with [icon].
+  final Color? dotColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm + AppSpacing.xs,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null)
+                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+              if (dotColor != null)
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: dotColor,
+                  ),
+                ),
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small, subtle badge showing [status], built from the shared
+/// [StatusPill] shell.
 class SyncStatusBadge extends StatelessWidget {
   /// Creates a [SyncStatusBadge].
   const SyncStatusBadge({required this.status, super.key});
@@ -28,22 +105,11 @@ class SyncStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final (label, icon) = switch (status) {
       ScoreSyncStatus.synced => ('Synced', Icons.cloud_done_outlined),
       ScoreSyncStatus.syncing => ('Syncing…', Icons.cloud_sync_outlined),
       ScoreSyncStatus.notSynced => ('Not synced', Icons.cloud_off_outlined),
     };
-    return Semantics(
-      label: label,
-      excludeSemantics: true,
-      child: Chip(
-        avatar: Icon(icon, size: 16),
-        label: Text(label),
-        visualDensity: VisualDensity.compact,
-        backgroundColor: scheme.surfaceContainerHigh,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      ),
-    );
+    return StatusPill(label: label, icon: icon);
   }
 }
