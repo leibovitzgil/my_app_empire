@@ -1,13 +1,12 @@
 part of 'library_bloc.dart';
 
-/// High-level phase of the Home / Piece List screen.
+/// High-level phase of the Home / Sheet Library screen.
 enum LibraryStatus { loading, ready, failure }
 
 /// Immutable state for [LibraryBloc].
 final class LibraryState extends Equatable {
   const LibraryState._({
     required this.currentUserId,
-    required this.currentRole,
     this.status = LibraryStatus.loading,
     this.pieces = const [],
     this.viewedPieceIds = const {},
@@ -15,24 +14,18 @@ final class LibraryState extends Equatable {
   });
 
   /// The initial state before [LibraryStarted] resolves.
-  const LibraryState.initial({
-    required String currentUserId,
-    required PieceRole currentRole,
-  }) : this._(currentUserId: currentUserId, currentRole: currentRole);
+  const LibraryState.initial({required String currentUserId})
+    : this._(currentUserId: currentUserId);
 
-  /// The signed-in participant's id.
+  /// The signed-in user's id.
   final String currentUserId;
-
-  /// Whether the signed-in participant is a teacher or a student — resolved
-  /// by the caller, not derived from [pieces] (a brand-new teacher with zero
-  /// pieces still needs the teacher layout, e.g. to see "Import piece").
-  final PieceRole currentRole;
 
   /// The current phase.
   final LibraryStatus status;
 
   /// Every piece [PieceRepository.watchPieces] currently reports for this
-  /// user (as teacher or student).
+  /// user (as owner or collaborator), already sorted most-recently-updated
+  /// first by the repository.
   final List<Piece> pieces;
 
   /// Ids of pieces opened this session, via [PieceViewed]. Session-local
@@ -57,34 +50,14 @@ final class LibraryState extends Equatable {
       piece.updatedAt.isAfter(piece.createdAt) &&
       !viewedPieceIds.contains(piece.id);
 
-  /// Teacher variant: this teacher's own pieces, grouped by collaborator id
-  /// (`null` for pieces awaiting a collaborator, e.g. just imported). A
-  /// piece with more than one collaborator (AC-4) appears once under EACH of
-  /// its collaborators' groups, so every collaborator sees it in their own
-  /// section.
-  Map<String?, List<Piece>> get piecesByStudent {
-    final grouped = <String?, List<Piece>>{};
-    for (final piece in pieces.where((p) => p.teacherId == currentUserId)) {
-      if (piece.collaboratorIds.isEmpty) {
-        (grouped[null] ??= <Piece>[]).add(piece);
-        continue;
-      }
-      for (final collaboratorId in piece.collaboratorIds) {
-        (grouped[collaboratorId] ??= <Piece>[]).add(piece);
-      }
-    }
-    return grouped;
-  }
+  /// The sheets this user owns (imported themselves) — the "My sheets" tab.
+  List<Piece> get myPieces =>
+      pieces.where((p) => p.ownerId == currentUserId).toList();
 
-  /// Student variant: the pieces a teacher has shared with this
-  /// collaborator — any piece this user collaborates on, not just the first
-  /// (AC-4: a second collaborator must see the piece too).
+  /// The sheets others have shared with this user (they're a collaborator on
+  /// them, not the owner) — the "Shared with me" tab.
   List<Piece> get sharedWithMe =>
       pieces.where((p) => p.isCollaborator(currentUserId)).toList();
-
-  /// This teacher's pieces that have no paired student yet — candidates for
-  /// the "Invite student" action.
-  List<Piece> get unpairedPieces => piecesByStudent[null] ?? const [];
 
   /// Returns a copy with the given fields replaced.
   LibraryState copyWith({
@@ -96,7 +69,6 @@ final class LibraryState extends Equatable {
   }) {
     return LibraryState._(
       currentUserId: currentUserId,
-      currentRole: currentRole,
       status: status ?? this.status,
       pieces: pieces ?? this.pieces,
       viewedPieceIds: viewedPieceIds ?? this.viewedPieceIds,
@@ -107,7 +79,6 @@ final class LibraryState extends Equatable {
   @override
   List<Object?> get props => [
     currentUserId,
-    currentRole,
     status,
     pieces,
     viewedPieceIds,

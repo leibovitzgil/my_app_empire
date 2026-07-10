@@ -20,7 +20,7 @@ final class ScoreState extends Equatable {
     this.currentPage = 0,
     this.layers = const [],
     this.notes = const [],
-    this.currentRole = PieceRole.student,
+    this.currentRole = PieceRole.collaborator,
     this.mode = ScoreMode.view,
     this.eraserActive = false,
     this.undoStack = const [],
@@ -62,7 +62,7 @@ final class ScoreState extends Equatable {
   /// The signed-in participant's id.
   final String currentUserId;
 
-  /// Whether the signed-in participant owns the piece (its teacher) or is a
+  /// Whether the signed-in participant owns the piece or is a
   /// collaborator on it.
   final PieceRole currentRole;
 

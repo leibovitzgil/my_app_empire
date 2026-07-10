@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_library/src/bloc/library_bloc.dart';
 import 'package:feature_library/src/data/pdf_file_picker.dart';
-import 'package:feature_library/src/domain/duet_permissions.dart';
 import 'package:feature_library/src/ui/import_piece_screen.dart';
 import 'package:feature_library/src/ui/library_format.dart';
 import 'package:feature_library/src/ui/piece_detail_screen.dart';
@@ -11,32 +10,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
-import 'package:user_roles/user_roles.dart';
 
-/// Builds the [AvatarStackPerson] list for [piece]'s current collaborators,
-/// shared by every row in this screen that surfaces a per-piece
-/// [AvatarStack].
-List<AvatarStackPerson> _avatarsFor(Piece piece) => [
-  for (final collaborator in piece.collaborators)
-    (
-      initials: LibraryFormat.initialsFor(collaborator.uid),
-      color: Color(LibraryFormat.colorValueFor(collaborator.uid)),
-    ),
+/// Builds the [AvatarStackPerson] list for the participants on [piece] OTHER
+/// than [currentUserId] — the owner plus every collaborator, minus the
+/// viewer. For a sheet you own that's your collaborators; for a sheet shared
+/// with you that's the owner plus any other collaborators.
+List<AvatarStackPerson> _otherParticipantAvatars(
+  Piece piece,
+  String currentUserId,
+) => [
+  for (final id in piece.participantIds)
+    if (id != currentUserId)
+      (
+        initials: LibraryFormat.initialsFor(id),
+        color: Color(LibraryFormat.colorValueFor(id)),
+      ),
 ];
 
 /// Entry widget for the library feature: provides [LibraryBloc] and renders
 /// [LibraryHomeScreen]. Apps wire this in with one line, supplying the
-/// concrete repositories/services and the two cross-feature navigation
-/// callbacks this package can't own directly (see [onOpenScore]/
-/// [onInvitePiece] docs).
+/// concrete repositories/services and the cross-feature navigation callbacks
+/// this package can't own directly (see [onOpenScore]/[onInvitePiece]).
 class LibraryPage extends StatelessWidget {
   /// Creates a [LibraryPage].
   const LibraryPage({
     required this.pieceRepository,
     required this.renderService,
-    required this.userRoleRepository,
     required this.currentUserId,
-    required this.currentRole,
     required this.onOpenScore,
     this.onInvitePiece,
     this.onOpenCollaborators,
@@ -52,14 +52,8 @@ class LibraryPage extends StatelessWidget {
   /// Used by the import flow to validate a picked PDF opens cleanly.
   final PdfRenderService renderService;
 
-  /// Gates the teacher-only "Import piece"/"Invite student" actions.
-  final UserRoleRepository userRoleRepository;
-
-  /// The signed-in participant's id.
+  /// The signed-in user's id.
   final String currentUserId;
-
-  /// Whether the signed-in participant is a teacher or a student.
-  final PieceRole currentRole;
 
   /// Called to navigate to `feature_score`'s `ScoreViewerScreen` for the
   /// given piece. A callback rather than a direct dependency: `feature_library`
@@ -67,10 +61,10 @@ class LibraryPage extends StatelessWidget {
   /// the app-glue layer owns the actual route.
   final void Function(Piece piece) onOpenScore;
 
-  /// Called when a teacher wants to invite a student for a given piece. A
-  /// callback for the same reason as [onOpenScore]: the invite sheet lives in
-  /// `feature_pairing`, a sibling package. `null` hides the action entirely
-  /// (e.g. an app that hasn't wired pairing yet).
+  /// Called when the user wants to invite a friend to a sheet they own (from
+  /// Piece Detail). A callback for the same reason as [onOpenScore]: the
+  /// invite sheet lives in `feature_pairing`, a sibling package. `null` hides
+  /// the action entirely (e.g. an app that hasn't wired pairing yet).
   final void Function(Piece piece)? onInvitePiece;
 
   /// Called when the user taps a piece's "Collaborators (N)" tile in Piece
@@ -90,10 +84,10 @@ class LibraryPage extends StatelessWidget {
   /// tests to avoid the platform channel.
   final PdfFilePicker? filePicker;
 
-  /// The signed-in teacher's display name, if known — sourced from auth
-  /// identity and attached to any piece created via the import flow (see
-  /// `ImportPieceBloc.teacherName`). `null` falls back to an
-  /// initials-from-id placeholder wherever this piece's teacher is shown.
+  /// The signed-in user's display name, if known — sourced from auth identity
+  /// and attached to any sheet created via the import flow (see
+  /// `ImportPieceBloc.ownerName`). `null` falls back to an initials-from-id
+  /// placeholder wherever this sheet's owner is shown.
   final String? currentUserName;
 
   @override
@@ -102,12 +96,10 @@ class LibraryPage extends StatelessWidget {
       create: (_) => LibraryBloc(
         pieceRepository: pieceRepository,
         currentUserId: currentUserId,
-        currentRole: currentRole,
       )..add(const LibraryStarted()),
       child: LibraryHomeScreen(
         pieceRepository: pieceRepository,
         renderService: renderService,
-        userRoleRepository: userRoleRepository,
         currentUserId: currentUserId,
         onOpenScore: onOpenScore,
         onInvitePiece: onInvitePiece,
@@ -120,14 +112,14 @@ class LibraryPage extends StatelessWidget {
   }
 }
 
-/// The role-aware Home / Piece List body. Reads [LibraryBloc] from context
-/// (provided by [LibraryPage]).
+/// The unified Home / Sheet Library body: two tabs ("My sheets" / "Shared with
+/// me") over the same piece stream. Reads [LibraryBloc] from context (provided
+/// by [LibraryPage]).
 class LibraryHomeScreen extends StatelessWidget {
   /// Creates a [LibraryHomeScreen].
   const LibraryHomeScreen({
     required this.pieceRepository,
     required this.renderService,
-    required this.userRoleRepository,
     required this.currentUserId,
     required this.onOpenScore,
     this.onInvitePiece,
@@ -144,10 +136,7 @@ class LibraryHomeScreen extends StatelessWidget {
   /// Used by the import flow to validate a picked PDF opens cleanly.
   final PdfRenderService renderService;
 
-  /// Gates the teacher-only "Import piece"/"Invite student" actions.
-  final UserRoleRepository userRoleRepository;
-
-  /// The signed-in participant's id.
+  /// The signed-in user's id.
   final String currentUserId;
 
   /// See [LibraryPage.onOpenScore].
@@ -172,72 +161,81 @@ class LibraryHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<LibraryBloc, LibraryState>(
       builder: (context, state) {
-        final isTeacher = state.currentRole == PieceRole.teacher;
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Duet'),
-            actions: [
-              if (isTeacher) ...[
-                PermissionGate(
-                  repository: userRoleRepository,
-                  permission: DuetPermissions.inviteStudent,
-                  child: IconButton(
-                    icon: const Icon(Icons.person_add_alt),
-                    tooltip: 'Invite student',
-                    onPressed: () =>
-                        unawaited(_onInviteStudent(context, state)),
-                  ),
-                ),
-                PermissionGate(
-                  repository: userRoleRepository,
-                  permission: DuetPermissions.importPiece,
-                  child: IconButton(
-                    icon: const Icon(Icons.add),
-                    tooltip: 'Import piece',
-                    onPressed: () => unawaited(_openImportFlow(context)),
-                  ),
-                ),
-              ],
-              if (onOpenSettings != null)
+        final ready = state.status == LibraryStatus.ready;
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Duet'),
+              actions: [
                 IconButton(
-                  icon: const Icon(Icons.settings),
-                  tooltip: 'Settings',
-                  onPressed: onOpenSettings,
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Import a sheet',
+                  onPressed: () => unawaited(_openImportFlow(context)),
                 ),
-            ],
-          ),
-          body: switch (state.status) {
-            LibraryStatus.loading => const Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: SkeletonList(),
-            ),
-            LibraryStatus.failure => ErrorRetryView(
-              title: "Couldn't load your pieces",
-              message: state.error,
-              onRetry: () =>
-                  context.read<LibraryBloc>().add(const LibraryStarted()),
-            ),
-            LibraryStatus.ready =>
-              isTeacher
-                  ? _TeacherBody(
-                      state: state,
-                      onOpenPiece: (piece) => _openDetail(context, piece),
-                      onInvitePiece: onInvitePiece == null
-                          ? null
-                          : (piece) => onInvitePiece!(piece),
+                if (onOpenSettings != null)
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    tooltip: 'Settings',
+                    onPressed: onOpenSettings,
+                  ),
+              ],
+              bottom: ready
+                  ? const TabBar(
+                      tabs: [
+                        Tab(text: 'My sheets'),
+                        Tab(text: 'Shared with me'),
+                      ],
                     )
-                  : _StudentBody(
-                      state: state,
-                      onOpenPiece: (piece) => _openDetail(context, piece),
-                    ),
-          },
+                  : null,
+            ),
+            body: switch (state.status) {
+              LibraryStatus.loading => const Padding(
+                padding: EdgeInsets.all(AppSpacing.md),
+                child: SkeletonList(),
+              ),
+              LibraryStatus.failure => ErrorRetryView(
+                title: "Couldn't load your library",
+                message: state.error,
+                onRetry: () =>
+                    context.read<LibraryBloc>().add(const LibraryStarted()),
+              ),
+              LibraryStatus.ready => TabBarView(
+                children: [
+                  _MySheetsTab(
+                    pieces: state.myPieces,
+                    state: state,
+                    currentUserId: currentUserId,
+                    onOpenScore: (piece) => _openScore(context, piece),
+                    onOpenDetail: (piece) => _openDetail(context, piece),
+                    onImport: () => unawaited(_openImportFlow(context)),
+                  ),
+                  _SharedTab(
+                    pieces: state.sharedWithMe,
+                    state: state,
+                    currentUserId: currentUserId,
+                    onOpenScore: (piece) => _openScore(context, piece),
+                    onOpenDetail: (piece) => _openDetail(context, piece),
+                  ),
+                ],
+              ),
+            },
+          ),
         );
       },
     );
   }
 
+  void _markViewed(BuildContext context, Piece piece) =>
+      context.read<LibraryBloc>().add(PieceViewed(piece.id));
+
+  void _openScore(BuildContext context, Piece piece) {
+    _markViewed(context, piece);
+    onOpenScore(piece);
+  }
+
   void _openDetail(BuildContext context, Piece piece) {
-    context.read<LibraryBloc>().add(PieceViewed(piece.id));
+    _markViewed(context, piece);
     unawaited(
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
@@ -246,6 +244,7 @@ class LibraryHomeScreen extends StatelessWidget {
             currentUserId: currentUserId,
             pieceId: piece.id,
             onOpenScore: onOpenScore,
+            onInvitePiece: onInvitePiece,
             onOpenCollaborators: onOpenCollaborators,
           ),
         ),
@@ -260,267 +259,150 @@ class LibraryHomeScreen extends StatelessWidget {
           pieceRepository: pieceRepository,
           renderService: renderService,
           filePicker: filePicker,
-          teacherName: currentUserName,
+          ownerName: currentUserName,
         ),
       ),
     );
     if (piece != null) onOpenScore(piece);
   }
-
-  Future<void> _onInviteStudent(
-    BuildContext context,
-    LibraryState state,
-  ) async {
-    final onInvite = onInvitePiece;
-    if (onInvite == null) return;
-    final unpaired = state.unpairedPieces;
-    if (unpaired.isEmpty) {
-      AppSnackbar.info(context, 'Import a piece first to invite a student');
-      return;
-    }
-    if (unpaired.length == 1) {
-      onInvite(unpaired.single);
-      return;
-    }
-    final chosen = await showModalBottomSheet<Piece>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Text('Invite a student for which piece?'),
-            ),
-            for (final piece in unpaired)
-              AppListTile(
-                title: Text(piece.title),
-                onTap: () => Navigator.of(sheetContext).pop(piece),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (chosen != null) onInvite(chosen);
-  }
 }
 
-class _TeacherBody extends StatelessWidget {
-  const _TeacherBody({
-    required this.state,
-    required this.onOpenPiece,
-    required this.onInvitePiece,
+/// A single sheet row, shared by both tabs. Tapping the row opens the Score
+/// Viewer; tapping the trailing info button opens Piece Detail.
+class _SheetTile extends StatelessWidget {
+  const _SheetTile({
+    required this.piece,
+    required this.subtitle,
+    required this.unread,
+    required this.currentUserId,
+    required this.onOpenScore,
+    required this.onOpenDetail,
   });
 
-  final LibraryState state;
-  final void Function(Piece piece) onOpenPiece;
-  final void Function(Piece piece)? onInvitePiece;
+  final Piece piece;
+  final String subtitle;
+  final bool unread;
+  final String currentUserId;
+  final void Function(Piece piece) onOpenScore;
+  final void Function(Piece piece) onOpenDetail;
 
   @override
   Widget build(BuildContext context) {
-    final grouped = state.piecesByStudent;
-    if (grouped.isEmpty) {
-      return const EmptyStateView(
+    final avatars = _otherParticipantAvatars(piece, currentUserId);
+    return AppListTile(
+      leading: avatars.isEmpty ? null : AvatarStack(people: avatars),
+      title: Text(piece.title),
+      subtitle: Text(subtitle),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (unread)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.xs),
+              child: Semantics(
+                label: 'Unread activity',
+                child: Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: '${piece.title} details',
+            onPressed: () => onOpenDetail(piece),
+          ),
+        ],
+      ),
+      onTap: () => onOpenScore(piece),
+    );
+  }
+}
+
+class _MySheetsTab extends StatelessWidget {
+  const _MySheetsTab({
+    required this.pieces,
+    required this.state,
+    required this.currentUserId,
+    required this.onOpenScore,
+    required this.onOpenDetail,
+    required this.onImport,
+  });
+
+  final List<Piece> pieces;
+  final LibraryState state;
+  final String currentUserId;
+  final void Function(Piece piece) onOpenScore;
+  final void Function(Piece piece) onOpenDetail;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pieces.isEmpty) {
+      return EmptyStateView(
         icon: Icons.library_music_outlined,
-        title: 'No pieces yet',
-        message: 'Import a piece to get started',
+        title: 'Your library is empty',
+        message:
+            'Import a PDF to add your first sheet, or open an invite '
+            'link from a friend to see what they’ve shared.',
+        messagePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        action: PrimaryButton(label: 'Import a sheet', onPressed: onImport),
       );
     }
-    final studentIds = grouped.keys.whereType<String>().toList()..sort();
-    final unpaired = grouped[null] ?? const <Piece>[];
     return ListView(
       children: [
-        for (final studentId in studentIds)
-          _StudentGroup(
-            studentId: studentId,
-            pieces: grouped[studentId]!,
-            state: state,
-            onOpenPiece: onOpenPiece,
-          ),
-        if (unpaired.isNotEmpty)
-          _UnpairedGroup(
-            pieces: unpaired,
-            onOpenPiece: onOpenPiece,
-            onInvitePiece: onInvitePiece,
+        for (final piece in pieces)
+          _SheetTile(
+            piece: piece,
+            subtitle: 'Updated ${LibraryFormat.relativeTime(piece.updatedAt)}',
+            unread: state.isUnread(piece),
+            currentUserId: currentUserId,
+            onOpenScore: onOpenScore,
+            onOpenDetail: onOpenDetail,
           ),
       ],
     );
   }
 }
 
-class _StudentGroup extends StatefulWidget {
-  const _StudentGroup({
-    required this.studentId,
+class _SharedTab extends StatelessWidget {
+  const _SharedTab({
     required this.pieces,
     required this.state,
-    required this.onOpenPiece,
-  });
-
-  final String studentId;
-  final List<Piece> pieces;
-  final LibraryState state;
-  final void Function(Piece piece) onOpenPiece;
-
-  @override
-  State<_StudentGroup> createState() => _StudentGroupState();
-}
-
-class _StudentGroupState extends State<_StudentGroup> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasUnread = widget.pieces.any(widget.state.isUnread);
-    // A collaborator's name should be the same across every piece they're
-    // on (it's set once, at pairing/invite-accept time), but fall back
-    // across the group in case an older/imported piece predates it on just
-    // one of them. Looked up by this group's own `studentId` — NOT the
-    // generic `studentName` compat getter, which only ever reflects a
-    // piece's FIRST collaborator and would show the wrong name for a
-    // piece's second-or-later collaborator's own group (AC-4).
-    final matchingNames = widget.pieces
-        .expand((p) => p.collaborators)
-        .where((c) => c.uid == widget.studentId && c.name != null)
-        .map((c) => c.name);
-    final studentName = matchingNames.isEmpty ? null : matchingNames.first;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PersonTile(
-          initials: LibraryFormat.initialsFor(widget.studentId),
-          color: Color(LibraryFormat.colorValueFor(widget.studentId)),
-          name:
-              studentName ??
-              'Student ${LibraryFormat.initialsFor(widget.studentId)}',
-          subtitle:
-              '${widget.pieces.length} shared '
-              '${widget.pieces.length == 1 ? 'piece' : 'pieces'}',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (hasUnread)
-                const Padding(
-                  padding: EdgeInsets.only(right: AppSpacing.xs),
-                  child: Icon(Icons.circle, size: 8, color: Colors.red),
-                ),
-              Icon(_expanded ? Icons.expand_less : Icons.expand_more),
-            ],
-          ),
-          onTap: () => setState(() => _expanded = !_expanded),
-        ),
-        if (_expanded)
-          for (final piece in widget.pieces)
-            Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg),
-              child: AppListTile(
-                // Only shown once a piece has more than one collaborator —
-                // a single-collaborator piece already names them in the
-                // group header above, so an avatar here would be redundant.
-                leading: piece.collaboratorCount > 1
-                    ? AvatarStack(people: _avatarsFor(piece))
-                    : null,
-                title: Text(piece.title),
-                subtitle: Text(
-                  'Last activity: '
-                  '${LibraryFormat.relativeTime(piece.updatedAt)}',
-                ),
-                trailing: widget.state.isUnread(piece)
-                    ? const Icon(Icons.circle, size: 8, color: Colors.red)
-                    : null,
-                onTap: () => widget.onOpenPiece(piece),
-              ),
-            ),
-      ],
-    );
-  }
-}
-
-class _UnpairedGroup extends StatelessWidget {
-  const _UnpairedGroup({
-    required this.pieces,
-    required this.onOpenPiece,
-    required this.onInvitePiece,
+    required this.currentUserId,
+    required this.onOpenScore,
+    required this.onOpenDetail,
   });
 
   final List<Piece> pieces;
-  final void Function(Piece piece) onOpenPiece;
-  final void Function(Piece piece)? onInvitePiece;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.xs,
-          ),
-          child: Text(
-            'Awaiting a student',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        for (final piece in pieces)
-          AppListTile(
-            title: Text(piece.title),
-            subtitle: Text(
-              'Imported ${LibraryFormat.relativeTime(piece.createdAt)}',
-            ),
-            trailing: onInvitePiece == null
-                ? null
-                : TextButton(
-                    onPressed: () => onInvitePiece!(piece),
-                    child: const Text('Invite'),
-                  ),
-            onTap: () => onOpenPiece(piece),
-          ),
-      ],
-    );
-  }
-}
-
-class _StudentBody extends StatelessWidget {
-  const _StudentBody({required this.state, required this.onOpenPiece});
-
   final LibraryState state;
-  final void Function(Piece piece) onOpenPiece;
+  final String currentUserId;
+  final void Function(Piece piece) onOpenScore;
+  final void Function(Piece piece) onOpenDetail;
 
   @override
   Widget build(BuildContext context) {
-    final pieces = state.sharedWithMe;
     if (pieces.isEmpty) {
       return const EmptyStateView(
-        icon: Icons.library_music_outlined,
-        title: 'No pieces yet',
-        message: 'Ask your teacher for an invite link to get started',
+        icon: Icons.inbox_outlined,
+        title: 'Nothing shared yet',
+        message: 'Sheets your friends share with you will appear here.',
+        messagePadding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       );
     }
     return ListView(
       children: [
         for (final piece in pieces)
-          AppListTile(
-            // Only shown when this piece has more than one collaborator —
-            // i.e. someone besides "me" is also sharing it with the
-            // teacher.
-            leading: piece.collaboratorCount > 1
-                ? AvatarStack(people: _avatarsFor(piece))
-                : null,
-            title: Text(piece.title),
-            subtitle: Text(
-              piece.teacherName ??
-                  'Teacher ${LibraryFormat.initialsFor(piece.teacherId)}',
-            ),
-            trailing: state.isUnread(piece)
-                ? const Icon(Icons.circle, size: 8, color: Colors.red)
-                : null,
-            onTap: () => onOpenPiece(piece),
+          _SheetTile(
+            piece: piece,
+            subtitle:
+                'Shared by ${piece.ownerName ?? 'Owner'} · '
+                '${LibraryFormat.relativeTime(piece.updatedAt)}',
+            unread: state.isUnread(piece),
+            currentUserId: currentUserId,
+            onOpenScore: onOpenScore,
+            onOpenDetail: onOpenDetail,
           ),
       ],
     );

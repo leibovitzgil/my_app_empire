@@ -14,7 +14,7 @@ import 'package:pieces/pieces.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Opens the "Invite a collaborator" flow for [pieceId] (owned by
-/// [teacherId]): email is the PRIMARY path (live lookup-as-you-type via
+/// [ownerId]): email is the PRIMARY path (live lookup-as-you-type via
 /// [collaboratorInviteService]), with the tokenized deep-link
 /// [inviteService] always available as a "Share invite link instead"
 /// fallback.
@@ -35,18 +35,18 @@ Future<void> showInviteSheet(
   required InviteService inviteService,
   required MonetizationService monetizationService,
   required PieceRepository pieceRepository,
-  required String teacherId,
+  required String ownerId,
   required String pieceId,
-  String? teacherName,
+  String? ownerName,
 }) async {
   final bloc = InviteBloc(
     collaboratorInviteService: collaboratorInviteService,
     inviteService: inviteService,
     monetizationService: monetizationService,
     pieceRepository: pieceRepository,
-    teacherId: teacherId,
+    ownerId: ownerId,
     pieceId: pieceId,
-    teacherName: teacherName,
+    ownerName: ownerName,
   )..add(const InviteSheetOpened());
   await AppBottomSheet.show<void>(
     context,
@@ -152,7 +152,7 @@ class _ReadyBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Invite a collaborator by email to work on this piece together.',
+          'Invite a collaborator by email to work on this sheet together.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

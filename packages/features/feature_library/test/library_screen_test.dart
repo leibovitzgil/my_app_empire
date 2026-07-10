@@ -7,42 +7,52 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
-import 'package:user_roles/user_roles.dart';
 
 class MockPieceRepository extends Mock implements PieceRepository {}
 
 class MockPdfRenderService extends Mock implements PdfRenderService {}
 
-/// Grants every permission, mirroring `user_roles`' own test convention (see
-/// `role_gate_test.dart`'s `_FakeUserRoleRepository`).
-class _AllowAllUserRoleRepository implements UserRoleRepository {
-  final _controller = StreamController<AppRole>.broadcast();
-
-  @override
-  Stream<AppRole> get currentRole => _controller.stream;
-
-  @override
-  Future<Result<AppRole>> getRole() async => const Success(AppRole.member);
-
-  @override
-  bool hasPermission(Permission permission) => true;
-
-  @override
-  bool hasMinimumRole(AppRole role) => true;
-
-  @override
-  Future<Result<void>> assignRole(String userId, AppRole role) async =>
-      const Success<void>(null);
-}
-
 void main() {
   group('LibraryHomeScreen', () {
-    const teacherId = 'teacher-1';
-    const studentId = 'student-1';
+    const currentUserId = 'me';
+    const otherOwnerId = 'owner-2';
 
     late MockPieceRepository repository;
     late MockPdfRenderService renderService;
     late StreamController<List<Piece>> piecesController;
+
+    Piece myPiece({
+      String id = 'p1',
+      String title = 'Clair de Lune',
+      List<Collaborator> collaborators = const [],
+      DateTime? updatedAt,
+    }) => Piece(
+      id: id,
+      title: title,
+      basePdfChecksum: 'checksum',
+      basePdfPath: '/tmp/$id.pdf',
+      ownerId: currentUserId,
+      collaborators: collaborators,
+      createdAt: DateTime(2024),
+      updatedAt: updatedAt ?? DateTime(2024),
+    );
+
+    Piece sharedPiece({
+      String id = 'p2',
+      String title = 'Nocturne',
+      String? ownerName,
+      DateTime? updatedAt,
+    }) => Piece(
+      id: id,
+      title: title,
+      basePdfChecksum: 'checksum',
+      basePdfPath: '/tmp/$id.pdf',
+      ownerId: otherOwnerId,
+      ownerName: ownerName,
+      collaborators: const [Collaborator(uid: currentUserId)],
+      createdAt: DateTime(2024),
+      updatedAt: updatedAt ?? DateTime(2024),
+    );
 
     setUp(() {
       repository = MockPieceRepository();
@@ -57,20 +67,21 @@ void main() {
 
     Future<void> pumpScreen(
       WidgetTester tester, {
-      required PieceRole role,
-      required String currentUserId,
       VoidCallback? onOpenSettings,
+      void Function(Piece piece)? onOpenScore,
+      void Function(Piece piece)? onInvitePiece,
+      void Function(Piece piece)? onOpenCollaborators,
     }) async {
       await tester.pumpWidget(
         MaterialApp(
           home: LibraryPage(
             pieceRepository: repository,
             renderService: renderService,
-            userRoleRepository: _AllowAllUserRoleRepository(),
             currentUserId: currentUserId,
-            currentRole: role,
-            onOpenScore: (_) {},
+            onOpenScore: onOpenScore ?? (_) {},
             onOpenSettings: onOpenSettings,
+            onInvitePiece: onInvitePiece,
+            onOpenCollaborators: onOpenCollaborators,
           ),
         ),
       );
@@ -82,71 +93,57 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1));
     }
 
-    testWidgets('teacher with no pieces sees the empty state and actions', (
-      tester,
-    ) async {
-      await pumpScreen(
-        tester,
-        role: PieceRole.teacher,
-        currentUserId: teacherId,
-      );
-      piecesController.add(const []);
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('No pieces yet'), findsOneWidget);
-      expect(find.byTooltip('Import piece'), findsOneWidget);
-      expect(find.byTooltip('Invite student'), findsOneWidget);
-    });
-
     testWidgets(
-      'student with no pieces sees the student-specific empty state',
-      (
-        tester,
-      ) async {
-        await pumpScreen(
-          tester,
-          role: PieceRole.student,
-          currentUserId: studentId,
-        );
+      'with no sheets at all shows the My sheets empty state and an '
+      'Import a sheet action',
+      (tester) async {
+        await pumpScreen(tester);
         piecesController.add(const []);
         await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Your library is empty'), findsOneWidget);
+        expect(find.text('Import a sheet'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'the import action is always present in the app bar, regardless of '
+      'tab or content',
+      (tester) async {
+        await pumpScreen(tester);
+        piecesController.add([myPiece(), sharedPiece()]);
+        await tester.pump();
         await tester.pump();
 
-        expect(find.text('No pieces yet'), findsOneWidget);
-        expect(find.textContaining('Ask your teacher'), findsOneWidget);
-        expect(find.byTooltip('Import piece'), findsNothing);
+        expect(find.byTooltip('Import a sheet'), findsOneWidget);
+
+        await tester.tap(find.text('Shared with me'));
+        await tester.pumpAndSettle();
+
+        expect(find.byTooltip('Import a sheet'), findsOneWidget);
       },
     );
 
     testWidgets('hides the settings action when onOpenSettings is null', (
       tester,
     ) async {
-      await pumpScreen(
-        tester,
-        role: PieceRole.teacher,
-        currentUserId: teacherId,
-      );
+      await pumpScreen(tester);
       piecesController.add(const []);
       await tester.pump();
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.byTooltip('Settings'), findsNothing);
     });
 
     testWidgets(
-      'shows the settings action for both roles and invokes the callback',
+      'shows the settings action and invokes the callback when given',
       (tester) async {
         var opened = 0;
-        await pumpScreen(
-          tester,
-          role: PieceRole.student,
-          currentUserId: studentId,
-          onOpenSettings: () => opened++,
-        );
+        await pumpScreen(tester, onOpenSettings: () => opened++);
         piecesController.add(const []);
         await tester.pump();
-        await tester.pump();
+        await tester.pumpAndSettle();
 
         expect(find.byTooltip('Settings'), findsOneWidget);
         await tester.tap(find.byTooltip('Settings'));
@@ -156,116 +153,93 @@ void main() {
       },
     );
 
-    testWidgets('student sees a flat list of shared pieces', (tester) async {
-      await pumpScreen(
-        tester,
-        role: PieceRole.student,
-        currentUserId: studentId,
-      );
-      piecesController.add([
-        Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          studentId: studentId,
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        ),
-      ]);
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Clair de Lune'), findsOneWidget);
-    });
-
-    testWidgets('teacher sees pieces grouped by student, expandable', (
-      tester,
-    ) async {
-      await pumpScreen(
-        tester,
-        role: PieceRole.teacher,
-        currentUserId: teacherId,
-      );
-      piecesController.add([
-        Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          studentId: studentId,
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        ),
-      ]);
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Clair de Lune'), findsNothing);
-      await tester.tap(find.textContaining('shared piece'));
-      await tester.pump();
-      expect(find.text('Clair de Lune'), findsOneWidget);
-    });
-
     testWidgets(
-      'teacher sees the real studentName on a paired piece, falling back '
-      'to an initials-from-id placeholder when unset',
+      'owned sheets show under My sheets, not under Shared with me',
       (tester) async {
-        await pumpScreen(
-          tester,
-          role: PieceRole.teacher,
-          currentUserId: teacherId,
-        );
-        piecesController.add([
-          Piece(
-            id: 'p1',
-            title: 'Clair de Lune',
-            basePdfChecksum: 'checksum',
-            basePdfPath: '/tmp/p1.pdf',
-            teacherId: teacherId,
-            studentId: studentId,
-            studentName: 'Sam Smith',
-            createdAt: DateTime(2024),
-            updatedAt: DateTime(2024),
-          ),
-        ]);
+        await pumpScreen(tester);
+        piecesController.add([myPiece(), sharedPiece()]);
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Sam Smith'), findsOneWidget);
-        expect(find.textContaining('Student '), findsNothing);
+        // "My sheets" is the default (first) tab.
+        expect(find.text('Clair de Lune'), findsOneWidget);
+        expect(find.text('Nocturne'), findsNothing);
       },
     );
 
     testWidgets(
-      "student sees the real teacherName in a piece's subtitle, falling "
-      'back to an initials-from-id placeholder when unset',
+      'shared sheets show under Shared with me, with the owner in the '
+      'subtitle, not under My sheets',
       (tester) async {
-        await pumpScreen(
-          tester,
-          role: PieceRole.student,
-          currentUserId: studentId,
-        );
+        await pumpScreen(tester);
         piecesController.add([
-          Piece(
-            id: 'p1',
-            title: 'Clair de Lune',
-            basePdfChecksum: 'checksum',
-            basePdfPath: '/tmp/p1.pdf',
-            teacherId: teacherId,
-            studentId: studentId,
-            teacherName: 'Jane Doe',
-            createdAt: DateTime(2024),
-            updatedAt: DateTime(2024),
-          ),
+          myPiece(),
+          sharedPiece(ownerName: 'Jane Doe'),
         ]);
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Jane Doe'), findsOneWidget);
-        expect(find.textContaining('Teacher '), findsNothing);
+        await tester.tap(find.text('Shared with me'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Nocturne'), findsOneWidget);
+        expect(find.textContaining('Shared by Jane Doe'), findsOneWidget);
+        expect(find.text('Clair de Lune'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'shows "Nothing shared yet" on the Shared with me tab when nothing '
+      'is shared',
+      (tester) async {
+        await pumpScreen(tester);
+        piecesController.add([myPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.tap(find.text('Shared with me'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Nothing shared yet'), findsOneWidget);
+      },
+    );
+
+    testWidgets('tapping a row opens the score for that piece', (
+      tester,
+    ) async {
+      Piece? opened;
+      await pumpScreen(tester, onOpenScore: (p) => opened = p);
+      piecesController.add([myPiece()]);
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Clair de Lune'));
+      await tester.pump();
+
+      expect(opened?.id, 'p1');
+    });
+
+    testWidgets(
+      'tapping the trailing info button opens Piece Detail instead of the '
+      'score',
+      (tester) async {
+        when(
+          () => repository.getPiece('p1'),
+        ).thenAnswer((_) async => Success(myPiece()));
+        Piece? opened;
+        await pumpScreen(tester, onOpenScore: (p) => opened = p);
+        piecesController.add([myPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byTooltip('Clair de Lune details'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Clair de Lune details'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(PieceDetailScreen), findsOneWidget);
+        // The row tap's own onOpenScore never fired for the info tap.
+        expect(opened, isNull);
       },
     );
   });

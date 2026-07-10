@@ -11,7 +11,7 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 void main() {
   group('CollaboratorsCubit', () {
-    const ownerId = 'teacher-1';
+    const ownerId = 'owner-1';
     const collaboratorA = Collaborator(uid: 'a', name: 'Alex');
     const collaboratorB = Collaborator(uid: 'b', name: 'Bo');
 
@@ -23,7 +23,7 @@ void main() {
       title: 'Nocturne',
       basePdfChecksum: 'c',
       basePdfPath: '/tmp/p.pdf',
-      teacherId: ownerId,
+      ownerId: ownerId,
       collaborators: collaborators,
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),

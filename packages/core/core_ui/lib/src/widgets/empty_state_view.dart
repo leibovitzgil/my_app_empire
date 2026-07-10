@@ -21,6 +21,7 @@ class EmptyStateView extends StatelessWidget {
     required this.icon,
     required this.title,
     this.message,
+    this.action,
     this.iconSize = 72,
     this.iconColor,
     this.messagePadding = EdgeInsets.zero,
@@ -35,6 +36,11 @@ class EmptyStateView extends StatelessWidget {
 
   /// An optional secondary line guiding the user's next action.
   final String? message;
+
+  /// An optional call-to-action (e.g. a `PrimaryButton`) shown below the
+  /// [message] — for empty states that offer a way out, like "import your
+  /// first sheet".
+  final Widget? action;
 
   /// The size of [icon]. Defaults to 72.
   final double iconSize;
@@ -72,6 +78,10 @@ class EmptyStateView extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+          if (action != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            action!,
           ],
         ],
       ),

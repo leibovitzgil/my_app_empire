@@ -17,7 +17,7 @@ import 'duet_flow_harness.dart';
 void main() {
   testWidgets(
     'import (real UI) -> annotate -> record audio note -> toggle layers -> '
-    'clean workspace -> close/reopen (bloc-level, against the piece the '
+    'clean workspace -> close/reopen (bloc-level, against the sheet the '
     'real import UI created)',
     (tester) async {
       final imported = await runDuetImportFlow(tester);
@@ -28,7 +28,7 @@ void main() {
       ScoreBloc openScore() => ScoreBloc(
         pieceRepository: pieceRepository,
         annotationRepository: annotationRepository,
-        currentUserId: teacherId,
+        currentUserId: ownerId,
       )..add(ScoreOpened(piece.id));
 
       final bloc = openScore();
@@ -36,8 +36,8 @@ void main() {
       await tester.pump();
       expect(bloc.state.status, ScoreStatus.ready);
 
-      // 2. Teacher draws a stroke; ink lands on the teacher's own layer
-      // only, never the (nonexistent, unpaired) student's.
+      // 2. Owner draws a stroke; ink lands on the owner's own layer only,
+      // never a (nonexistent, uninvited) collaborator's.
       bloc
         ..add(const ModeChanged(ScoreMode.draw))
         ..add(
@@ -48,14 +48,14 @@ void main() {
         );
       await tester.pump();
       await tester.pump();
-      // On an unpaired piece there is exactly one participant layer — the
-      // owner's — and the stroke lands on it.
+      // On a sheet with no collaborators there is exactly one participant
+      // layer — the owner's — and the stroke lands on it.
       expect(bloc.state.layers, hasLength(1));
       final ownLayer = bloc.state.ownLayer!;
-      expect(ownLayer.ownerId, teacherId);
+      expect(ownLayer.ownerId, ownerId);
       expect(ownLayer.isOwn, isTrue);
       expect(ownLayer.strokes, hasLength(1));
-      expect(ownLayer.strokes.single.authorId, teacherId);
+      expect(ownLayer.strokes.single.authorId, ownerId);
 
       // 3. Region-select a passage and record an audio note on it.
       bloc
@@ -70,7 +70,7 @@ void main() {
           AudioNoteSaved(
             AudioNote(
               id: 'note-1',
-              authorId: teacherId,
+              authorId: ownerId,
               audioAssetId: 'asset-1',
               pageIndex: 0,
               durationMs: 4000,
@@ -91,7 +91,7 @@ void main() {
 
       expect(bloc.state.notes, hasLength(1));
       final recordedNote = bloc.state.notes.single;
-      expect(recordedNote.authorId, teacherId);
+      expect(recordedNote.authorId, ownerId);
       expect(
         recordedNote.region,
         const Region(
@@ -105,10 +105,10 @@ void main() {
 
       // 4. Layer toggles are independent and immediate: toggling the owner's
       // ink layer off leaves audio pins untouched.
-      bloc.add(const InkLayerToggled(teacherId));
+      bloc.add(const InkLayerToggled(ownerId));
       await tester.pump();
       expect(bloc.state.ownLayer!.visible, isFalse);
-      expect(bloc.state.hiddenInkOwnerIds, {teacherId});
+      expect(bloc.state.hiddenInkOwnerIds, {ownerId});
       expect(bloc.state.audioPinsVisible, isTrue);
 
       // 5. Clean workspace hides every layer regardless of its own flag...
@@ -136,7 +136,7 @@ void main() {
       expect(bloc.state.ownLayer!.visible, isFalse);
       expect(bloc.state.audioPinsVisible, isFalse);
 
-      // 6. "Close and reopen the piece": a brand-new `ScoreBloc` — not the
+      // 6. "Close and reopen the sheet": a brand-new `ScoreBloc` — not the
       // one already in memory — reads the *same* (repository-backed)
       // annotation repository and sees the same stroke and audio note (at
       // the same fractional position). The original bloc is deliberately
@@ -161,8 +161,8 @@ void main() {
     'in-memory message gateway, records the collaborator with their email '
     '(AC-1, AC-2)',
     (tester) async {
-      const studentId = 'student-e2e';
-      const studentEmail = 'student@duet.dev';
+      const collaboratorId = 'collaborator-e2e';
+      const collaboratorEmail = 'friend@duet.dev';
 
       final imported = await runDuetImportFlow(tester);
       final pieceRepository = imported.pieceRepository;
@@ -176,9 +176,9 @@ void main() {
       final directory = InMemoryUserDirectory(
         seed: const [
           DirectoryUser(
-            uid: studentId,
-            email: studentEmail,
-            displayName: 'Student',
+            uid: collaboratorId,
+            email: collaboratorEmail,
+            displayName: 'Friend',
           ),
         ],
       );
@@ -189,42 +189,42 @@ void main() {
         messageGateway: messaging,
       );
 
-      // 1. Owner sends an email invite; it resolves to the seeded student
+      // 1. Owner sends an email invite; it resolves to the seeded friend
       // account and a message lands in their inbox (the foreground/
       // warm-start delivery bridge itself — surfacing that as a device
       // notification — is `injection.dart`'s app-level concern, covered at
       // the unit level by `services/notifications`' own tests).
       final sendResult = await inviteService.sendInvite(
         pieceId: piece.id,
-        ownerId: teacherId,
-        email: studentEmail,
-        ownerName: 'Teacher',
+        ownerId: ownerId,
+        email: collaboratorEmail,
+        ownerName: 'Owner',
       );
       expect(sendResult.isSuccess, isTrue);
       expect((sendResult as Success<LookupOutcome>).value, isA<Resolved>());
 
-      final invites = await inviteService.watchInvites(studentId).first;
+      final invites = await inviteService.watchInvites(collaboratorId).first;
       expect(invites, hasLength(1));
       expect(invites.single.pieceId, piece.id);
-      expect(invites.single.ownerId, teacherId);
+      expect(invites.single.ownerId, ownerId);
 
-      // 2. The invitee accepts; the piece now records them as a
+      // 2. The invitee accepts; the sheet now records them as a
       // collaborator, with their email attached (AC-2).
       final acceptResult = await inviteService.acceptInvite(
         invites.single,
-        accepterId: studentId,
-        accepterName: 'Student',
-        accepterEmail: studentEmail,
+        accepterId: collaboratorId,
+        accepterName: 'Friend',
+        accepterEmail: collaboratorEmail,
       );
       expect(acceptResult.isSuccess, isTrue);
 
       final updated = (await pieceRepository.getPiece(piece.id)).orThrow();
-      expect(updated.isCollaborator(studentId), isTrue);
+      expect(updated.isCollaborator(collaboratorId), isTrue);
       final collaborator = updated.collaborators.firstWhere(
-        (c) => c.uid == studentId,
+        (c) => c.uid == collaboratorId,
       );
-      expect(collaborator.email, studentEmail);
-      expect(collaborator.name, 'Student');
+      expect(collaborator.email, collaboratorEmail);
+      expect(collaborator.name, 'Friend');
     },
   );
 }

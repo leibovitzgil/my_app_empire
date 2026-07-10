@@ -9,7 +9,7 @@ final class PieceDetailState extends Equatable {
     this.status = PieceDetailStatus.loading,
     this.pieceId,
     this.piece,
-    this.currentRole = PieceRole.student,
+    this.currentRole = PieceRole.collaborator,
     this.error,
     this.deleted = false,
     this.left = false,
@@ -28,7 +28,7 @@ final class PieceDetailState extends Equatable {
   /// The loaded piece, once [status] is [PieceDetailStatus.ready].
   final Piece? piece;
 
-  /// Whether the signed-in participant is [piece]'s teacher or student.
+  /// Whether the signed-in participant is [piece]'s owner or a collaborator.
   final PieceRole currentRole;
 
   /// The most recent failure (load or action), if any.

@@ -13,8 +13,8 @@ class MockAnnotationRepository extends Mock implements AnnotationRepository {}
 
 void main() {
   group('ScoreBloc', () {
-    const teacherId = 'teacher1';
-    const studentId = 'student1';
+    const ownerId = 'owner1';
+    const collaboratorId = 'collaborator1';
     const pieceId = 'piece1';
 
     final piece = Piece(
@@ -22,8 +22,8 @@ void main() {
       title: 'Nocturne',
       basePdfChecksum: 'checksum',
       basePdfPath: '/tmp/piece1.pdf',
-      teacherId: teacherId,
-      studentId: studentId,
+      ownerId: ownerId,
+      collaborators: const [Collaborator(uid: collaboratorId)],
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
     );
@@ -89,7 +89,7 @@ void main() {
       await annotationsController.close();
     });
 
-    ScoreBloc buildBloc({String currentUserId = teacherId}) => ScoreBloc(
+    ScoreBloc buildBloc({String currentUserId = ownerId}) => ScoreBloc(
       pieceRepository: pieceRepository,
       annotationRepository: annotationRepository,
       currentUserId: currentUserId,
@@ -98,7 +98,7 @@ void main() {
     test('initial state is loading with the given currentUserId', () {
       final bloc = buildBloc();
       expect(bloc.state.status, ScoreStatus.loading);
-      expect(bloc.state.currentUserId, teacherId);
+      expect(bloc.state.currentUserId, ownerId);
       addTearDown(bloc.close);
     });
 
@@ -113,7 +113,7 @@ void main() {
         isA<ScoreState>()
             .having((s) => s.status, 'status', ScoreStatus.ready)
             .having((s) => s.piece, 'piece', piece)
-            .having((s) => s.currentRole, 'currentRole', PieceRole.teacher),
+            .having((s) => s.currentRole, 'currentRole', PieceRole.owner),
       ],
     );
 
@@ -152,12 +152,12 @@ void main() {
             pieceId: pieceId,
             layers: [
               InkLayer(
-                ownerId: teacherId,
-                role: PieceRole.teacher,
+                ownerId: ownerId,
+                role: PieceRole.owner,
                 strokes: [
                   InkStroke(
                     id: 't1',
-                    authorId: teacherId,
+                    authorId: ownerId,
                     pageIndex: 0,
                     colorId: 'p0',
                     points: [InkPoint(x: 0, y: 0), InkPoint(x: 1, y: 1)],
@@ -165,8 +165,8 @@ void main() {
                 ],
               ),
               InkLayer(
-                ownerId: studentId,
-                role: PieceRole.student,
+                ownerId: collaboratorId,
+                role: PieceRole.collaborator,
                 strokes: [],
               ),
             ],
@@ -179,12 +179,12 @@ void main() {
         final layers = bloc.state.layers;
         expect(layers, hasLength(2));
         // Owner first, then the collaborator, in participant order.
-        expect(layers[0].ownerId, teacherId);
+        expect(layers[0].ownerId, ownerId);
         expect(layers[0].strokes, hasLength(1));
         expect(layers[0].strokes.single.id, 't1');
         expect(layers[0].colorId, 'p0');
         expect(layers[0].isOwn, isTrue);
-        expect(layers[1].ownerId, studentId);
+        expect(layers[1].ownerId, collaboratorId);
         expect(layers[1].strokes, isEmpty);
         expect(layers[1].colorId, 'p1');
         expect(layers[1].isOwn, isFalse);
@@ -200,10 +200,10 @@ void main() {
           title: 'Trio',
           basePdfChecksum: 'checksum',
           basePdfPath: '/tmp/piece1.pdf',
-          teacherId: teacherId,
+          ownerId: ownerId,
           collaborators: const [
-            Collaborator(uid: 'student1', name: 'Bea'),
-            Collaborator(uid: 'student2', name: 'Cy'),
+            Collaborator(uid: 'collaborator1', name: 'Bea'),
+            Collaborator(uid: 'collaborator2', name: 'Cy'),
           ],
           createdAt: DateTime(2024),
           updatedAt: DateTime(2024),
@@ -220,12 +220,12 @@ void main() {
             pieceId: pieceId,
             layers: [
               InkLayer(
-                ownerId: 'student2',
-                role: PieceRole.student,
+                ownerId: 'collaborator2',
+                role: PieceRole.collaborator,
                 strokes: [
                   InkStroke(
                     id: 'c2',
-                    authorId: 'student2',
+                    authorId: 'collaborator2',
                     pageIndex: 0,
                     colorId: 'p2',
                     points: [InkPoint(x: 0, y: 0), InkPoint(x: 1, y: 1)],
@@ -241,9 +241,9 @@ void main() {
       verify: (bloc) {
         final layers = bloc.state.layers;
         expect(layers.map((l) => l.ownerId), [
-          teacherId,
-          'student1',
-          'student2',
+          ownerId,
+          'collaborator1',
+          'collaborator2',
         ]);
         expect(layers.map((l) => l.label), ['Owner', 'Bea', 'Cy']);
         expect(layers.map((l) => l.colorId), ['p0', 'p1', 'p2']);
@@ -298,8 +298,8 @@ void main() {
       );
     });
 
-    ParticipantLayer layerFor(ScoreBloc bloc, String ownerId) =>
-        bloc.state.layers.firstWhere((l) => l.ownerId == ownerId);
+    ParticipantLayer layerFor(ScoreBloc bloc, String participantId) =>
+        bloc.state.layers.firstWhere((l) => l.ownerId == participantId);
 
     blocTest<ScoreBloc, ScoreState>(
       'clean-workspace toggle restores exact prior per-layer visibility',
@@ -310,25 +310,25 @@ void main() {
         annotationsController.add(PieceAnnotations.empty(pieceId));
         await Future<void>.delayed(Duration.zero);
         bloc
-          ..add(const InkLayerToggled(teacherId)) // teacher ink off
+          ..add(const InkLayerToggled(ownerId)) // owner ink off
           ..add(const CleanWorkspaceToggled())
           ..add(const CleanWorkspaceToggled());
       },
       verify: (bloc) {
-        // Set up: teacher ink off, student ink on (its default).
+        // Set up: owner ink off, collaborator ink on (its default).
         // After the sequence above, clean-workspace is back off, and each
         // layer's visibility must be exactly what it was before it was
         // toggled on — not reset to some default.
         expect(bloc.state.cleanWorkspace, isFalse);
-        expect(bloc.state.hiddenInkOwnerIds, {teacherId});
-        expect(layerFor(bloc, teacherId).visible, isFalse);
-        expect(layerFor(bloc, studentId).visible, isTrue);
+        expect(bloc.state.hiddenInkOwnerIds, {ownerId});
+        expect(layerFor(bloc, ownerId).visible, isFalse);
+        expect(layerFor(bloc, collaboratorId).visible, isTrue);
         expect(
-          bloc.state.effectiveInkVisible(layerFor(bloc, teacherId)),
+          bloc.state.effectiveInkVisible(layerFor(bloc, ownerId)),
           isFalse,
         );
         expect(
-          bloc.state.effectiveInkVisible(layerFor(bloc, studentId)),
+          bloc.state.effectiveInkVisible(layerFor(bloc, collaboratorId)),
           isTrue,
         );
       },
@@ -343,7 +343,7 @@ void main() {
         annotationsController.add(PieceAnnotations.empty(pieceId));
         await Future<void>.delayed(Duration.zero);
         bloc
-          ..add(const InkLayerToggled(teacherId))
+          ..add(const InkLayerToggled(ownerId))
           ..add(const CleanWorkspaceToggled());
       },
       verify: (bloc) {
@@ -362,11 +362,11 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         annotationsController.add(PieceAnnotations.empty(pieceId));
         await Future<void>.delayed(Duration.zero);
-        bloc.add(const InkLayerToggled(teacherId));
+        bloc.add(const InkLayerToggled(ownerId));
       },
       verify: (bloc) {
-        expect(layerFor(bloc, teacherId).visible, isFalse);
-        expect(layerFor(bloc, studentId).visible, isTrue);
+        expect(layerFor(bloc, ownerId).visible, isFalse);
+        expect(layerFor(bloc, collaboratorId).visible, isTrue);
         expect(bloc.state.audioPinsVisible, isTrue);
       },
     );
@@ -428,7 +428,7 @@ void main() {
           ).captured;
           expect(captured, hasLength(1));
           final stroke = captured.single as InkStroke;
-          expect(stroke.authorId, teacherId);
+          expect(stroke.authorId, ownerId);
         },
       );
 
@@ -453,13 +453,13 @@ void main() {
       blocTest<ScoreBloc, ScoreState>(
         "StrokeErased is a no-op for a stroke on another participant's layer",
         build: buildBloc,
-        seed: () => const ScoreState.initial(currentUserId: teacherId).copyWith(
+        seed: () => const ScoreState.initial(currentUserId: ownerId).copyWith(
           status: ScoreStatus.ready,
           piece: piece,
-          currentRole: PieceRole.teacher,
+          currentRole: PieceRole.owner,
           layers: const [
             ParticipantLayer(
-              ownerId: teacherId,
+              ownerId: ownerId,
               label: 'Owner',
               colorId: 'p0',
               strokes: [],
@@ -467,15 +467,15 @@ void main() {
               isOwn: true,
             ),
             ParticipantLayer(
-              ownerId: studentId,
+              ownerId: collaboratorId,
               label: 'Bea',
               colorId: 'p1',
               visible: true,
               isOwn: false,
               strokes: [
                 InkStroke(
-                  id: 'student_stroke',
-                  authorId: studentId,
+                  id: 'collaborator_stroke',
+                  authorId: collaboratorId,
                   pageIndex: 0,
                   colorId: 'p1',
                   points: [InkPoint(x: 0, y: 0), InkPoint(x: 1, y: 1)],
@@ -484,7 +484,7 @@ void main() {
             ),
           ],
         ),
-        act: (bloc) => bloc.add(const StrokeErased('student_stroke')),
+        act: (bloc) => bloc.add(const StrokeErased('collaborator_stroke')),
         verify: (_) {
           verifyNever(() => annotationRepository.eraseStroke(any(), any()));
         },
@@ -561,13 +561,13 @@ void main() {
       blocTest<ScoreBloc, ScoreState>(
         'AudioNoteDeleteRequested is a no-op for a note owned by someone else',
         build: buildBloc,
-        seed: () => const ScoreState.initial(currentUserId: teacherId).copyWith(
+        seed: () => const ScoreState.initial(currentUserId: ownerId).copyWith(
           status: ScoreStatus.ready,
           piece: piece,
           notes: [
             AudioNote(
               id: 'note1',
-              authorId: studentId,
+              authorId: collaboratorId,
               audioAssetId: '/tmp/a.m4a',
               pageIndex: 0,
               durationMs: 1000,
@@ -600,7 +600,7 @@ void main() {
             AudioNoteSaved(
               AudioNote(
                 id: 'note1',
-                authorId: teacherId,
+                authorId: ownerId,
                 audioAssetId: '/tmp/a.m4a',
                 pageIndex: 0,
                 durationMs: 1000,

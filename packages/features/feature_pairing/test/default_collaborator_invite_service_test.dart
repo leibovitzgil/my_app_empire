@@ -51,12 +51,12 @@ class _FakePieceRepository implements PieceRepository {
       throw UnimplementedError();
 
   @override
-  Future<Result<Piece>> pairStudent(
+  Future<Result<Piece>> pairCollaborator(
     String pieceId, {
-    required String studentId,
-    String? studentName,
-    String? studentEmail,
-    String? teacherName,
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
@@ -67,7 +67,7 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,
-    String? teacherName,
+    String? ownerName,
   }) => throw UnimplementedError();
 
   @override
@@ -81,11 +81,11 @@ class _FakePieceRepository implements PieceRepository {
   Future<Result<Piece>> registerImportedPiece({
     required String pieceId,
     required String title,
-    required String teacherId,
+    required String ownerId,
     required String sourcePath,
-    String? studentId,
-    String? teacherName,
-    String? studentName,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
   }) => throw UnimplementedError();
 }
 
@@ -107,7 +107,7 @@ void main() {
         title: 'Nocturne',
         basePdfChecksum: 'checksum',
         basePdfPath: '/tmp/p1.pdf',
-        teacherId: ownerId,
+        ownerId: ownerId,
         createdAt: DateTime(2024),
         updatedAt: DateTime(2024),
       );

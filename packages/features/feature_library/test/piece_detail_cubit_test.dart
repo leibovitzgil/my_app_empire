@@ -9,16 +9,16 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 void main() {
   group('PieceDetailCubit', () {
-    const teacherId = 'teacher-1';
-    const studentId = 'student-1';
+    const ownerId = 'owner-1';
+    const collaboratorId = 'collaborator-1';
 
-    final teacherPiece = Piece(
+    final ownedPiece = Piece(
       id: 'p1',
       title: 'Nocturne',
       basePdfChecksum: 'checksum',
       basePdfPath: '/tmp/p1.pdf',
-      teacherId: teacherId,
-      studentId: studentId,
+      ownerId: ownerId,
+      collaborators: const [Collaborator(uid: collaboratorId)],
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
     );
@@ -30,14 +30,14 @@ void main() {
     });
 
     blocTest<PieceDetailCubit, PieceDetailState>(
-      'load resolves the piece and the teacher role',
+      'load resolves the piece and the owner role',
       build: () {
         when(
           () => repository.getPiece('p1'),
-        ).thenAnswer((_) async => Success(teacherPiece));
+        ).thenAnswer((_) async => Success(ownedPiece));
         return PieceDetailCubit(
           pieceRepository: repository,
-          currentUserId: teacherId,
+          currentUserId: ownerId,
         );
       },
       act: (cubit) => cubit.load('p1'),
@@ -49,20 +49,20 @@ void main() {
         ),
         isA<PieceDetailState>()
             .having((s) => s.status, 'status', PieceDetailStatus.ready)
-            .having((s) => s.piece, 'piece', teacherPiece)
-            .having((s) => s.currentRole, 'currentRole', PieceRole.teacher),
+            .having((s) => s.piece, 'piece', ownedPiece)
+            .having((s) => s.currentRole, 'currentRole', PieceRole.owner),
       ],
     );
 
     blocTest<PieceDetailCubit, PieceDetailState>(
-      'load resolves the student role for the paired student',
+      'load resolves the collaborator role for the paired collaborator',
       build: () {
         when(
           () => repository.getPiece('p1'),
-        ).thenAnswer((_) async => Success(teacherPiece));
+        ).thenAnswer((_) async => Success(ownedPiece));
         return PieceDetailCubit(
           pieceRepository: repository,
-          currentUserId: studentId,
+          currentUserId: collaboratorId,
         );
       },
       act: (cubit) => cubit.load('p1'),
@@ -71,7 +71,7 @@ void main() {
         isA<PieceDetailState>().having(
           (s) => s.currentRole,
           'currentRole',
-          PieceRole.student,
+          PieceRole.collaborator,
         ),
       ],
     );
@@ -84,7 +84,7 @@ void main() {
         );
         return PieceDetailCubit(
           pieceRepository: repository,
-          currentUserId: teacherId,
+          currentUserId: ownerId,
         );
       },
       act: (cubit) => cubit.load('missing'),
@@ -103,13 +103,13 @@ void main() {
       build: () {
         when(
           () => repository.getPiece('p1'),
-        ).thenAnswer((_) async => Success(teacherPiece));
+        ).thenAnswer((_) async => Success(ownedPiece));
         when(
           () => repository.renamePiece('p1', 'New title'),
         ).thenAnswer((_) async => const Success<void>(null));
         return PieceDetailCubit(
           pieceRepository: repository,
-          currentUserId: teacherId,
+          currentUserId: ownerId,
         );
       },
       act: (cubit) async {
@@ -131,13 +131,13 @@ void main() {
       build: () {
         when(
           () => repository.getPiece('p1'),
-        ).thenAnswer((_) async => Success(teacherPiece));
+        ).thenAnswer((_) async => Success(ownedPiece));
         when(
           () => repository.deletePiece('p1'),
         ).thenAnswer((_) async => const Success<void>(null));
         return PieceDetailCubit(
           pieceRepository: repository,
-          currentUserId: teacherId,
+          currentUserId: ownerId,
         );
       },
       act: (cubit) async {
@@ -155,15 +155,15 @@ void main() {
       build: () {
         when(
           () => repository.getPiece('p1'),
-        ).thenAnswer((_) async => Success(teacherPiece));
+        ).thenAnswer((_) async => Success(ownedPiece));
         when(() => repository.leavePiece('p1')).thenAnswer(
           (_) async => ResultFailure<void>(
-            StateError('The teacher owns this piece'),
+            StateError('The owner cannot leave their own piece'),
           ),
         );
         return PieceDetailCubit(
           pieceRepository: repository,
-          currentUserId: teacherId,
+          currentUserId: ownerId,
         );
       },
       act: (cubit) async {

@@ -16,16 +16,16 @@ part 'invite_state.dart';
 /// tokenized deep-link [InviteService] always available as a secondary
 /// fallback ("Share invite link instead").
 class InviteBloc extends Bloc<InviteEvent, InviteState> {
-  /// Creates an [InviteBloc] for [teacherId] inviting a collaborator to
+  /// Creates an [InviteBloc] for [ownerId] inviting a collaborator to
   /// [pieceId].
   InviteBloc({
     required CollaboratorInviteService collaboratorInviteService,
     required InviteService inviteService,
     required MonetizationService monetizationService,
     required PieceRepository pieceRepository,
-    required this.teacherId,
+    required this.ownerId,
     required this.pieceId,
-    this.teacherName,
+    this.ownerName,
   }) : _collaboratorInviteService = collaboratorInviteService,
        _inviteService = inviteService,
        _monetization = monetizationService,
@@ -38,7 +38,7 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
   }
 
   /// The inviting owner's id.
-  final String teacherId;
+  final String ownerId;
 
   /// The piece being invited for.
   final String pieceId;
@@ -46,7 +46,7 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
   /// The inviting owner's display name, if known — passed through to
   /// [CollaboratorInviteService.sendInvite] and
   /// [InviteService.createInvite].
-  final String? teacherName;
+  final String? ownerName;
 
   final CollaboratorInviteService _collaboratorInviteService;
   final InviteService _inviteService;
@@ -135,9 +135,9 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
     emit(state.copyWith(status: InviteStatus.sending, clearError: true));
     final result = await _collaboratorInviteService.sendInvite(
       pieceId: pieceId,
-      ownerId: teacherId,
+      ownerId: ownerId,
       email: email,
-      ownerName: teacherName,
+      ownerName: ownerName,
     );
     switch (result) {
       case Success<LookupOutcome>(:final value):
@@ -171,9 +171,9 @@ class InviteBloc extends Bloc<InviteEvent, InviteState> {
     final fallbackStatus = state.status;
     emit(state.copyWith(status: InviteStatus.sending, clearError: true));
     final result = await _inviteService.createInvite(
-      teacherId: teacherId,
+      ownerId: ownerId,
       pieceId: pieceId,
-      teacherName: teacherName,
+      ownerName: ownerName,
     );
     switch (result) {
       case Success<InviteLink>(:final value):

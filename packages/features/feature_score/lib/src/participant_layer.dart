@@ -11,7 +11,7 @@ import 'package:pieces/pieces.dart';
 /// `pieces`' `InkLayer`). `ScoreBloc` projects one of these per participant —
 /// in [Piece.participantIds] order, each assigned a distinct palette colour —
 /// so the viewer can render and toggle every collaborator's ink, rather than
-/// the fixed teacher/student pair it modelled before.
+/// the fixed owner/collaborator pair it modelled before.
 final class ParticipantLayer extends Equatable {
   /// Creates a [ParticipantLayer].
   const ParticipantLayer({

@@ -16,6 +16,7 @@ class PieceDetailPage extends StatelessWidget {
     required this.currentUserId,
     required this.pieceId,
     required this.onOpenScore,
+    this.onInvitePiece,
     this.onOpenCollaborators,
     super.key,
   });
@@ -23,7 +24,7 @@ class PieceDetailPage extends StatelessWidget {
   /// Where the piece is loaded from and mutated.
   final PieceRepository pieceRepository;
 
-  /// The signed-in participant's id.
+  /// The signed-in user's id.
   final String currentUserId;
 
   /// The piece to load.
@@ -34,11 +35,14 @@ class PieceDetailPage extends StatelessWidget {
   /// `LibraryPage.onOpenScore`.
   final void Function(Piece piece) onOpenScore;
 
+  /// Called when the owner taps "Invite a friend", to open `feature_pairing`'s
+  /// invite sheet. A callback for the same cross-package reason as
+  /// [onOpenScore]. `null` hides the action entirely.
+  final void Function(Piece piece)? onInvitePiece;
+
   /// Called when the user taps "Collaborators", to navigate to
   /// `feature_pairing`'s Collaborators screen. A callback for the same
-  /// cross-package reason as [onOpenScore]: `feature_library` and
-  /// `feature_pairing` are siblings that must not depend on each other.
-  /// `null` hides the "Collaborators" tile entirely.
+  /// cross-package reason as [onOpenScore]. `null` hides the tile entirely.
   final void Function(Piece piece)? onOpenCollaborators;
 
   @override
@@ -54,25 +58,30 @@ class PieceDetailPage extends StatelessWidget {
       },
       child: PieceDetailScreen(
         onOpenScore: onOpenScore,
+        onInvitePiece: onInvitePiece,
         onOpenCollaborators: onOpenCollaborators,
       ),
     );
   }
 }
 
-/// The Piece Detail body: metadata, the other party, "Open score", and a
-/// role-appropriate overflow menu. Reads [PieceDetailCubit] from context
+/// The Piece Detail body: metadata, collaborators, "Open score", and an
+/// ownership-appropriate overflow menu. Reads [PieceDetailCubit] from context
 /// (provided by [PieceDetailPage]).
 class PieceDetailScreen extends StatelessWidget {
   /// Creates a [PieceDetailScreen].
   const PieceDetailScreen({
     required this.onOpenScore,
+    this.onInvitePiece,
     this.onOpenCollaborators,
     super.key,
   });
 
   /// See [PieceDetailPage.onOpenScore].
   final void Function(Piece piece) onOpenScore;
+
+  /// See [PieceDetailPage.onInvitePiece].
+  final void Function(Piece piece)? onInvitePiece;
 
   /// See [PieceDetailPage.onOpenCollaborators].
   final void Function(Piece piece)? onOpenCollaborators;
@@ -95,7 +104,7 @@ class PieceDetailScreen extends StatelessWidget {
       builder: (context, state) {
         return Scaffold(
           appBar: AppBar(
-            title: Text(state.piece?.title ?? 'Piece'),
+            title: Text(state.piece?.title ?? 'Sheet'),
             actions: [
               if (state.status == PieceDetailStatus.ready)
                 const _OverflowMenu(),
@@ -104,7 +113,7 @@ class PieceDetailScreen extends StatelessWidget {
           body: switch (state.status) {
             PieceDetailStatus.loading => const LoadingView(),
             PieceDetailStatus.failure => ErrorRetryView(
-              title: "Couldn't load this piece",
+              title: "Couldn't load this sheet",
               message: state.error,
               onRetry: () {
                 final pieceId = state.pieceId;
@@ -116,6 +125,7 @@ class PieceDetailScreen extends StatelessWidget {
             PieceDetailStatus.ready => _ReadyBody(
               state: state,
               onOpenScore: onOpenScore,
+              onInvitePiece: onInvitePiece,
               onOpenCollaborators: onOpenCollaborators,
             ),
           },
@@ -129,20 +139,20 @@ class _ReadyBody extends StatelessWidget {
   const _ReadyBody({
     required this.state,
     required this.onOpenScore,
+    this.onInvitePiece,
     this.onOpenCollaborators,
   });
 
   final PieceDetailState state;
   final void Function(Piece piece) onOpenScore;
+  final void Function(Piece piece)? onInvitePiece;
   final void Function(Piece piece)? onOpenCollaborators;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final piece = state.piece!;
-    final isTeacher = state.currentRole == PieceRole.teacher;
-    final otherId = isTeacher ? piece.studentId : piece.teacherId;
-    final otherName = isTeacher ? piece.studentName : piece.teacherName;
+    final isOwner = state.currentRole == PieceRole.owner;
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
@@ -157,22 +167,14 @@ class _ReadyBody extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          if (otherId != null)
+          // A collaborator sees who shared the sheet with them; there is
+          // always exactly one owner.
+          if (!isOwner)
             PersonTile(
-              initials: LibraryFormat.initialsFor(otherId),
-              color: Color(LibraryFormat.colorValueFor(otherId)),
-              name:
-                  otherName ??
-                  (isTeacher
-                      ? 'Student ${LibraryFormat.initialsFor(otherId)}'
-                      : 'Teacher ${LibraryFormat.initialsFor(otherId)}'),
-            )
-          else
-            Text(
-              'No student paired yet.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              initials: LibraryFormat.initialsFor(piece.ownerId),
+              color: Color(LibraryFormat.colorValueFor(piece.ownerId)),
+              name: piece.ownerName ?? 'Owner',
+              subtitle: 'Shared this sheet with you',
             ),
           if (onOpenCollaborators != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -197,6 +199,14 @@ class _ReadyBody extends StatelessWidget {
               onTap: () => onOpenCollaborators!(piece),
             ),
           ],
+          // Only the owner can invite others onto their sheet.
+          if (isOwner && onInvitePiece != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            SecondaryButton(
+              label: 'Invite a friend',
+              onPressed: () => onInvitePiece!(piece),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           PrimaryButton(
             label: 'Open score',
@@ -216,23 +226,23 @@ class _OverflowMenu extends StatelessWidget {
     final cubit = context.read<PieceDetailCubit>();
     return BlocBuilder<PieceDetailCubit, PieceDetailState>(
       builder: (context, state) {
-        final isTeacher = state.currentRole == PieceRole.teacher;
+        final isOwner = state.currentRole == PieceRole.owner;
         return PopupMenuButton<String>(
           onSelected: (value) => unawaited(
             _onSelected(context, cubit, state, value),
           ),
           itemBuilder: (context) => [
-            if (isTeacher)
+            if (isOwner)
               const PopupMenuItem<String>(
                 value: 'rename',
                 child: Text('Rename'),
               ),
-            if (isTeacher)
+            if (isOwner)
               const PopupMenuItem<String>(
                 value: 'delete',
                 child: Text('Delete'),
               ),
-            if (!isTeacher)
+            if (!isOwner)
               const PopupMenuItem<String>(value: 'leave', child: Text('Leave')),
           ],
         );
@@ -253,8 +263,8 @@ class _OverflowMenu extends StatelessWidget {
       case 'delete':
         final confirmed = await confirmDialog(
           context,
-          title: 'Delete this piece?',
-          message: 'This permanently deletes the piece for both of you.',
+          title: 'Delete this sheet?',
+          message: 'This permanently deletes the sheet for everyone on it.',
           confirmLabel: 'Delete',
           isDestructive: true,
         );
@@ -262,7 +272,7 @@ class _OverflowMenu extends StatelessWidget {
       case 'leave':
         final confirmed = await confirmDialog(
           context,
-          title: 'Leave this piece?',
+          title: 'Leave this sheet?',
           message: "You'll lose access until invited again.",
           confirmLabel: 'Leave',
           isDestructive: true,
@@ -276,7 +286,7 @@ class _OverflowMenu extends StatelessWidget {
     return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Rename piece'),
+        title: const Text('Rename sheet'),
         content: AppTextField(controller: controller, label: 'Title'),
         actions: [
           TextButton(

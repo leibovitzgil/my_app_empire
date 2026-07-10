@@ -17,10 +17,10 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 void main() {
   group('InviteBloc', () {
-    const teacherId = 'teacher-1';
+    const ownerId = 'owner-1';
     const pieceId = 'p1';
-    const email = 'student@example.com';
-    const recipient = InviteRecipient(uid: 'student-1', email: email);
+    const email = 'collaborator@example.com';
+    const recipient = InviteRecipient(uid: 'collaborator-1', email: email);
 
     late MockCollaboratorInviteService collaboratorInviteService;
     late MockInviteService inviteService;
@@ -32,7 +32,7 @@ void main() {
       title: 'Nocturne',
       basePdfChecksum: 'c',
       basePdfPath: '/tmp/p.pdf',
-      teacherId: teacherId,
+      ownerId: ownerId,
       collaborators: collaborators,
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
@@ -50,7 +50,7 @@ void main() {
       inviteService: inviteService,
       monetizationService: monetization,
       pieceRepository: pieceRepository,
-      teacherId: teacherId,
+      ownerId: ownerId,
       pieceId: pieceId,
     );
 
@@ -239,7 +239,7 @@ void main() {
         when(
           () => collaboratorInviteService.sendInvite(
             pieceId: pieceId,
-            ownerId: teacherId,
+            ownerId: ownerId,
             email: email,
             ownerName: any(named: 'ownerName'),
           ),
@@ -268,7 +268,7 @@ void main() {
         verify(
           () => collaboratorInviteService.sendInvite(
             pieceId: pieceId,
-            ownerId: teacherId,
+            ownerId: ownerId,
             email: email,
             ownerName: any(named: 'ownerName'),
           ),
@@ -322,9 +322,9 @@ void main() {
         ).thenAnswer((_) async => const Success(NoAccount()));
         when(
           () => inviteService.createInvite(
-            teacherId: teacherId,
+            ownerId: ownerId,
             pieceId: pieceId,
-            teacherName: any(named: 'teacherName'),
+            ownerName: any(named: 'ownerName'),
           ),
         ).thenAnswer(
           (_) async => Success(
@@ -332,7 +332,7 @@ void main() {
               token: 'tok',
               uri: Uri.parse('https://duet.app/invite/tok'),
               pieceId: pieceId,
-              teacherId: teacherId,
+              ownerId: ownerId,
             ),
           ),
         );
@@ -368,9 +368,9 @@ void main() {
         ).thenAnswer((_) async => Success(piece()));
         when(
           () => inviteService.createInvite(
-            teacherId: teacherId,
+            ownerId: ownerId,
             pieceId: pieceId,
-            teacherName: any(named: 'teacherName'),
+            ownerName: any(named: 'ownerName'),
           ),
         ).thenAnswer(
           (_) async => const ResultFailure<InviteLink>(InviteException('boom')),

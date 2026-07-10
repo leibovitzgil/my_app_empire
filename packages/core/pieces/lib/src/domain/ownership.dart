@@ -1,6 +1,6 @@
 /// Thrown (surfaced via a `Result` failure) when a participant attempts to
-/// modify or delete an annotation they do not own — e.g. a student erasing
-/// the teacher's ink stroke.
+/// modify or delete an annotation they do not own — e.g. one collaborator
+/// erasing another participant's ink stroke.
 class OwnershipViolation implements Exception {
   /// Creates an [OwnershipViolation] for [resourceId].
   const OwnershipViolation(this.resourceId, {this.reason});

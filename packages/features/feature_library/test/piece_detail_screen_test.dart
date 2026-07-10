@@ -9,8 +9,8 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 void main() {
   group('PieceDetailScreen', () {
-    const teacherId = 'teacher-1';
-    const studentId = 'student-1';
+    const ownerId = 'owner-1';
+    const collaboratorId = 'collaborator-1';
 
     late MockPieceRepository repository;
 
@@ -18,11 +18,29 @@ void main() {
       repository = MockPieceRepository();
     });
 
+    Piece piece({
+      List<Collaborator> collaborators = const [
+        Collaborator(uid: collaboratorId),
+      ],
+      String? ownerName,
+    }) => Piece(
+      id: 'p1',
+      title: 'Clair de Lune',
+      basePdfChecksum: 'checksum',
+      basePdfPath: '/tmp/p1.pdf',
+      ownerId: ownerId,
+      ownerName: ownerName,
+      collaborators: collaborators,
+      createdAt: DateTime(2024),
+      updatedAt: DateTime(2024),
+    );
+
     Future<void> pumpScreen(
       WidgetTester tester, {
       required Piece piece,
       required String currentUserId,
       void Function(Piece piece)? onOpenCollaborators,
+      void Function(Piece piece)? onInvitePiece,
     }) async {
       when(
         () => repository.getPiece(piece.id),
@@ -35,6 +53,7 @@ void main() {
             pieceId: piece.id,
             onOpenScore: (_) {},
             onOpenCollaborators: onOpenCollaborators,
+            onInvitePiece: onInvitePiece,
           ),
         ),
       );
@@ -47,129 +66,49 @@ void main() {
     }
 
     testWidgets(
-      'teacher sees the real studentName on a paired piece, falling back '
-      'to an initials-from-id placeholder when unset',
+      'a collaborator sees the real ownerName and "Shared this sheet with '
+      'you"',
       (tester) async {
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          studentId: studentId,
-          studentName: 'Sam Smith',
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
+        await pumpScreen(
+          tester,
+          piece: piece(ownerName: 'Jane Doe'),
+          currentUserId: collaboratorId,
         );
-
-        await pumpScreen(tester, piece: piece, currentUserId: teacherId);
-
-        expect(find.text('Sam Smith'), findsOneWidget);
-        expect(find.textContaining('Student '), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'teacher sees an initials-from-id placeholder for a paired student '
-      'with no studentName yet',
-      (tester) async {
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          studentId: studentId,
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
-
-        await pumpScreen(tester, piece: piece, currentUserId: teacherId);
-
-        expect(find.textContaining('Student '), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'student sees the real teacherName, falling back to an '
-      'initials-from-id placeholder when unset',
-      (tester) async {
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          studentId: studentId,
-          teacherName: 'Jane Doe',
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
-
-        await pumpScreen(tester, piece: piece, currentUserId: studentId);
 
         expect(find.text('Jane Doe'), findsOneWidget);
-        expect(find.textContaining('Teacher '), findsNothing);
+        expect(find.text('Shared this sheet with you'), findsOneWidget);
+        expect(find.text('Owner'), findsNothing);
       },
     );
 
     testWidgets(
-      'student sees an initials-from-id placeholder for a teacher with '
-      'no teacherName yet',
+      'a collaborator sees the "Owner" fallback when the piece has no '
+      'ownerName yet',
       (tester) async {
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          studentId: studentId,
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
+        await pumpScreen(tester, piece: piece(), currentUserId: collaboratorId);
 
-        await pumpScreen(tester, piece: piece, currentUserId: studentId);
-
-        expect(find.textContaining('Teacher '), findsOneWidget);
+        expect(find.text('Owner'), findsOneWidget);
       },
     );
 
-    testWidgets('teacher with no paired student sees "No student paired yet"', (
-      tester,
-    ) async {
-      final piece = Piece(
-        id: 'p1',
-        title: 'Clair de Lune',
-        basePdfChecksum: 'checksum',
-        basePdfPath: '/tmp/p1.pdf',
-        teacherId: teacherId,
-        createdAt: DateTime(2024),
-        updatedAt: DateTime(2024),
-      );
+    testWidgets(
+      'the owner never sees the "shared with you" owner tile, even with no '
+      'collaborators',
+      (tester) async {
+        await pumpScreen(
+          tester,
+          piece: piece(collaborators: const []),
+          currentUserId: ownerId,
+        );
 
-      await pumpScreen(tester, piece: piece, currentUserId: teacherId);
-
-      expect(find.text('No student paired yet.'), findsOneWidget);
-    });
+        expect(find.text('Shared this sheet with you'), findsNothing);
+      },
+    );
 
     testWidgets(
       'hides the Collaborators tile when onOpenCollaborators is null',
       (tester) async {
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          collaborators: const [
-            Collaborator(uid: studentId),
-            Collaborator(uid: 'student-2'),
-          ],
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
-
-        await pumpScreen(tester, piece: piece, currentUserId: teacherId);
+        await pumpScreen(tester, piece: piece(), currentUserId: ownerId);
 
         expect(find.textContaining('Collaborators ('), findsNothing);
       },
@@ -178,25 +117,16 @@ void main() {
     testWidgets(
       'shows "Collaborators (N)" and navigates on tap when wired',
       (tester) async {
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'checksum',
-          basePdfPath: '/tmp/p1.pdf',
-          teacherId: teacherId,
-          collaborators: const [
-            Collaborator(uid: studentId),
-            Collaborator(uid: 'student-2'),
-          ],
-          createdAt: DateTime(2024),
-          updatedAt: DateTime(2024),
-        );
-
         Piece? tapped;
         await pumpScreen(
           tester,
-          piece: piece,
-          currentUserId: teacherId,
+          piece: piece(
+            collaborators: const [
+              Collaborator(uid: collaboratorId),
+              Collaborator(uid: 'collaborator-2'),
+            ],
+          ),
+          currentUserId: ownerId,
           onOpenCollaborators: (p) => tapped = p,
         );
 
@@ -208,5 +138,176 @@ void main() {
         expect(tapped?.id, 'p1');
       },
     );
+
+    testWidgets(
+      'the owner sees an Invite a friend button when onInvitePiece is '
+      'given, and tapping it invokes it',
+      (tester) async {
+        Piece? invited;
+        await pumpScreen(
+          tester,
+          piece: piece(),
+          currentUserId: ownerId,
+          onInvitePiece: (p) => invited = p,
+        );
+
+        expect(find.text('Invite a friend'), findsOneWidget);
+
+        await tester.tap(find.text('Invite a friend'));
+        await tester.pump();
+
+        expect(invited?.id, 'p1');
+      },
+    );
+
+    testWidgets(
+      'the owner sees no Invite a friend button when onInvitePiece is null',
+      (tester) async {
+        await pumpScreen(tester, piece: piece(), currentUserId: ownerId);
+
+        expect(find.text('Invite a friend'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a collaborator never sees the Invite a friend button, even with '
+      'onInvitePiece set (owner-gated)',
+      (tester) async {
+        await pumpScreen(
+          tester,
+          piece: piece(),
+          currentUserId: collaboratorId,
+          onInvitePiece: (_) {},
+        );
+
+        expect(find.text('Invite a friend'), findsNothing);
+      },
+    );
+
+    testWidgets('the owner overflow shows Rename and Delete, never Leave', (
+      tester,
+    ) async {
+      await pumpScreen(tester, piece: piece(), currentUserId: ownerId);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rename'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+      expect(find.text('Leave'), findsNothing);
+    });
+
+    testWidgets('a collaborator overflow shows only Leave', (tester) async {
+      await pumpScreen(tester, piece: piece(), currentUserId: collaboratorId);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Leave'), findsOneWidget);
+      expect(find.text('Rename'), findsNothing);
+      expect(find.text('Delete'), findsNothing);
+    });
+
+    testWidgets(
+      'the owner: Rename via the overflow menu prompts "Rename sheet" and '
+      'submits the new title',
+      (tester) async {
+        when(
+          () => repository.renamePiece('p1', 'New title'),
+        ).thenAnswer((_) async => const Success<void>(null));
+        await pumpScreen(tester, piece: piece(), currentUserId: ownerId);
+
+        await tester.tap(find.byIcon(Icons.more_vert));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rename'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Rename sheet'), findsOneWidget);
+
+        await tester.enterText(find.byType(TextField), 'New title');
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+
+        verify(() => repository.renamePiece('p1', 'New title')).called(1);
+      },
+    );
+
+    testWidgets(
+      'the owner: Delete via the overflow menu, after confirming "Delete '
+      'this sheet?", calls deletePiece',
+      (tester) async {
+        when(
+          () => repository.deletePiece('p1'),
+        ).thenAnswer((_) async => const Success<void>(null));
+        await pumpScreen(tester, piece: piece(), currentUserId: ownerId);
+
+        await tester.tap(find.byIcon(Icons.more_vert));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Delete this sheet?'), findsOneWidget);
+        expect(
+          find.text(
+            'This permanently deletes the sheet for everyone on it.',
+          ),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Delete').last);
+        await tester.pumpAndSettle();
+
+        verify(() => repository.deletePiece('p1')).called(1);
+      },
+    );
+
+    testWidgets(
+      'a collaborator: Leave via the overflow menu, after confirming '
+      '"Leave this sheet?", calls leavePiece',
+      (tester) async {
+        when(
+          () => repository.leavePiece('p1'),
+        ).thenAnswer((_) async => const Success<void>(null));
+        await pumpScreen(
+          tester,
+          piece: piece(),
+          currentUserId: collaboratorId,
+        );
+
+        await tester.tap(find.byIcon(Icons.more_vert));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Leave'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Leave this sheet?'), findsOneWidget);
+
+        await tester.tap(find.text('Leave').last);
+        await tester.pumpAndSettle();
+
+        verify(() => repository.leavePiece('p1')).called(1);
+      },
+    );
+
+    testWidgets('shows a failure state with the sheet-worded copy', (
+      tester,
+    ) async {
+      when(() => repository.getPiece('missing')).thenAnswer(
+        (_) async => ResultFailure(StateError('Unknown piece: missing')),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PieceDetailPage(
+            pieceRepository: repository,
+            currentUserId: ownerId,
+            pieceId: 'missing',
+            onOpenScore: (_) {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text("Couldn't load this sheet"), findsOneWidget);
+    });
   });
 }

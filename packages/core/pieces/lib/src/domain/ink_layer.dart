@@ -4,10 +4,10 @@ import 'package:pieces/src/domain/ink_stroke.dart';
 /// Which side of a piece's collaboration a participant is on.
 enum PieceRole {
   /// The piece's owner, who imported it.
-  teacher,
+  owner,
 
-  /// The participant paired on the piece by the teacher.
-  student,
+  /// A participant invited to collaborate on the piece by its owner.
+  collaborator,
 }
 
 /// All ink strokes authored by a single participant ([ownerId]) on a piece.
@@ -22,7 +22,7 @@ class InkLayer extends Equatable {
   /// The id of the participant this layer belongs to.
   final String ownerId;
 
-  /// Whether [ownerId] is the teacher or the student on the piece.
+  /// Whether [ownerId] is the owner of or a collaborator on the piece.
   final PieceRole role;
 
   /// The strokes this participant has drawn.

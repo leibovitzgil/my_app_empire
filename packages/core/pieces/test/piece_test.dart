@@ -10,7 +10,7 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
+        ownerId: 'owner-1',
         createdAt: now,
         updatedAt: now,
       );
@@ -22,7 +22,7 @@ void main() {
           title: 'Clair de Lune',
           basePdfChecksum: 'abc123',
           basePdfPath: '/pieces/p1.pdf',
-          teacherId: 'teacher-1',
+          ownerId: 'owner-1',
           createdAt: now,
           updatedAt: now,
         ),
@@ -36,7 +36,7 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
+        ownerId: 'owner-1',
         createdAt: now,
         updatedAt: now,
       );
@@ -45,7 +45,7 @@ void main() {
 
       expect(renamed.title, 'Reverie');
       expect(renamed.id, piece.id);
-      expect(renamed.teacherId, piece.teacherId);
+      expect(renamed.ownerId, piece.ownerId);
     });
 
     test('collaborators defaults to empty, and names default to null', () {
@@ -55,18 +55,16 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
+        ownerId: 'owner-1',
         createdAt: now,
         updatedAt: now,
       );
 
       expect(piece.collaborators, isEmpty);
-      expect(piece.teacherName, isNull);
-      expect(piece.studentId, isNull);
-      expect(piece.studentName, isNull);
+      expect(piece.ownerName, isNull);
       expect(piece.collaboratorCount, 0);
       expect(piece.collaboratorIds, isEmpty);
-      expect(piece.participantIds, ['teacher-1']);
+      expect(piece.participantIds, ['owner-1']);
     });
 
     test('collaborators participate in value equality', () {
@@ -76,20 +74,24 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
-        teacherName: 'Jane',
+        ownerId: 'owner-1',
+        ownerName: 'Jane',
         collaborators: collaborators,
         createdAt: now,
         updatedAt: now,
       );
 
       expect(
-        build(const [Collaborator(uid: 'student-1', name: 'Sam')]),
-        build(const [Collaborator(uid: 'student-1', name: 'Sam')]),
+        build(const [Collaborator(uid: 'collaborator-1', name: 'Sam')]),
+        build(const [Collaborator(uid: 'collaborator-1', name: 'Sam')]),
       );
       expect(
-        build(const [Collaborator(uid: 'student-1', name: 'Sam')]),
-        isNot(build(const [Collaborator(uid: 'student-1', name: 'Someone')])),
+        build(const [Collaborator(uid: 'collaborator-1', name: 'Sam')]),
+        isNot(
+          build(const [
+            Collaborator(uid: 'collaborator-1', name: 'Someone'),
+          ]),
+        ),
       );
     });
 
@@ -100,15 +102,15 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
-        teacherName: 'Jane',
+        ownerId: 'owner-1',
+        ownerName: 'Jane',
         createdAt: now,
         updatedAt: now,
       );
 
       final renamed = piece.copyWith(title: 'Reverie');
 
-      expect(renamed.teacherName, 'Jane');
+      expect(renamed.ownerName, 'Jane');
     });
 
     test('copyWith replaces collaborators when given', () {
@@ -118,82 +120,29 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
-        teacherName: 'Jane',
+        ownerId: 'owner-1',
+        ownerName: 'Jane',
         createdAt: now,
         updatedAt: now,
       );
 
       final updated = piece.copyWith(
-        collaborators: const [Collaborator(uid: 'student-1', name: 'Sam')],
-        teacherName: 'Jane Doe',
+        collaborators: const [
+          Collaborator(uid: 'collaborator-1', name: 'Sam'),
+        ],
+        ownerName: 'Jane Doe',
       );
 
       expect(updated.collaborators, [
-        const Collaborator(uid: 'student-1', name: 'Sam'),
+        const Collaborator(uid: 'collaborator-1', name: 'Sam'),
       ]);
-      expect(updated.studentId, 'student-1');
-      expect(updated.studentName, 'Sam');
-      expect(updated.teacherName, 'Jane Doe');
-      expect(updated.isCollaborator('student-1'), isTrue);
-      expect(updated.isParticipant('student-1'), isTrue);
-      expect(updated.isParticipant('teacher-1'), isTrue);
+      expect(updated.collaboratorIds, ['collaborator-1']);
+      expect(updated.ownerName, 'Jane Doe');
+      expect(updated.isCollaborator('collaborator-1'), isTrue);
+      expect(updated.isParticipant('collaborator-1'), isTrue);
+      expect(updated.isParticipant('owner-1'), isTrue);
       expect(updated.isParticipant('someone-else'), isFalse);
     });
-
-    test(
-      'legacy studentId/studentName constructor sugar seeds one '
-      'collaborator (back-compat, AC-10)',
-      () {
-        final now = DateTime(2024);
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'abc123',
-          basePdfPath: '/pieces/p1.pdf',
-          teacherId: 'teacher-1',
-          studentId: 'student-1',
-          studentName: 'Sam',
-          createdAt: now,
-          updatedAt: now,
-        );
-
-        expect(piece.collaborators, [
-          const Collaborator(uid: 'student-1', name: 'Sam'),
-        ]);
-        expect(piece.studentId, 'student-1');
-        expect(piece.studentName, 'Sam');
-        expect(piece.collaboratorCount, 1);
-      },
-    );
-
-    test(
-      'legacy copyWith(studentId:) sugar replaces only the first '
-      'collaborator slot',
-      () {
-        final now = DateTime(2024);
-        final piece = Piece(
-          id: 'p1',
-          title: 'Clair de Lune',
-          basePdfChecksum: 'abc123',
-          basePdfPath: '/pieces/p1.pdf',
-          teacherId: 'teacher-1',
-          collaborators: const [
-            Collaborator(uid: 'student-1', name: 'Sam'),
-            Collaborator(uid: 'student-2', name: 'Alex'),
-          ],
-          createdAt: now,
-          updatedAt: now,
-        );
-
-        final updated = piece.copyWith(studentName: 'Samuel');
-
-        expect(updated.collaborators, [
-          const Collaborator(uid: 'student-1', name: 'Samuel'),
-          const Collaborator(uid: 'student-2', name: 'Alex'),
-        ]);
-      },
-    );
 
     test('multiple collaborators: ids/participants/count', () {
       final now = DateTime(2024);
@@ -202,23 +151,25 @@ void main() {
         title: 'Clair de Lune',
         basePdfChecksum: 'abc123',
         basePdfPath: '/pieces/p1.pdf',
-        teacherId: 'teacher-1',
+        ownerId: 'owner-1',
         collaborators: const [
-          Collaborator(uid: 'student-1'),
-          Collaborator(uid: 'student-2'),
+          Collaborator(uid: 'collaborator-1'),
+          Collaborator(uid: 'collaborator-2'),
         ],
         createdAt: now,
         updatedAt: now,
       );
 
       expect(piece.collaboratorCount, 2);
-      expect(piece.collaboratorIds, ['student-1', 'student-2']);
-      expect(piece.participantIds, ['teacher-1', 'student-1', 'student-2']);
-      expect(piece.isCollaborator('student-2'), isTrue);
-      expect(piece.isCollaborator('teacher-1'), isFalse);
-      expect(piece.isParticipant('teacher-1'), isTrue);
-      // The plain compat getters only ever surface the *first* collaborator.
-      expect(piece.studentId, 'student-1');
+      expect(piece.collaboratorIds, ['collaborator-1', 'collaborator-2']);
+      expect(piece.participantIds, [
+        'owner-1',
+        'collaborator-1',
+        'collaborator-2',
+      ]);
+      expect(piece.isCollaborator('collaborator-2'), isTrue);
+      expect(piece.isCollaborator('owner-1'), isFalse);
+      expect(piece.isParticipant('owner-1'), isTrue);
     });
   });
 
@@ -233,7 +184,7 @@ void main() {
       title: 'Clair de Lune',
       basePdfChecksum: 'abc123',
       basePdfPath: '/pieces/p1.pdf',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
       collaborators: [
         for (var i = 0; i < collaboratorCount; i++) Collaborator(uid: 's$i'),
       ],

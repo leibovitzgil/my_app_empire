@@ -98,8 +98,8 @@ Widget labeledDividerPreview() {
 @Preview(name: 'LabeledToggleChip • unselected')
 Widget labeledToggleChipUnselectedPreview() {
   return LabeledToggleChip(
-    label: 'Teacher',
-    icon: Icons.school_outlined,
+    label: 'Alex',
+    icon: Icons.person_outline,
     selected: false,
     onTap: () {},
   );
@@ -108,8 +108,8 @@ Widget labeledToggleChipUnselectedPreview() {
 @Preview(name: 'LabeledToggleChip • selected + owned')
 Widget labeledToggleChipSelectedOwnedPreview() {
   return LabeledToggleChip(
-    label: 'Teacher',
-    icon: Icons.school_outlined,
+    label: 'You',
+    icon: Icons.person_outline,
     selected: true,
     owned: true,
     onTap: () {},
@@ -200,6 +200,16 @@ Widget emptyStateViewPreview() {
     icon: Icons.shopping_basket_outlined,
     title: 'Your list is empty',
     message: 'Add the first item below',
+  );
+}
+
+@Preview(name: 'EmptyStateView • with action')
+Widget emptyStateViewWithActionPreview() {
+  return EmptyStateView(
+    icon: Icons.library_music_outlined,
+    title: 'Your library is empty',
+    message: 'Import a PDF to add your first sheet.',
+    action: PrimaryButton(label: 'Import a sheet', onPressed: () {}),
   );
 }
 

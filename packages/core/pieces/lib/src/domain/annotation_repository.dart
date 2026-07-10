@@ -36,8 +36,9 @@ class PieceAnnotations extends Equatable {
 /// Contract for reading and mutating a piece's ink strokes and audio notes.
 ///
 /// Implementations are constructed with a `currentUserId` callback so every
-/// mutation can guard ownership (e.g. a student erasing the teacher's stroke
-/// fails with an ownership-violation failure) without each call site
+/// mutation can guard ownership (e.g. one collaborator erasing another
+/// participant's stroke fails with an ownership-violation failure) without
+/// each call site
 /// re-deriving "who am I".
 abstract class AnnotationRepository {
   /// Emits the current [PieceAnnotations] for [pieceId], updating as ink

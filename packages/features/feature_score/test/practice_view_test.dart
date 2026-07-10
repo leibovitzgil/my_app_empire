@@ -99,7 +99,7 @@ void main() {
         ),
         layers: const [
           ParticipantLayer(
-            ownerId: 'teacher-1',
+            ownerId: 'owner-1',
             label: 'Owner',
             colorId: 'p0',
             visible: true,
@@ -107,7 +107,7 @@ void main() {
             strokes: [
               InkStroke(
                 id: 't1',
-                authorId: 'teacher-1',
+                authorId: 'owner-1',
                 pageIndex: 0,
                 colorId: 'p0',
                 points: [InkPoint(x: 0.1, y: 0.1)],
@@ -115,7 +115,7 @@ void main() {
             ],
           ),
           ParticipantLayer(
-            ownerId: 'student-1',
+            ownerId: 'collaborator-1',
             label: 'Bea',
             colorId: 'p1',
             visible: true,
@@ -123,7 +123,7 @@ void main() {
             strokes: [
               InkStroke(
                 id: 's1',
-                authorId: 'student-1',
+                authorId: 'collaborator-1',
                 pageIndex: 0,
                 colorId: 'p1',
                 points: [InkPoint(x: 0.2, y: 0.2)],

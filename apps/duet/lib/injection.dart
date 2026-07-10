@@ -13,7 +13,6 @@ import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
-import 'package:duet/domain/duet_roles.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_pairing/feature_pairing.dart';
 import 'package:feature_settings/feature_settings.dart';
@@ -25,7 +24,6 @@ import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:review_sync/review_sync.dart';
 import 'package:user_directory/user_directory.dart';
-import 'package:user_roles/user_roles.dart';
 
 /// The app's service locator.
 final GetIt getIt = GetIt.instance;
@@ -79,26 +77,6 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt<AuthAccountProvider>().account.map((account) => account?.email),
   );
   getIt.registerSingleton<CurrentUserEmail>(currentUserEmail);
-
-  if (useFirebase) {
-    getIt.registerLazySingleton<UserRoleRepository>(
-      () => FirestoreUserRoleRepository(
-        firestore: FirebaseFirestore.instance,
-        userIdStream: getIt<AuthRepository>().user,
-        rolePermissions: DuetRoles.rolePermissions,
-        knownRoles: DuetRoles.knownRoles,
-      ),
-    );
-  } else {
-    getIt.registerSingleton<UserRoleRepository>(
-      LocalUserRoleRepository(
-        storage: getIt<LocalStorageService>(),
-        userIdStream: getIt<AuthRepository>().user,
-        rolePermissions: DuetRoles.rolePermissions,
-        knownRoles: DuetRoles.knownRoles,
-      ),
-    );
-  }
 
   getIt.registerLazySingleton<MonetizationService>(
     SimulatedMonetizationService.new,
@@ -167,9 +145,9 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       () => InMemoryUserDirectory(
         seed: const [
           DirectoryUser(
-            uid: 'demo_student_1',
-            email: 'student@duet.dev',
-            displayName: 'Demo Student',
+            uid: 'demo_friend_1',
+            email: 'friend@duet.dev',
+            displayName: 'Demo Friend',
           ),
         ],
       ),
@@ -232,7 +210,7 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   // `PieceRepository`/`AnnotationRepository` have a constructor cycle:
   // `LocalPieceRepository` needs an `AnnotationRepository` (to purge a
   // deleted piece's annotations) and `LocalAnnotationRepository` needs a
-  // `PieceRepository` (to resolve a new author's teacher/student role). The
+  // `PieceRepository` (to resolve a new author's owner/collaborator role).
   // Piece side takes a *lazy provider* rather than a direct instance,
   // breaking the cycle: whichever of the two get_it resolves first fully
   // constructs (caching itself as the singleton) before the other's factory

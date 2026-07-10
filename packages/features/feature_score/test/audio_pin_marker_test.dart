@@ -31,8 +31,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AudioPinMarker(
-              note: _note('teacher1'),
-              currentUserId: 'student1',
+              note: _note('owner1'),
+              currentUserId: 'collaborator1',
               isPlaying: false,
               onTap: () => tapped = true,
               onDelete: () {},
@@ -54,8 +54,8 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: AudioPinMarker(
-                note: _note('teacher1'),
-                currentUserId: 'teacher1',
+                note: _note('owner1'),
+                currentUserId: 'owner1',
                 isPlaying: false,
                 onTap: () {},
                 onDelete: () => deleted = true,
@@ -84,8 +84,8 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: AudioPinMarker(
-                note: _note('teacher1'),
-                currentUserId: 'student1',
+                note: _note('owner1'),
+                currentUserId: 'collaborator1',
                 isPlaying: false,
                 onTap: () {},
                 onDelete: () => deleted = true,

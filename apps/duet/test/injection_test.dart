@@ -15,7 +15,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
-import 'package:user_roles/user_roles.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
@@ -80,18 +79,13 @@ void main() {
       },
     );
 
-    test(
-      'binds CollaboratorInviteService and a Local (non-Firestore) '
-      'UserRoleRepository',
-      () async {
-        await configureDependencies();
+    test('binds CollaboratorInviteService', () async {
+      await configureDependencies();
 
-        expect(
-          getIt<CollaboratorInviteService>(),
-          isA<DefaultCollaboratorInviteService>(),
-        );
-        expect(getIt<UserRoleRepository>(), isA<LocalUserRoleRepository>());
-      },
-    );
+      expect(
+        getIt<CollaboratorInviteService>(),
+        isA<DefaultCollaboratorInviteService>(),
+      );
+    });
   });
 }

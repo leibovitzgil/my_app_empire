@@ -1,35 +1,22 @@
 import 'package:equatable/equatable.dart';
 import 'package:pieces/src/domain/collaborator.dart';
 
-/// A single piece of sheet music shared between a teacher (its owner) and
-/// zero or more collaborators.
+/// A single sheet of music, owned by one user and shared with zero or more
+/// collaborators.
 class Piece extends Equatable {
-  /// Creates a [Piece].
-  ///
-  /// [collaborators] is the current, canonical list. [studentId]/
-  /// [studentName] are back-compat construction sugar for pre-migration
-  /// call sites: when [collaborators] isn't given, a non-null [studentId]
-  /// seeds a single-entry collaborators list — mirroring the on-disk
-  /// migration in `piece_mappers.dart`. Prefer [collaborators] in new code.
-  Piece({
+  /// Creates a [Piece]. [collaborators] is the canonical list of everyone
+  /// granted access beyond the owner; it defaults to empty.
+  const Piece({
     required this.id,
     required this.title,
     required this.basePdfChecksum,
     required this.basePdfPath,
-    required this.teacherId,
+    required this.ownerId,
     required this.createdAt,
     required this.updatedAt,
-    this.teacherName,
+    this.ownerName,
     List<Collaborator>? collaborators,
-    String? studentId,
-    String? studentName,
-  }) : collaborators =
-           collaborators ??
-           (studentId == null
-               ? const <Collaborator>[]
-               : <Collaborator>[
-                   Collaborator(uid: studentId, name: studentName),
-                 ]);
+  }) : collaborators = collaborators ?? const <Collaborator>[];
 
   /// The stable identifier for this piece.
   final String id;
@@ -44,15 +31,14 @@ class Piece extends Equatable {
   /// The on-device path to the original (unannotated) PDF.
   final String basePdfPath;
 
-  /// The id of the teacher who owns this piece.
-  final String teacherId;
+  /// The id of the user who owns this piece (the one who imported it).
+  final String ownerId;
 
-  /// The teacher's display name, if known at the time this piece was
-  /// imported/registered. Nullable: older/imported pieces predating this
-  /// field, or a teacher whose identity had no resolvable display name at
-  /// import time, won't have one — UI falls back to an initials-from-id
-  /// placeholder in that case.
-  final String? teacherName;
+  /// The owner's display name, if known at the time this piece was
+  /// imported/registered. Nullable: a piece imported by an identity with no
+  /// resolvable display name won't have one — UI falls back to an
+  /// initials-from-id placeholder in that case.
+  final String? ownerName;
 
   /// Every collaborator currently granted access to this piece, beyond its
   /// owner. Order is insertion order (earliest-invited first).
@@ -64,17 +50,6 @@ class Piece extends Equatable {
   /// When this piece (or its metadata) was last modified.
   final DateTime updatedAt;
 
-  /// Back-compat read-only view of the first collaborator's uid. Not
-  /// `@Deprecated`, to avoid cascading lint at every read call site — prefer
-  /// [collaborators]/[isCollaborator] in new code.
-  String? get studentId =>
-      collaborators.isEmpty ? null : collaborators.first.uid;
-
-  /// Back-compat read-only view of the first collaborator's name. See
-  /// [studentId].
-  String? get studentName =>
-      collaborators.isEmpty ? null : collaborators.first.name;
-
   /// The uids of every current collaborator.
   List<String> get collaboratorIds => [
     for (final collaborator in collaborators) collaborator.uid,
@@ -82,7 +57,7 @@ class Piece extends Equatable {
 
   /// The uids of every participant on this piece: the owner plus every
   /// collaborator.
-  List<String> get participantIds => [teacherId, ...collaboratorIds];
+  List<String> get participantIds => [ownerId, ...collaboratorIds];
 
   /// The number of current collaborators. The shared input to
   /// [CollaboratorLimits]'s cap check.
@@ -96,20 +71,13 @@ class Piece extends Equatable {
   /// Whether [userId] is a participant on this piece at all: its owner or
   /// one of its collaborators.
   bool isParticipant(String userId) =>
-      userId == teacherId || isCollaborator(userId);
+      userId == ownerId || isCollaborator(userId);
 
   /// Returns a copy with the given fields replaced.
-  ///
-  /// [studentId]/[studentName] are back-compat sugar (see the constructor
-  /// doc): when given and [collaborators] isn't, they replace/backfill the
-  /// *first* collaborator slot, matching the pre-migration single-student
-  /// semantics. Prefer passing [collaborators] directly in new code.
   Piece copyWith({
     String? title,
-    String? teacherName,
+    String? ownerName,
     List<Collaborator>? collaborators,
-    String? studentId,
-    String? studentName,
     DateTime? updatedAt,
   }) {
     return Piece(
@@ -117,29 +85,12 @@ class Piece extends Equatable {
       title: title ?? this.title,
       basePdfChecksum: basePdfChecksum,
       basePdfPath: basePdfPath,
-      teacherId: teacherId,
-      teacherName: teacherName ?? this.teacherName,
-      collaborators:
-          collaborators ?? _mergeLegacyStudent(studentId, studentName),
+      ownerId: ownerId,
+      ownerName: ownerName ?? this.ownerName,
+      collaborators: collaborators ?? this.collaborators,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
-  }
-
-  /// Backs [copyWith]'s legacy `studentId`/`studentName` sugar: replaces (or
-  /// backfills, if there wasn't one yet) the first collaborator slot only,
-  /// leaving any other collaborators untouched.
-  List<Collaborator> _mergeLegacyStudent(
-    String? studentId,
-    String? studentName,
-  ) {
-    if (studentId == null && studentName == null) return collaborators;
-    final resolvedId = studentId ?? this.studentId;
-    if (resolvedId == null) return collaborators;
-    final resolvedName = studentName ?? this.studentName;
-    final updated = Collaborator(uid: resolvedId, name: resolvedName);
-    if (collaborators.isEmpty) return [updated];
-    return [updated, ...collaborators.skip(1)];
   }
 
   @override
@@ -148,8 +99,8 @@ class Piece extends Equatable {
     title,
     basePdfChecksum,
     basePdfPath,
-    teacherId,
-    teacherName,
+    ownerId,
+    ownerName,
     collaborators,
     createdAt,
     updatedAt,

@@ -20,7 +20,7 @@ import 'package:pieces/src/domain/piece_repository.dart';
 class LocalAnnotationRepository implements AnnotationRepository {
   /// Creates a [LocalAnnotationRepository], guarding mutating calls with
   /// [currentUserId]. [pieceRepository] resolves a new author's
-  /// [PieceRole] (teacher vs. student) the first time they add a stroke.
+  /// [PieceRole] (owner vs. collaborator) the first time they add a stroke.
   LocalAnnotationRepository({
     required LocalStorageService storage,
     required String Function() currentUserId,
@@ -64,12 +64,12 @@ class LocalAnnotationRepository implements AnnotationRepository {
   Future<PieceRole> _roleFor(String pieceId, String authorId) async {
     final result = await _pieceRepository.getPiece(pieceId);
     if (result case Success<Piece>(:final value)) {
-      if (value.teacherId == authorId) return PieceRole.teacher;
-      if (value.isCollaborator(authorId)) return PieceRole.student;
+      if (value.ownerId == authorId) return PieceRole.owner;
+      if (value.isCollaborator(authorId)) return PieceRole.collaborator;
     }
-    // Unknown piece or participant; default to student since the teacher is
-    // always expected to be resolvable (they created the piece).
-    return PieceRole.student;
+    // Unknown piece or participant; default to collaborator since the owner
+    // is always expected to be resolvable (they created the piece).
+    return PieceRole.collaborator;
   }
 
   @override

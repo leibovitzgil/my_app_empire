@@ -11,7 +11,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LabeledToggleChip(
-              label: 'Teacher',
+              label: 'Alex',
               icon: Icons.school_outlined,
               selected: false,
               onTap: () => tapped = true,
@@ -34,7 +34,7 @@ void main() {
           theme: ThemeData(colorScheme: scheme, useMaterial3: true),
           home: Scaffold(
             body: LabeledToggleChip(
-              label: 'Teacher',
+              label: 'Alex',
               icon: Icons.school_outlined,
               selected: selected,
               onTap: () {},
@@ -64,7 +64,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LabeledToggleChip(
-              label: 'Teacher',
+              label: 'Alex',
               icon: Icons.school_outlined,
               selected: false,
               owned: true,
@@ -82,7 +82,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: LabeledToggleChip(
-              label: 'Teacher',
+              label: 'Alex',
               icon: Icons.school_outlined,
               selected: false,
               onTap: () {},

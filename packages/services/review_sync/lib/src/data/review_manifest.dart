@@ -76,7 +76,7 @@ class ReviewManifest {
   /// The author's display name at export time, if known locally on their
   /// device — carried through so a receiver creating this piece for the
   /// first time (see `FileShareReviewSyncService._importPieceFromBundle`)
-  /// can attach a real `Piece.teacherName` instead of leaving it null.
+  /// can attach a real `Piece.ownerName` instead of leaving it null.
   final String? authorName;
 
   /// When this bundle was exported, in epoch milliseconds. Doubles as the

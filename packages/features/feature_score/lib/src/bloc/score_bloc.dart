@@ -71,9 +71,9 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
     final result = await _pieceRepository.getPiece(event.pieceId);
     switch (result) {
       case Success<Piece>(:final value):
-        final role = value.teacherId == state.currentUserId
-            ? PieceRole.teacher
-            : PieceRole.student;
+        final role = value.ownerId == state.currentUserId
+            ? PieceRole.owner
+            : PieceRole.collaborator;
         emit(
           state.copyWith(
             status: ScoreStatus.ready,
@@ -142,7 +142,7 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
   /// (`Owner`, or `Collaborator N` keyed on participant index so unnamed
   /// collaborators stay distinguishable).
   String _labelForParticipant(Piece piece, String ownerId, int index) {
-    if (ownerId == piece.teacherId) return piece.teacherName ?? 'Owner';
+    if (ownerId == piece.ownerId) return piece.ownerName ?? 'Owner';
     for (final collaborator in piece.collaborators) {
       if (collaborator.uid == ownerId) {
         return collaborator.name ?? 'Collaborator $index';

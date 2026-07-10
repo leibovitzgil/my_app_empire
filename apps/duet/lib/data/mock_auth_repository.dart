@@ -4,11 +4,10 @@ import 'package:feature_auth/feature_auth.dart';
 /// An in-memory [AuthRepository] for local development.
 ///
 /// Broadcast (unlike a plain, single-subscription controller) because more
-/// than one long-lived singleton needs to observe [user]: `AuthBloc`,
-/// `CurrentUser`, and `UserRoleRepository` all subscribe independently (each
-/// eagerly, at app-startup — see `injection.dart` — so none misses the first
-/// emission despite a broadcast stream not replaying past events to a late
-/// subscriber).
+/// than one long-lived singleton needs to observe [user]: `AuthBloc` and
+/// `CurrentUser` both subscribe independently (each eagerly, at app-startup —
+/// see `injection.dart` — so none misses the first emission despite a
+/// broadcast stream not replaying past events to a late subscriber).
 ///
 /// Also implements [AuthAccountProvider] — mirroring
 /// `FirebaseAuthRepository` — so the default (headless, no-Firebase) DI

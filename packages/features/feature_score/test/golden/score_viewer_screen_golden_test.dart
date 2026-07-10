@@ -58,7 +58,7 @@ void main() {
       final bloc = ScoreBloc(
         pieceRepository: pieceRepository,
         annotationRepository: annotationRepository,
-        currentUserId: 'teacher-1',
+        currentUserId: 'owner-1',
       );
       addTearDown(bloc.close);
 
@@ -80,7 +80,7 @@ void main() {
       final bloc = ScoreBloc(
         pieceRepository: pieceRepository,
         annotationRepository: annotationRepository,
-        currentUserId: 'teacher-1',
+        currentUserId: 'owner-1',
       )..add(const ScoreOpened('piece-1'));
       addTearDown(bloc.close);
 

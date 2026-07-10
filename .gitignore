@@ -4,6 +4,8 @@
 .pub-cache/
 .pub/
 build/
+# Flutter golden-test failure artifacts (regenerated on each failing run)
+**/test/golden/failures/
 .flutter-plugins
 .flutter-plugins-dependencies
 pubspec_overrides.yaml

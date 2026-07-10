@@ -20,15 +20,15 @@ part 'accept_invite_state.dart';
 /// `PieceDetailCubit` — since it's a simple, externally-triggered
 /// load-then-act flow rather than event-driven branching.
 class AcceptInviteCubit extends Cubit<AcceptInviteState> {
-  /// Creates an [AcceptInviteCubit] for [studentId] accepting [token].
+  /// Creates an [AcceptInviteCubit] for [collaboratorId] accepting [token].
   AcceptInviteCubit({
     required InviteService inviteService,
     required PieceRepository pieceRepository,
     required MonetizationService monetizationService,
     required this.token,
-    required this.studentId,
-    this.studentName,
-    this.studentEmail,
+    required this.collaboratorId,
+    this.collaboratorName,
+    this.collaboratorEmail,
   }) : _inviteService = inviteService,
        _pieceRepository = pieceRepository,
        _monetization = monetizationService,
@@ -37,22 +37,22 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
   /// The invite token to resolve/accept.
   final String token;
 
-  /// The accepting student's id.
-  final String studentId;
+  /// The accepting collaborator's id.
+  final String collaboratorId;
 
-  /// The accepting student's display name, if known — passed through to
+  /// The accepting collaborator's display name, if known — passed through to
   /// [InviteService.acceptInvite].
-  final String? studentName;
+  final String? collaboratorName;
 
-  /// The accepting student's email, if known — passed through to
+  /// The accepting collaborator's email, if known — passed through to
   /// [InviteService.acceptInvite] (AC-2: acceptance records uid+email).
-  final String? studentEmail;
+  final String? collaboratorEmail;
 
   final InviteService _inviteService;
   final PieceRepository _pieceRepository;
   final MonetizationService _monetization;
 
-  /// Resolves [token] to its piece/teacher details, then checks whether the
+  /// Resolves [token] to its piece/owner details, then checks whether the
   /// accepter is already a collaborator or the piece is at its cap.
   Future<void> load() async {
     emit(state.copyWith(status: AcceptInviteStatus.loading, clearError: true));
@@ -71,7 +71,7 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
     final pieceResult = await _pieceRepository.getPiece(details.pieceId);
     switch (pieceResult) {
       case Success<Piece>(:final value):
-        if (value.isCollaborator(studentId)) {
+        if (value.isCollaborator(collaboratorId)) {
           emit(
             state.copyWith(
               status: AcceptInviteStatus.alreadyCollaborator,
@@ -97,7 +97,7 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
     }
   }
 
-  /// Accepts the invite, pairing [studentId] to its piece.
+  /// Accepts the invite, pairing [collaboratorId] to its piece.
   Future<void> accept() async {
     if (state.status != AcceptInviteStatus.ready) return;
     emit(
@@ -105,9 +105,9 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
     );
     final result = await _inviteService.acceptInvite(
       token,
-      studentId: studentId,
-      studentName: studentName,
-      studentEmail: studentEmail,
+      collaboratorId: collaboratorId,
+      collaboratorName: collaboratorName,
+      collaboratorEmail: collaboratorEmail,
     );
     switch (result) {
       case Success<void>():

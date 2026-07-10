@@ -6,7 +6,7 @@ import 'package:pieces/pieces.dart';
 part 'piece_detail_state.dart';
 
 /// Drives the Piece Detail screen: loads a single piece and mediates
-/// rename/delete (teacher) or leave (student).
+/// rename/delete (owner) or leave (collaborator).
 ///
 /// A [Cubit] rather than a [Bloc] — like `RecordAudioCubit`/
 /// `AudioPlaybackCubit` in `feature_score` — since each action is a simple,
@@ -39,9 +39,9 @@ class PieceDetailCubit extends Cubit<PieceDetailState> {
           state.copyWith(
             status: PieceDetailStatus.ready,
             piece: value,
-            currentRole: value.teacherId == _currentUserId
-                ? PieceRole.teacher
-                : PieceRole.student,
+            currentRole: value.ownerId == _currentUserId
+                ? PieceRole.owner
+                : PieceRole.collaborator,
           ),
         );
       case ResultFailure<Piece>(:final error):
@@ -51,7 +51,7 @@ class PieceDetailCubit extends Cubit<PieceDetailState> {
     }
   }
 
-  /// Renames the loaded piece. Teacher only — the caller is expected to gate
+  /// Renames the loaded piece. Owner only — the caller is expected to gate
   /// the affordance; the repository doesn't re-check ownership here.
   Future<void> rename(String title) async {
     final piece = state.piece;
@@ -66,7 +66,7 @@ class PieceDetailCubit extends Cubit<PieceDetailState> {
     }
   }
 
-  /// Permanently deletes the loaded piece. Teacher only.
+  /// Permanently deletes the loaded piece. Owner only.
   Future<void> delete() async {
     final piece = state.piece;
     if (piece == null) return;
@@ -79,7 +79,7 @@ class PieceDetailCubit extends Cubit<PieceDetailState> {
     }
   }
 
-  /// Leaves the loaded piece without deleting it. Student only.
+  /// Leaves the loaded piece without deleting it. Collaborator only.
   Future<void> leave() async {
     final piece = state.piece;
     if (piece == null) return;

@@ -54,8 +54,6 @@ dependencies:
     path: ../../packages/services/review_sync
   user_directory:
     path: ../../packages/core/user_directory
-  user_roles:
-    path: ../../packages/core/user_roles
 
 dev_dependencies:
   firebase_messaging: ^16.4.1

@@ -18,7 +18,7 @@ void main() {
       title: 'Nocturne',
       basePdfChecksum: 'checksum',
       basePdfPath: '/tmp/p1.pdf',
-      teacherId: 'teacher-1',
+      ownerId: 'owner-1',
       createdAt: DateTime(2024),
       updatedAt: DateTime(2024),
     );
@@ -109,7 +109,7 @@ void main() {
           () => repository.importPiece(
             title: 'My title',
             sourcePath: sourcePath,
-            teacherName: any(named: 'teacherName'),
+            ownerName: any(named: 'ownerName'),
           ),
         ).thenAnswer((_) async => Success(piece));
         return buildBloc(filePicker: () async => null);
@@ -138,7 +138,7 @@ void main() {
           () => repository.importPiece(
             title: 'My title',
             sourcePath: sourcePath,
-            teacherName: any(named: 'teacherName'),
+            ownerName: any(named: 'ownerName'),
           ),
         ).thenAnswer(
           (_) async => ResultFailure(StateError('permission denied')),
