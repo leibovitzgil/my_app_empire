@@ -253,6 +253,10 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
                       searchController: _searchController,
                       searchFocusNode: _searchFocusNode,
                       onOpenSettings: widget.onOpenSettings,
+                      // Search is hidden until the library has content (mockup
+                      // 3b: "search + chips hidden until there is content"),
+                      // matching the filter bar's gating above.
+                      showSearch: showFab,
                     ),
                     if (showFilterBar) _FilterSortBar(state: state),
                     Expanded(child: _buildBody(context, state, columns)),
@@ -524,6 +528,7 @@ class _Header extends StatelessWidget {
     required this.searchController,
     required this.searchFocusNode,
     required this.onOpenSettings,
+    required this.showSearch,
   });
 
   final String appName;
@@ -532,6 +537,7 @@ class _Header extends StatelessWidget {
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final VoidCallback? onOpenSettings;
+  final bool showSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -574,17 +580,19 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: AppSearchField(
-                controller: searchController,
-                focusNode: searchFocusNode,
-                hint: 'Search your library',
+          if (showSearch) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: AppSearchField(
+                  controller: searchController,
+                  focusNode: searchFocusNode,
+                  hint: 'Search your library',
+                ),
               ),
             ),
-          ),
+          ],
           if (onOpenSettings != null) ...[
             const SizedBox(width: AppSpacing.sm),
             IconButton(
