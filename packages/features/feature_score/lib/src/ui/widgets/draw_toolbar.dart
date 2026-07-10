@@ -1,11 +1,13 @@
 import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 
-/// The contextual toolbar shown only while drawing.
+/// The contextual toolbar shown only while drawing: a floating pill above
+/// the mode segmented control.
 ///
 /// In collaboration mode every participant draws in their own auto-assigned
 /// layer colour (there's no manual colour picking), so this shows that colour
-/// as a read-only "your ink" indicator alongside the eraser toggle and undo.
+/// as a read-only "your ink" indicator alongside the eraser toggle, undo,
+/// and a "Done" action that exits back to view mode.
 class DrawToolbar extends StatelessWidget {
   /// Creates a [DrawToolbar].
   const DrawToolbar({
@@ -14,6 +16,7 @@ class DrawToolbar extends StatelessWidget {
     required this.canUndo,
     required this.onEraserToggled,
     required this.onUndo,
+    required this.onDone,
     super.key,
   });
 
@@ -33,26 +36,31 @@ class DrawToolbar extends StatelessWidget {
   /// Called when the undo button is tapped.
   final VoidCallback onUndo;
 
+  /// Called when "Done" is tapped — the caller exits draw mode.
+  final VoidCallback onDone;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ColoredBox(
+    return Material(
       color: scheme.surfaceContainerHigh,
+      shape: StadiumBorder(side: BorderSide(color: scheme.outlineVariant)),
+      elevation: 4,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.xs,
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Semantics(
               label: 'Your ink colour',
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Container(
-                  width: 24,
-                  height: 24,
+                  width: 22,
+                  height: 22,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: penColor,
@@ -63,9 +71,9 @@ class DrawToolbar extends StatelessWidget {
             ),
             Text(
               'Your ink',
-              style: TextStyle(color: scheme.onSurfaceVariant),
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
             ),
-            const SizedBox(width: AppSpacing.md),
+            _Divider(color: scheme.outlineVariant),
             Semantics(
               button: true,
               label: eraserActive
@@ -99,9 +107,27 @@ class DrawToolbar extends StatelessWidget {
                 ),
               ),
             ),
+            _Divider(color: scheme.outlineVariant),
+            AppTextButton(label: 'Done', onPressed: onDone),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 26,
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      color: color,
     );
   }
 }

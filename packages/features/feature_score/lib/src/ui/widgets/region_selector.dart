@@ -1,5 +1,3 @@
-import 'package:core_ui/core_ui.dart';
-import 'package:feature_score/src/bloc/score_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:pieces/pieces.dart';
 
@@ -7,19 +5,21 @@ import 'package:pieces/pieces.dart';
 /// `regionSelect`.
 ///
 /// While dragging, a live dashed rectangle with corner handles previews the
-/// selection (purely local widget state — a snappy 60fps drag shouldn't
-/// round-trip through the bloc for every pixel of movement, though
-/// [onRegionPreview] still mirrors it into `ScoreState.activeRegion` per
-/// frame for other listeners). On release, an [AppBottomSheet] offers
-/// "Record audio note" / "Practice this passage" / "Cancel"; picking one
-/// calls [onRegionChosen] with the intent, which the caller uses to
-/// dispatch both `RegionSelectStarted` and `RegionSelectCompleted`.
+/// selection against a dimmed veil (purely local widget state — a snappy
+/// 60fps drag shouldn't round-trip through the bloc for every pixel of
+/// movement, though [onRegionPreview] still mirrors it into
+/// `ScoreState.activeRegion` per frame for other listeners). On release, if
+/// the drag cleared the minimum size, [onRegionCompleted] fires with the
+/// final fractional [Region] — the caller (`score_viewer_screen.dart`)
+/// decides what UI (an anchored popover or a bottom sheet) offers "Practice"
+/// / "Record" / "Cancel" from there; this widget no longer makes that
+/// choice itself.
 class RegionSelector extends StatefulWidget {
   /// Creates a [RegionSelector] for [pageIndex].
   const RegionSelector({
     required this.pageIndex,
     required this.onRegionPreview,
-    required this.onRegionChosen,
+    required this.onRegionCompleted,
     super.key,
   });
 
@@ -30,9 +30,9 @@ class RegionSelector extends StatefulWidget {
   /// preview via bloc state.
   final ValueChanged<Region> onRegionPreview;
 
-  /// Called once a final region has been dragged out and the user picked an
-  /// intent from the choice sheet.
-  final void Function(Region region, RegionIntent intent) onRegionChosen;
+  /// Called once a final region has been dragged out (and cleared the
+  /// minimum drag size).
+  final ValueChanged<Region> onRegionCompleted;
 
   @override
   State<RegionSelector> createState() => _RegionSelectorState();
@@ -63,6 +63,7 @@ class _RegionSelectorState extends State<RegionSelector> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
@@ -83,7 +84,17 @@ class _RegionSelectorState extends State<RegionSelector> {
           },
           onPanEnd: (_) => _finishDrag(size),
           child: CustomPaint(
-            painter: _DashedRectPainter(_dragRect),
+            // The dashed rect/handles read poorly in `colorScheme.primary`
+            // against the light page paper in this app's dark theme
+            // (verified: ~1.5:1 luminance contrast) — `onPrimary` is the
+            // pairing Material designed for exactly this "reads against a
+            // light surface" need, so it's used here instead while staying
+            // a themed role rather than a new hardcoded literal.
+            painter: _RegionPainter(
+              _dragRect,
+              strokeColor: scheme.onPrimary,
+              veilColor: scheme.scrim,
+            ),
             size: Size.infinite,
           ),
         );
@@ -91,7 +102,7 @@ class _RegionSelectorState extends State<RegionSelector> {
     );
   }
 
-  Future<void> _finishDrag(Size size) async {
+  void _finishDrag(Size size) {
     final rect = _dragRect;
     setState(() {
       _start = null;
@@ -104,57 +115,20 @@ class _RegionSelectorState extends State<RegionSelector> {
         rect.height < _minDragPixels) {
       return;
     }
-    final region = _toRegion(rect, size);
-    final intent = await _chooseIntent();
-    if (intent != null) widget.onRegionChosen(region, intent);
-  }
-
-  Future<RegionIntent?> _chooseIntent() {
-    return AppBottomSheet.show<RegionIntent>(
-      context,
-      title: 'This passage',
-      builder: (sheetContext) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Semantics(
-            button: true,
-            label: 'Record an audio note for this passage',
-            child: ListTile(
-              leading: const Icon(Icons.mic_none_outlined),
-              title: const Text('Record audio note'),
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(RegionIntent.recordAudio),
-            ),
-          ),
-          Semantics(
-            button: true,
-            label: 'Practice this passage',
-            child: ListTile(
-              leading: const Icon(Icons.repeat),
-              title: const Text('Practice this passage'),
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(RegionIntent.practice),
-            ),
-          ),
-          Semantics(
-            button: true,
-            label: 'Cancel region selection',
-            child: ListTile(
-              leading: const Icon(Icons.close),
-              title: const Text('Cancel'),
-              onTap: () => Navigator.of(sheetContext).pop(),
-            ),
-          ),
-        ],
-      ),
-    );
+    widget.onRegionCompleted(_toRegion(rect, size));
   }
 }
 
-class _DashedRectPainter extends CustomPainter {
-  _DashedRectPainter(this.rect);
+class _RegionPainter extends CustomPainter {
+  _RegionPainter(
+    this.rect, {
+    required this.strokeColor,
+    required this.veilColor,
+  });
 
   final Rect? rect;
+  final Color strokeColor;
+  final Color veilColor;
 
   static const double _dashWidth = 6;
   static const double _dashGap = 4;
@@ -164,13 +138,25 @@ class _DashedRectPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = this.rect;
     if (rect == null) return;
+
+    // Dims everything outside the dragged rect via an even-odd fill, so the
+    // rect itself is left as a "hole" showing the page at full brightness.
+    final veilPath = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Offset.zero & size)
+      ..addRect(rect);
+    canvas.drawPath(
+      veilPath,
+      Paint()..color = veilColor.withValues(alpha: 0.35),
+    );
+
     final paint = Paint()
-      ..color = Colors.blueAccent
+      ..color = strokeColor
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     _drawDashedRect(canvas, rect, paint);
 
-    final handlePaint = Paint()..color = Colors.blueAccent;
+    final handlePaint = Paint()..color = strokeColor;
     for (final corner in [
       rect.topLeft,
       rect.topRight,
@@ -201,6 +187,8 @@ class _DashedRectPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DashedRectPainter oldDelegate) =>
-      oldDelegate.rect != rect;
+  bool shouldRepaint(covariant _RegionPainter oldDelegate) =>
+      oldDelegate.rect != rect ||
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.veilColor != veilColor;
 }

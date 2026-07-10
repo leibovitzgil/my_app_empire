@@ -39,6 +39,18 @@ final class PageChanged extends ScoreEvent {
   List<Object?> get props => [page];
 }
 
+/// The piece's total page count was resolved after opening its PDF (see
+/// `ScoreViewerScreen`). [ScoreBloc] floors it at 1 and re-clamps
+/// [ScoreState.currentPage] into the resulting range.
+final class PageCountResolved extends ScoreEvent {
+  const PageCountResolved(this.pageCount);
+
+  final int pageCount;
+
+  @override
+  List<Object?> get props => [pageCount];
+}
+
 /// The interaction mode changed. Draw and region-select are mutually
 /// exclusive by construction (a single [ScoreState.mode] field); selecting
 /// [ScoreMode.view] exits either.

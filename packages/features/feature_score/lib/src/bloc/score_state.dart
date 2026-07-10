@@ -18,6 +18,7 @@ final class ScoreState extends Equatable {
     this.pieceId,
     this.piece,
     this.currentPage = 0,
+    this.pageCount = 1,
     this.layers = const [],
     this.notes = const [],
     this.currentRole = PieceRole.collaborator,
@@ -49,6 +50,11 @@ final class ScoreState extends Equatable {
 
   /// The zero-based page currently shown.
   final int currentPage;
+
+  /// The piece's total page count, resolved from [PageCountResolved] once
+  /// the PDF has been opened (see `ScoreViewerScreen`). Defaults to 1 so
+  /// [isLastPage] is meaningful even before that resolves.
+  final int pageCount;
 
   /// Every participant's ink, one [ParticipantLayer] per participant on the
   /// piece (its owner plus every collaborator), in [Piece.participantIds]
@@ -102,6 +108,12 @@ final class ScoreState extends Equatable {
   /// The most recent (usually transient/non-blocking) error, if any.
   final String? error;
 
+  /// Whether [currentPage] is the first page.
+  bool get isFirstPage => currentPage <= 0;
+
+  /// Whether [currentPage] is the last page.
+  bool get isLastPage => currentPage >= pageCount - 1;
+
   /// The signed-in participant's own layer, if it has been projected yet.
   ParticipantLayer? get ownLayer {
     for (final layer in layers) {
@@ -128,6 +140,7 @@ final class ScoreState extends Equatable {
     String? pieceId,
     Piece? piece,
     int? currentPage,
+    int? pageCount,
     List<ParticipantLayer>? layers,
     List<AudioNote>? notes,
     PieceRole? currentRole,
@@ -150,6 +163,7 @@ final class ScoreState extends Equatable {
       pieceId: pieceId ?? this.pieceId,
       piece: piece ?? this.piece,
       currentPage: currentPage ?? this.currentPage,
+      pageCount: pageCount ?? this.pageCount,
       layers: layers ?? this.layers,
       notes: notes ?? this.notes,
       currentRole: currentRole ?? this.currentRole,
@@ -175,6 +189,7 @@ final class ScoreState extends Equatable {
     pieceId,
     piece,
     currentPage,
+    pageCount,
     layers,
     notes,
     currentUserId,

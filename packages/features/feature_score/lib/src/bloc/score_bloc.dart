@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bloc/bloc.dart';
 import 'package:core_utils/core_utils.dart';
@@ -34,6 +35,7 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
     on<ScoreOpened>(_onOpened);
     on<ScoreAnnotationsUpdated>(_onAnnotationsUpdated);
     on<PageChanged>(_onPageChanged);
+    on<PageCountResolved>(_onPageCountResolved);
     on<ModeChanged>(_onModeChanged);
     on<InkLayerToggled>(_onInkLayerToggled);
     on<AudioPinsToggled>(_onAudioPinsToggled);
@@ -152,7 +154,26 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
   }
 
   void _onPageChanged(PageChanged event, Emitter<ScoreState> emit) {
-    emit(state.copyWith(currentPage: event.page));
+    emit(
+      state.copyWith(currentPage: event.page.clamp(0, state.pageCount - 1)),
+    );
+  }
+
+  /// Floors [PageCountResolved.pageCount] at 1 and re-clamps `currentPage`
+  /// into the resulting `[0, pageCount - 1]` range — a page count shrinking
+  /// (e.g. a re-open with a different render) must never leave `currentPage`
+  /// pointing past the end.
+  void _onPageCountResolved(
+    PageCountResolved event,
+    Emitter<ScoreState> emit,
+  ) {
+    final pageCount = math.max(1, event.pageCount);
+    emit(
+      state.copyWith(
+        pageCount: pageCount,
+        currentPage: state.currentPage.clamp(0, pageCount - 1),
+      ),
+    );
   }
 
   void _onModeChanged(ModeChanged event, Emitter<ScoreState> emit) {

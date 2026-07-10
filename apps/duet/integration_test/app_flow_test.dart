@@ -73,7 +73,7 @@ void main() {
       // the owner's own layer only.
       final canvasCenter = tester.getCenter(find.byType(InteractiveViewer));
 
-      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.tap(find.text('Draw'));
       await tester.pump();
       expect(bloc.state.mode, ScoreMode.draw);
 
@@ -86,13 +86,12 @@ void main() {
       expect(bloc.state.ownLayer!.strokes.single.authorId, ownerId);
       await shot('04_stroke_drawn');
 
-      // Turn drawing mode back off before region-select (mutually
-      // exclusive).
-      await tester.tap(find.byIcon(Icons.edit_outlined));
-      await tester.pump();
-
-      // 3. Region-select a passage and record an audio note on it.
-      await tester.tap(find.byIcon(Icons.crop_free));
+      // 3. Region-select a passage and record an audio note on it. The mode
+      // segmented control's segments are mutually exclusive by construction
+      // (unlike the old FAB pair, which toggled relative to the current
+      // mode), so tapping "Passage" directly from draw mode switches with no
+      // separate "turn off draw" step needed.
+      await tester.tap(find.text('Passage'));
       await tester.pump();
       expect(bloc.state.mode, ScoreMode.regionSelect);
 
@@ -102,7 +101,9 @@ void main() {
         const Offset(120, 100),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Record audio note'));
+      // The anchored popover (≥600dp) and the bottom-sheet fallback
+      // (<600dp) share this exact copy, so this finder works either way.
+      await tester.tap(find.text('Record an audio note'));
       await tester.pumpAndSettle();
       await shot('05_record_sheet');
 
@@ -125,8 +126,12 @@ void main() {
       await shot('06_audio_note_saved');
 
       // 4. Layer toggles are independent and immediate: toggling the owner's
-      // ink layer off (their chip carries the "(yours)" indicator) leaves
-      // audio pins untouched.
+      // ink layer off (their row carries the "(yours)" indicator) leaves
+      // audio pins untouched. The Layers panel lives behind a "Layers"
+      // button at some widths (it's docked inline on wide/tablet layouts,
+      // otherwise reached via an endDrawer or bottom sheet) — open it first
+      // if that button is present; a no-op when already docked.
+      await _ensureLayersPanelOpen(tester);
       await tester.tap(find.bySemanticsLabel(RegExp(r'layer \(yours\)')));
       await tester.pump();
       expect(bloc.state.ownLayer!.visible, isFalse);
@@ -134,7 +139,9 @@ void main() {
       await shot('07_own_layer_hidden');
 
       // 5. Clean workspace hides every layer regardless of its own flag...
-      await tester.tap(find.byIcon(Icons.layers_outlined));
+      // (the Layers panel's "Clean workspace" `Switch` replaces the old app
+      // bar icon toggle; it's the only `Switch` on this screen).
+      await tester.tap(find.byType(Switch));
       await tester.pump();
       expect(bloc.state.cleanWorkspace, isTrue);
       for (final layer in bloc.state.layers) {
@@ -153,12 +160,16 @@ void main() {
       // ...and turning clean workspace off restores the *exact* prior
       // per-layer state — the owner's ink still off, audio pins now off (the
       // change made while masked) — never a reset to some default.
-      await tester.tap(find.byIcon(Icons.layers_clear_outlined));
+      await tester.tap(find.byType(Switch));
       await tester.pump();
       expect(bloc.state.cleanWorkspace, isFalse);
       expect(bloc.state.ownLayer!.visible, isFalse);
       expect(bloc.state.audioPinsVisible, isFalse);
       await shot('09_clean_workspace_restored');
+      // Closes the endDrawer/bottom sheet, if that's how the panel was
+      // shown, so the next `pop()` closes the Score Viewer itself rather
+      // than a still-open modal.
+      await _ensureLayersPanelClosed(tester);
 
       // 6. Close the sheet and reopen it: the stroke and the audio note (at
       // the same fractional position) both survive, via a brand-new
@@ -203,4 +214,31 @@ Future<void> _dragIncrementally(
     await tester.pump(const Duration(milliseconds: 20));
   }
   await gesture.up();
+}
+
+/// Opens the Score Viewer's Layers panel if it isn't already showing.
+///
+/// The panel docks inline on wide/tablet layouts (no button — this is a
+/// no-op there), otherwise it's reached via a "Layers" button that opens an
+/// `endDrawer` or a bottom sheet depending on width. This device-only test
+/// can't assume a specific window size, so it checks for the button rather
+/// than hardcoding one path.
+Future<void> _ensureLayersPanelOpen(WidgetTester tester) async {
+  final layersButton = find.bySemanticsLabel('Layers');
+  if (layersButton.evaluate().isNotEmpty) {
+    await tester.tap(layersButton);
+    await tester.pumpAndSettle();
+  }
+}
+
+/// Closes the Layers panel's `endDrawer`/bottom sheet, if that's how it was
+/// shown (see [_ensureLayersPanelOpen]) — a no-op when the panel is docked
+/// inline, so a caller's next `Navigator.pop()` closes the Score Viewer
+/// itself rather than a still-open modal.
+Future<void> _ensureLayersPanelClosed(WidgetTester tester) async {
+  final closeButton = find.bySemanticsLabel('Close layers panel');
+  if (closeButton.evaluate().isNotEmpty) {
+    await tester.tap(closeButton);
+    await tester.pumpAndSettle();
+  }
 }
