@@ -112,6 +112,15 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _openedPdfPath;
 
+  // The PDF render service is opened asynchronously (see `_openPdf`), but the
+  // piece's metadata becomes `ready` before that completes. `ScorePageCanvas`
+  // calls `renderPage` on mount and requires the document to already be open,
+  // so the canvas must not be shown until `open()` has actually succeeded —
+  // otherwise it renders into a not-yet-open service and fails. These two
+  // fields track that lifecycle so `_buildBody` can gate on it.
+  bool _pdfOpen = false;
+  String? _pdfOpenError;
+
   @override
   void initState() {
     super.initState();
@@ -168,6 +177,11 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     final path = state.piece?.basePdfPath;
     if (path == null || path == _openedPdfPath) return;
     _openedPdfPath = path;
+    // Reset the open lifecycle for the new path. Set directly (not via
+    // `setState`) — this runs inside `build`, and `_buildBody` reads these
+    // fields later in the same build.
+    _pdfOpen = false;
+    _pdfOpenError = null;
     unawaited(_openPdf(path));
   }
 
@@ -177,13 +191,31 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     if (!mounted || path != _openedPdfPath) return;
     switch (result) {
       case Success<int>(:final value):
+        setState(() {
+          _pdfOpen = true;
+          _pdfOpenError = null;
+        });
         context.read<ScoreBloc>().add(PageCountResolved(value));
-      case ResultFailure<int>():
-        // `ScorePageCanvas` surfaces its own render error with a retry
-        // affordance; page count simply stays at its default (1) so
-        // pagination doesn't break.
-        break;
+      case ResultFailure<int>(:final error):
+        // Surface the failure so the reader shows why the sheet won't open
+        // (e.g. a missing file) with a retry, rather than the canvas racing
+        // ahead into a not-yet-open service.
+        setState(() {
+          _pdfOpen = false;
+          _pdfOpenError = '$error';
+        });
     }
+  }
+
+  /// Re-runs `open()` for the current piece PDF (used by the open-failure
+  /// retry). Clears `_openedPdfPath` so `_maybeOpenPdf` treats the next build
+  /// as a fresh open.
+  void _retryOpenPdf() {
+    setState(() {
+      _openedPdfPath = null;
+      _pdfOpen = false;
+      _pdfOpenError = null;
+    });
   }
 
   Widget _buildTopBar(BuildContext context, ScoreState state) {
@@ -302,14 +334,31 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
           }
         },
       ),
-      ScoreStatus.ready => _ReaderCanvas(
-        state: state,
-        renderService: widget.renderService,
-        audioAssetStore: widget.audioAssetStore,
-        syncStatus: widget.syncStatus,
-        onShareRequested: widget.onShareRequested,
-      ),
+      ScoreStatus.ready => _buildReadyBody(context, state),
     };
+  }
+
+  /// Once the piece metadata is [ScoreStatus.ready], the body still depends on
+  /// the async `open()` of its PDF: show the open failure (with retry) or a
+  /// loading view until the document is actually open, then the canvas.
+  Widget _buildReadyBody(BuildContext context, ScoreState state) {
+    if (_pdfOpenError != null) {
+      return ErrorRetryView(
+        title: "Couldn't open this sheet",
+        message: _pdfOpenError,
+        onRetry: _retryOpenPdf,
+      );
+    }
+    if (!_pdfOpen) {
+      return const LoadingView(label: 'Opening sheet…');
+    }
+    return _ReaderCanvas(
+      state: state,
+      renderService: widget.renderService,
+      audioAssetStore: widget.audioAssetStore,
+      syncStatus: widget.syncStatus,
+      onShareRequested: widget.onShareRequested,
+    );
   }
 
   void _onRegionSelectionChanged(BuildContext context, ScoreState state) {

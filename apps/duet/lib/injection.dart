@@ -193,7 +193,7 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     ),
   );
 
-  getIt.registerLazySingleton<PdfRenderService>(PdfxRenderService.new);
+  getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
   getIt.registerLazySingleton<AudioRecorderService>(
     RecordAudioRecorderService.new,
   );

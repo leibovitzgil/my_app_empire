@@ -64,7 +64,9 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
     if (oldWidget.pageIndex != widget.pageIndex ||
         oldWidget.renderService != widget.renderService) {
       _focused = false;
-      setState(() => _imageFuture = _renderPage());
+      setState(() {
+        _imageFuture = _renderPage();
+      });
     }
   }
 
@@ -134,7 +136,9 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
           return ErrorRetryView(
             title: "Couldn't render this page",
             message: '${snapshot.error}',
-            onRetry: () => setState(() => _imageFuture = _renderPage()),
+            onRetry: () => setState(() {
+              _imageFuture = _renderPage();
+            }),
           );
         }
         final image = snapshot.data!;
