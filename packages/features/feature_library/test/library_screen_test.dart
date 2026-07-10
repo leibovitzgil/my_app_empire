@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:core_utils/core_utils.dart';
 import 'package:feature_library/feature_library.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
@@ -379,5 +380,60 @@ void main() {
         expect(find.textContaining('No matches for'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'search is global: finds a shared sheet even while the My sheets '
+      'filter is active',
+      (tester) async {
+        await pumpScreen(tester);
+        piecesController.add([myPiece(), sharedPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.tap(find.widgetWithText(ChoiceChip, 'My sheets'));
+        await tester.pumpAndSettle();
+        // The shared sheet is filtered out of the shelf...
+        expect(find.text('Nocturne'), findsNothing);
+
+        await tester.enterText(find.byType(TextField), 'nocturne');
+        await tester.pumpAndSettle();
+
+        // ...but a global search still surfaces it.
+        expect(find.textContaining('No matches for'), findsNothing);
+        expect(find.textContaining('Shared by'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'cover cards expose tap and long-press as semantic actions, so '
+      'assistive tech can open and quick-action them',
+      (tester) async {
+        await pumpScreen(tester);
+        piecesController.add([myPiece()]);
+        await tester.pump();
+        await tester.pump();
+
+        final handle = tester.ensureSemantics();
+        final data = tester
+            .getSemantics(find.bySemanticsLabel(RegExp('Clair de Lune')))
+            .getSemanticsData();
+        expect(data.hasAction(SemanticsAction.tap), isTrue);
+        expect(data.hasAction(SemanticsAction.longPress), isTrue);
+        handle.dispose();
+      },
+    );
+  });
+
+  group('columnsForWidth', () {
+    test('steps 2 → 3 → 4 → 5 at the documented breakpoints', () {
+      expect(columnsForWidth(320), 2);
+      expect(columnsForWidth(599), 2);
+      expect(columnsForWidth(600), 3);
+      expect(columnsForWidth(899), 3);
+      expect(columnsForWidth(900), 4);
+      expect(columnsForWidth(1023), 4);
+      expect(columnsForWidth(1024), 5);
+      expect(columnsForWidth(1600), 5);
+    });
   });
 }

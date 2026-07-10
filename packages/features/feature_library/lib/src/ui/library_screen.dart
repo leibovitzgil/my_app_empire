@@ -1059,7 +1059,9 @@ class _SearchResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pieces = state.visiblePieces;
+    // Global search — spans the whole library, not the active filter (the
+    // chips are hidden during search), so a query always finds every match.
+    final pieces = state.searchResults;
     final query = state.query.trim();
     if (pieces.isEmpty) return _NoMatches(query: query);
     return ListView.builder(
@@ -1197,6 +1199,12 @@ class _SheetCoverCardState extends State<_SheetCoverCard> {
       button: true,
       excludeSemantics: true,
       label: semanticParts.join(', '),
+      // The tap/long-press live on the inner InkWell, which `excludeSemantics`
+      // hides from assistive tech — so surface them on this node too, or the
+      // card reads as a button that does nothing when activated and the
+      // long-press quick actions are unreachable.
+      onTap: () => widget.onOpenScore(piece),
+      onLongPress: () => widget.onShowQuickActions(piece),
       child: AnimatedScale(
         scale: _elevated ? 1.02 : 1,
         duration: const Duration(milliseconds: 150),

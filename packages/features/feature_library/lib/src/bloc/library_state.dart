@@ -123,6 +123,13 @@ final class LibraryState extends Equatable {
     LibraryFilter.favorites => favoritePieces,
   };
 
+  /// Search results across the *whole* library, independent of the active
+  /// [filter], narrowed by [query] and ordered by [sort]. Search is global —
+  /// searching while a narrower filter (e.g. "My sheets", or the always-empty
+  /// "Favorites") is active still finds every matching sheet. Only meaningful
+  /// when [query] is non-empty.
+  List<Piece> get searchResults => _view(pieces);
+
   List<Piece> _view(List<Piece> src) => _sort(_search(src));
 
   List<Piece> _search(List<Piece> src) {
