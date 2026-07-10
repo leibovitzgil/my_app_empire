@@ -168,12 +168,14 @@ flesh out the repository/bloc, and wire it into an app (path dependency + DI).
   the relevant one. Design/review agents are read-only; only the builder and QA
   write code.
 - **Skills** (`.claude/skills/`): `new-app`, `new-feature`, `workspace-check`,
-  `run-app`, `golden`, `flutter-e2e`, `widget-preview`, and `screenshot` encode
-  these workflows as slash-commands. `screenshot` builds an app for web and
-  drives it with the pre-installed Playwright Chromium to capture real,
-  readable screenshots of a live flow in this headless container — use it for
-  visual feedback or to review your own UI work, versus `golden`'s exact but
-  unreadable-text widget diffs.
+  `run-app`, `golden`, `flutter-e2e`, `widget-preview`, `screenshot`, and
+  `duet-emulator` encode these workflows as slash-commands. `screenshot` builds
+  an app for web and drives it with the pre-installed Playwright Chromium to
+  capture real, readable screenshots of a live flow in this headless container —
+  use it for visual feedback or to review your own UI work, versus `golden`'s
+  exact but unreadable-text widget diffs. `duet-emulator` runs the Duet app
+  against the local Firebase Emulator Suite (Auth + Firestore) with one command
+  (`apps/duet/dev.sh`).
 - **Reference app** (`apps/showcase`): a runnable composition (mock/simulated
   backends, no Firebase) — the golden example for wiring capabilities together.
 - **Dart MCP server** (`.mcp.json`): wires the official `dart mcp-server` into
