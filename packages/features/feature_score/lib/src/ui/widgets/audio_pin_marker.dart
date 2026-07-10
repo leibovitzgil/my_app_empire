@@ -5,9 +5,13 @@ import 'package:pieces/pieces.dart';
 /// A tappable circular marker for a single [AudioNote], positioned by the
 /// caller at the region's centroid.
 ///
+/// Tinted with the note author's identity colour ([accentColor] — the
+/// caller passes their ink colour, or the theme primary for the signed-in
+/// user's own notes) so a pin reads as "whose voice is this" at a glance.
 /// Tapping plays/stops the note (driven by `AudioPlaybackCubit` in the
-/// caller); when [isPlaying] a progress ring fills in around the marker.
-/// Long-pressing surfaces a delete action, but only when [note] belongs to
+/// caller); when [isPlaying] a progress ring fills in around a stop glyph,
+/// so the "tap again to stop" affordance is explicit. Long-pressing
+/// surfaces a delete action, but only when [note] belongs to
 /// [currentUserId] — otherwise the affordance is entirely absent, not just
 /// disabled.
 class AudioPinMarker extends StatelessWidget {
@@ -18,6 +22,7 @@ class AudioPinMarker extends StatelessWidget {
     required this.isPlaying,
     required this.onTap,
     required this.onDelete,
+    this.accentColor,
     this.progress,
     super.key,
   });
@@ -27,6 +32,10 @@ class AudioPinMarker extends StatelessWidget {
 
   /// The signed-in participant's id, used to gate the delete affordance.
   final String currentUserId;
+
+  /// The author-identity tint. Falls back to the theme primary for own
+  /// notes and tertiary for others when unset.
+  final Color? accentColor;
 
   /// Whether this note is the one currently playing.
   final bool isPlaying;
@@ -45,7 +54,8 @@ class AudioPinMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final ringColor = _ownedByCurrentUser ? scheme.primary : scheme.tertiary;
+    final ringColor =
+        accentColor ?? (_ownedByCurrentUser ? scheme.primary : scheme.tertiary);
     final label = isPlaying
         ? 'Playing audio note. Double tap to stop.'
         : _ownedByCurrentUser
@@ -56,23 +66,31 @@ class AudioPinMarker extends StatelessWidget {
       width: 48,
       height: 48,
       child: Material(
-        color: scheme.surface,
+        color: scheme.surfaceContainerHigh,
         shape: CircleBorder(
           side: BorderSide(color: ringColor, width: isPlaying ? 3 : 2),
         ),
+        shadowColor: scheme.shadow,
+        elevation: 3,
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: Center(
             child: isPlaying
-                ? SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 2,
-                      color: ringColor,
-                    ),
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 2.5,
+                          color: ringColor,
+                        ),
+                      ),
+                      Icon(Icons.stop, color: ringColor, size: 16),
+                    ],
                   )
                 : Icon(Icons.play_arrow, color: ringColor, size: 20),
           ),

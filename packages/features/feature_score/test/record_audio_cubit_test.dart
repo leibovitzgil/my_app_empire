@@ -120,6 +120,34 @@ void main() {
       expect: () => [const RecordAudioState.idle()],
     );
 
+    blocTest<RecordAudioCubit, RecordAudioState>(
+      'cancel mid-recording stops the recorder, drops the file, and '
+      'returns to idle',
+      build: () => RecordAudioCubit(recorder: recorder),
+      act: (cubit) async {
+        await cubit.start('/tmp/out.m4a');
+        await cubit.cancel();
+      },
+      skip: 1,
+      expect: () => [const RecordAudioState.idle()],
+      verify: (_) {
+        // The recorder was actually stopped (the mic never stays hot), but
+        // no reviewing state was ever surfaced for the abandoned file.
+        expect(recorder.stopCalls, 1);
+      },
+    );
+
+    blocTest<RecordAudioCubit, RecordAudioState>(
+      'cancel while not recording just returns to idle without touching '
+      'the recorder',
+      build: () => RecordAudioCubit(recorder: recorder),
+      act: (cubit) => cubit.cancel(),
+      expect: () => [const RecordAudioState.idle()],
+      verify: (_) {
+        expect(recorder.stopCalls, 0);
+      },
+    );
+
     test('the 60s cap surfaces reviewing state automatically', () {
       fakeAsync((async) {
         // Built inside the fakeAsync zone (rather than reusing the shared

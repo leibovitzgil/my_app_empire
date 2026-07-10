@@ -53,7 +53,7 @@ void main() {
     final currentUserName = CurrentUserName(mockAuthRepository.displayName);
     getIt.registerSingleton<CurrentUserName>(currentUserName);
 
-    getIt.registerLazySingleton<PdfRenderService>(PdfxRenderService.new);
+    getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
     getIt.registerLazySingleton<AudioRecorderService>(
       RecordAudioRecorderService.new,
     );

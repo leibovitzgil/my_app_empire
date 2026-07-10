@@ -51,6 +51,40 @@ class _FakePdfRenderService implements PdfRenderService {
       const Success('checksum');
 }
 
+const _ownerLayer = ParticipantLayer(
+  ownerId: 'owner-1',
+  label: 'Owner',
+  colorId: 'p0',
+  visible: true,
+  isOwn: true,
+  strokes: [
+    InkStroke(
+      id: 't1',
+      authorId: 'owner-1',
+      pageIndex: 0,
+      colorId: 'p0',
+      points: [InkPoint(x: 0.1, y: 0.1)],
+    ),
+  ],
+);
+
+const _collaboratorLayer = ParticipantLayer(
+  ownerId: 'collaborator-1',
+  label: 'Bea',
+  colorId: 'p1',
+  visible: true,
+  isOwn: false,
+  strokes: [
+    InkStroke(
+      id: 's1',
+      authorId: 'collaborator-1',
+      pageIndex: 0,
+      colorId: 'p1',
+      points: [InkPoint(x: 0.2, y: 0.2)],
+    ),
+  ],
+);
+
 void main() {
   group('PracticeView', () {
     late _FakePdfRenderService renderService;
@@ -63,6 +97,7 @@ void main() {
       WidgetTester tester, {
       required Region region,
       List<ParticipantLayer> layers = const [],
+      int pageCount = 6,
     }) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -70,6 +105,8 @@ void main() {
             region: region,
             renderService: renderService,
             layers: layers,
+            pageCount: pageCount,
+            pieceTitle: 'Clair de Lune',
           ),
         ),
       );
@@ -85,6 +122,10 @@ void main() {
       }
     }
 
+    Region focusedRegion(WidgetTester tester) => tester
+        .widget<ScorePageCanvas>(find.byType(ScorePageCanvas))
+        .focusRegion!;
+
     testWidgets('renders the focused region with both ink overlays', (
       tester,
     ) async {
@@ -97,48 +138,18 @@ void main() {
           width: 0.2,
           height: 0.1,
         ),
-        layers: const [
-          ParticipantLayer(
-            ownerId: 'owner-1',
-            label: 'Owner',
-            colorId: 'p0',
-            visible: true,
-            isOwn: true,
-            strokes: [
-              InkStroke(
-                id: 't1',
-                authorId: 'owner-1',
-                pageIndex: 0,
-                colorId: 'p0',
-                points: [InkPoint(x: 0.1, y: 0.1)],
-              ),
-            ],
-          ),
-          ParticipantLayer(
-            ownerId: 'collaborator-1',
-            label: 'Bea',
-            colorId: 'p1',
-            visible: true,
-            isOwn: false,
-            strokes: [
-              InkStroke(
-                id: 's1',
-                authorId: 'collaborator-1',
-                pageIndex: 0,
-                colorId: 'p1',
-                points: [InkPoint(x: 0.2, y: 0.2)],
-              ),
-            ],
-          ),
-        ],
+        layers: const [_ownerLayer, _collaboratorLayer],
       );
 
       expect(find.text('Practice'), findsOneWidget);
+      expect(find.text('Clair de Lune'), findsOneWidget);
       expect(find.byType(RawImage), findsOneWidget);
       // One overlay per participant ink layer, regardless of how many
       // strokes each carries.
       expect(find.byType(InkOverlay), findsNWidgets(2));
       expect(find.text('Edit here'), findsOneWidget);
+      // The location chip and the mini-map caption both say where we are.
+      expect(find.text('Page 1 of 6'), findsNWidgets(2));
     });
 
     testWidgets(
@@ -163,17 +174,14 @@ void main() {
         // scale is bounded by the region's width/height (whichever needs
         // more zoom to fill the viewport), capped at 5x. The formula runs
         // against `LayoutBuilder`'s `constraints.biggest` — the *available*
-        // space handed to `InteractiveViewer`, not that widget's own
-        // rendered size (its `AspectRatio` child shrink-wraps to a square
-        // for this test's square fake image, so `InteractiveViewer` itself
-        // ends up smaller than the space it was offered). The Scaffold
-        // body's available area is the full screen size minus the AppBar,
-        // which *is* what's actually offered.
+        // space handed to `InteractiveViewer`: the Scaffold body minus the
+        // 64dp top bar, inset by the 16dp padding around the canvas (this
+        // mirrors the widget's fixed layout, the same way the old version
+        // of this test mirrored the `AppBar` height).
         final scaffoldSize = tester.getSize(find.byType(Scaffold));
-        final appBarHeight = tester.getSize(find.byType(AppBar)).height;
         final viewportSize = Size(
-          scaffoldSize.width,
-          scaffoldSize.height - appBarHeight,
+          scaffoldSize.width - 32,
+          scaffoldSize.height - 64 - 32,
         );
         final expectedScale = [
           1 / region.width,
@@ -200,6 +208,164 @@ void main() {
       },
     );
 
+    testWidgets('steppers move the focus window one height at a time', (
+      tester,
+    ) async {
+      await pumpPracticeView(
+        tester,
+        region: const Region(
+          pageIndex: 0,
+          left: 0.2,
+          top: 0.3,
+          width: 0.6,
+          height: 0.2,
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+      expect(focusedRegion(tester).top, closeTo(0.5, 0.0001));
+
+      await tester.tap(find.byIcon(Icons.chevron_left));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.chevron_left));
+      await tester.pump();
+      expect(focusedRegion(tester).top, closeTo(0.1, 0.0001));
+
+      // Finish the glide animations so no ticker is left running.
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('stepping past the page edge rolls onto the next page', (
+      tester,
+    ) async {
+      await pumpPracticeView(
+        tester,
+        region: const Region(
+          pageIndex: 0,
+          left: 0,
+          top: 0.5,
+          width: 1,
+          height: 0.5,
+        ),
+        pageCount: 2,
+      );
+
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+      var region = focusedRegion(tester);
+      expect(region.pageIndex, 1);
+      expect(region.top, 0);
+      expect(find.text('Page 2 of 2'), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+      region = focusedRegion(tester);
+      expect(region.pageIndex, 1);
+      expect(region.top, closeTo(0.5, 0.0001));
+
+      // Last window of the last page: forward is now disabled.
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+      region = focusedRegion(tester);
+      expect(region.pageIndex, 1);
+      expect(region.top, closeTo(0.5, 0.0001));
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('the back stepper is disabled at the very start', (
+      tester,
+    ) async {
+      await pumpPracticeView(
+        tester,
+        region: const Region(
+          pageIndex: 0,
+          left: 0,
+          top: 0,
+          width: 1,
+          height: 0.2,
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.chevron_left));
+      await tester.pump();
+      expect(focusedRegion(tester).top, 0);
+      expect(focusedRegion(tester).pageIndex, 0);
+    });
+
+    testWidgets('layer dots toggle a participant ink overlay', (
+      tester,
+    ) async {
+      await pumpPracticeView(
+        tester,
+        region: const Region(
+          pageIndex: 0,
+          left: 0.2,
+          top: 0.3,
+          width: 0.2,
+          height: 0.1,
+        ),
+        layers: const [_ownerLayer, _collaboratorLayer],
+      );
+      expect(find.byType(InkOverlay), findsNWidgets(2));
+
+      await tester.tap(find.byTooltip('Bea'));
+      await tester.pump();
+      expect(find.byType(InkOverlay), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Bea'));
+      await tester.pump();
+      expect(find.byType(InkOverlay), findsNWidgets(2));
+    });
+
+    testWidgets('a layer hidden in the reader starts hidden here', (
+      tester,
+    ) async {
+      await pumpPracticeView(
+        tester,
+        region: const Region(
+          pageIndex: 0,
+          left: 0.2,
+          top: 0.3,
+          width: 0.2,
+          height: 0.1,
+        ),
+        layers: [
+          _ownerLayer,
+          _collaboratorLayer.copyWith(visible: false),
+        ],
+      );
+
+      expect(find.byType(InkOverlay), findsOneWidget);
+    });
+
+    testWidgets('tapping the mini-map recenters the focus window there', (
+      tester,
+    ) async {
+      await pumpPracticeView(
+        tester,
+        region: const Region(
+          pageIndex: 0,
+          left: 0.2,
+          top: 0.3,
+          width: 0.2,
+          height: 0.1,
+        ),
+      );
+
+      final map = find.descendant(
+        of: find.bySemanticsLabel(RegExp('Page map')),
+        matching: find.byType(GestureDetector),
+      );
+      await tester.tapAt(tester.getCenter(map));
+      await tester.pump();
+
+      final region = focusedRegion(tester);
+      expect(region.left, closeTo(0.4, 0.05));
+      expect(region.top, closeTo(0.45, 0.05));
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
     testWidgets('"Edit here" pops back to the caller', (tester) async {
       const region = Region(
         pageIndex: 0,
@@ -221,6 +387,7 @@ void main() {
                           region: region,
                           renderService: renderService,
                           layers: const [],
+                          pageCount: 6,
                         ),
                       ),
                     ),

@@ -13,6 +13,10 @@ import 'package:pieces/pieces.dart';
 /// [overlays] (ink layers, audio pins, the region selector) as children
 /// positioned in the same fractional coordinate space as the page image.
 ///
+/// The page floats on the reader's dark stage — rounded corners and a soft
+/// shadow travel with it under pan/zoom, matching the design's paper-on-
+/// stage look.
+///
 /// [renderService] must already be `open`ed on the piece's PDF by the
 /// caller — this widget only calls [PdfRenderService.renderPage].
 class ScorePageCanvas extends StatefulWidget {
@@ -23,6 +27,7 @@ class ScorePageCanvas extends StatefulWidget {
     this.overlays = const [],
     this.focusRegion,
     this.scale = 2,
+    this.boundaryMargin = const EdgeInsets.all(64),
     super.key,
   });
 
@@ -37,25 +42,46 @@ class ScorePageCanvas extends StatefulWidget {
   final List<Widget> overlays;
 
   /// If set, the view centers and zooms to this region once the page has
-  /// rendered (used by the practice view).
+  /// rendered (used by the practice view). The first focus lands instantly;
+  /// later changes (stepping between passages) glide there, so the player
+  /// keeps their bearings on the page.
   final Region? focusRegion;
 
   /// The render scale factor (higher = sharper, more memory).
   final double scale;
 
+  /// How far a gesture may pan the page past its own edges. The reader's
+  /// default is a small nudge (the fit-zoomed page shouldn't wander); the
+  /// practice view passes a much larger margin so a zoomed-in passage near
+  /// the page edge can still sit centred without the next gesture snapping
+  /// the view back inside tight bounds.
+  final EdgeInsets boundaryMargin;
+
   @override
   State<ScorePageCanvas> createState() => _ScorePageCanvasState();
 }
 
-class _ScorePageCanvasState extends State<ScorePageCanvas> {
+class _ScorePageCanvasState extends State<ScorePageCanvas>
+    with SingleTickerProviderStateMixin {
   late Future<ui.Image> _imageFuture;
   final _transformationController = TransformationController();
-  bool _focused = false;
+  late final AnimationController _focusController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  Animation<Matrix4>? _focusAnimation;
+  Region? _focusedRegion;
 
   @override
   void initState() {
     super.initState();
     _imageFuture = _renderPage();
+    _focusController.addListener(() {
+      final animation = _focusAnimation;
+      if (animation != null) {
+        _transformationController.value = animation.value;
+      }
+    });
   }
 
   @override
@@ -63,7 +89,7 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.pageIndex != widget.pageIndex ||
         oldWidget.renderService != widget.renderService) {
-      _focused = false;
+      _focusedRegion = null;
       setState(() {
         _imageFuture = _renderPage();
       });
@@ -72,6 +98,7 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
 
   @override
   void dispose() {
+    _focusController.dispose();
     _transformationController.dispose();
     super.dispose();
   }
@@ -99,10 +126,7 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
     return completer.future;
   }
 
-  void _focusOnRegionIfNeeded(Size viewportSize) {
-    final region = widget.focusRegion;
-    if (_focused || region == null || viewportSize.isEmpty) return;
-    _focused = true;
+  Matrix4 _matrixForRegion(Region region, Size viewportSize) {
     final scale = math
         .min(
           math.min(
@@ -116,11 +140,38 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
     final centerY = (region.top + region.height / 2) * viewportSize.height;
     final dx = viewportSize.width / 2 - centerX * scale;
     final dy = viewportSize.height / 2 - centerY * scale;
+    return Matrix4.identity()
+      ..translateByDouble(dx, dy, 0, 1)
+      ..scaleByDouble(scale, scale, scale, 1);
+  }
+
+  void _focusOnRegionIfNeeded(Size viewportSize) {
+    final region = widget.focusRegion;
+    if (region == null || region == _focusedRegion || viewportSize.isEmpty) {
+      return;
+    }
+    // The first focus (opening the practice view) lands instantly; moving
+    // between passages glides, so the jump reads as motion across the page
+    // rather than a cut.
+    final animate = _focusedRegion != null;
+    _focusedRegion = region;
+    final target = _matrixForRegion(region, viewportSize);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _transformationController.value = Matrix4.identity()
-        ..translateByDouble(dx, dy, 0, 1)
-        ..scaleByDouble(scale, scale, scale, 1);
+      if (!animate) {
+        _transformationController.value = target;
+        return;
+      }
+      _focusAnimation =
+          Matrix4Tween(
+                begin: _transformationController.value,
+                end: target,
+              )
+              .chain(CurveTween(curve: Curves.easeInOutCubic))
+              .animate(
+                _focusController,
+              );
+      unawaited(_focusController.forward(from: 0));
     });
   }
 
@@ -142,6 +193,7 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
           );
         }
         final image = snapshot.data!;
+        final scheme = Theme.of(context).colorScheme;
         return LayoutBuilder(
           builder: (context, constraints) {
             final viewportSize = constraints.biggest;
@@ -150,14 +202,30 @@ class _ScorePageCanvasState extends State<ScorePageCanvas> {
               transformationController: _transformationController,
               minScale: 0.5,
               maxScale: 6,
+              boundaryMargin: widget.boundaryMargin,
               child: AspectRatio(
                 aspectRatio: image.width / image.height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    RawImage(image: image, fit: BoxFit.contain),
-                    ...widget.overlays,
-                  ],
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: scheme.shadow.withValues(alpha: 0.5),
+                        blurRadius: 36,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        RawImage(image: image, fit: BoxFit.contain),
+                        ...widget.overlays,
+                      ],
+                    ),
+                  ),
                 ),
               ),
             );

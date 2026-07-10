@@ -14,6 +14,8 @@ export 'src/ui/widgets/page_thumbnail_rail.dart';
 export 'src/ui/widgets/passage_popover.dart';
 export 'src/ui/widgets/playback_chip.dart';
 export 'src/ui/widgets/reader_top_bar.dart';
+export 'src/ui/widgets/record_note_card.dart';
+export 'src/ui/widgets/region_highlight_overlay.dart';
 export 'src/ui/widgets/region_selector.dart';
 export 'src/ui/widgets/score_page_canvas.dart';
 export 'src/ui/widgets/sync_status_badge.dart';
