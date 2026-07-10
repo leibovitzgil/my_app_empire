@@ -30,6 +30,7 @@ class ReaderTopBar extends StatelessWidget {
     this.onShare,
     this.onImport,
     this.onPracticePage,
+    this.compact = false,
     super.key,
   });
 
@@ -90,6 +91,12 @@ class ReaderTopBar extends StatelessWidget {
 
   /// Called when "Practice this page" is selected. `null` hides the item.
   final VoidCallback? onPracticePage;
+
+  /// Whether to render the compact (narrow-width) layout: drops the page-nav
+  /// pill and collaborator avatars so the fixed trailing cluster can't overrun
+  /// a phone-width bar. The status badge is kept but rendered `Flexible` so it
+  /// shrinks rather than overflows.
+  final bool compact;
 
   /// Composer is a placeholder literal — there is no composer-metadata field
   /// on `Piece` yet (mirrors `feature_library`'s `LibraryFormat`/gallery
@@ -162,7 +169,7 @@ class ReaderTopBar extends StatelessWidget {
               ],
             ),
           ),
-          if (mode == ScoreMode.view) ...[
+          if (mode == ScoreMode.view && !compact) ...[
             const SizedBox(width: AppSpacing.sm),
             _PageNavPill(
               currentPage: currentPage,
@@ -172,8 +179,12 @@ class ReaderTopBar extends StatelessWidget {
             ),
           ],
           const SizedBox(width: AppSpacing.sm),
-          _statusBadge(scheme),
-          if (mode == ScoreMode.view && collaborators.isNotEmpty) ...[
+          // Flexible so a wide badge (e.g. "Drawing in your layer") shrinks
+          // and ellipsizes instead of overflowing a narrow bar.
+          Flexible(child: _statusBadge(scheme)),
+          if (mode == ScoreMode.view &&
+              collaborators.isNotEmpty &&
+              !compact) ...[
             const SizedBox(width: AppSpacing.sm),
             AvatarStack(people: collaborators),
           ],

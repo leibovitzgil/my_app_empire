@@ -12,6 +12,7 @@ Future<void> _pump(
   bool cleanWorkspace = false,
   List<AvatarStackPerson> collaborators = const [],
   List<String> collaboratorNames = const [],
+  bool compact = false,
   VoidCallback onBack = _noop,
   VoidCallback? onPreviousPage,
   VoidCallback? onNextPage,
@@ -32,6 +33,7 @@ Future<void> _pump(
           cleanWorkspace: cleanWorkspace,
           collaborators: collaborators,
           collaboratorNames: collaboratorNames,
+          compact: compact,
           onBack: onBack,
           onPreviousPage: onPreviousPage,
           onNextPage: onNextPage,
@@ -44,6 +46,12 @@ Future<void> _pump(
     ),
   );
 }
+
+final _threePeople = <AvatarStackPerson>[
+  (initials: 'MK', color: const Color(0xFF8B5CF6)),
+  (initials: 'TR', color: const Color(0xFFF59E0B)),
+  (initials: 'NB', color: const Color(0xFF14B8A6)),
+];
 
 void _noop() {}
 
@@ -225,5 +233,52 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Next page'));
       expect(nextTapped, isTrue);
     });
+
+    testWidgets(
+      'compact view mode does not overflow a phone width and drops the page '
+      'pill and avatars',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await _pump(
+          tester,
+          compact: true,
+          currentPage: 1,
+          pageCount: 6,
+          collaborators: _threePeople,
+          collaboratorNames: const ['Maya K.', 'Tomer R.', 'Noa B.'],
+          onOpenLayers: () {},
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.byType(AvatarStack), findsNothing);
+        expect(find.text('Page 2 of 6'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'compact draw mode does not overflow a phone width despite the wide '
+      'status badge',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await _pump(
+          tester,
+          mode: ScoreMode.draw,
+          compact: true,
+          currentPage: 1,
+          pageCount: 6,
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Drawing in your layer'), findsOneWidget);
+      },
+    );
   });
 }

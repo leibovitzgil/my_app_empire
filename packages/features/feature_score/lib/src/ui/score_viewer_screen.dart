@@ -34,6 +34,14 @@ const double _kMediumBreakpoint = 600;
 /// [_kMediumBreakpoint]) Layers moves to an `endDrawer`.
 const double _kWideBreakpoint = 840;
 
+/// The reader's forced-dark colour scheme (the app runs `ThemeMode.system`,
+/// but this screen is unconditionally dark). Computed once — `fromSeed` is a
+/// pure function of its inputs, so it never needs re-deriving per rebuild.
+final ColorScheme _readerDarkScheme = ColorScheme.fromSeed(
+  seedColor: Colors.blue,
+  brightness: Brightness.dark,
+);
+
 /// The Score Viewer: the app's core screen. Wired to [ScoreBloc] (read from
 /// context) for the heavy-lift annotation/state logic, and owns its own
 /// [RecordAudioCubit]/[AudioPlaybackCubit] for the screen-scoped
@@ -132,14 +140,11 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
         listener: _onRegionSelectionChanged,
         builder: (context, state) {
           _maybeOpenPdf(state);
-          final darkScheme = ColorScheme.fromSeed(
-            seedColor: Colors.blue,
-            brightness: Brightness.dark,
-          );
           return Theme(
-            data: Theme.of(
-              context,
-            ).copyWith(brightness: Brightness.dark, colorScheme: darkScheme),
+            data: Theme.of(context).copyWith(
+              brightness: Brightness.dark,
+              colorScheme: _readerDarkScheme,
+            ),
             child: Scaffold(
               key: _scaffoldKey,
               endDrawer: _buildEndDrawer(context, state),
@@ -168,7 +173,8 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
 
   Future<void> _openPdf(String path) async {
     final result = await widget.renderService.open(path);
-    if (!mounted) return;
+    // Ignore a late result for a path we've since moved off of.
+    if (!mounted || path != _openedPdfPath) return;
     switch (result) {
       case Success<int>(:final value):
         context.read<ScoreBloc>().add(PageCountResolved(value));
@@ -196,6 +202,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       pageCount: state.pageCount,
       syncStatus: widget.syncStatus,
       cleanWorkspace: state.cleanWorkspace,
+      compact: width < _kMediumBreakpoint,
       collaborators: _collaboratorAvatars(state),
       collaboratorNames: _collaboratorNames(state),
       ownInkColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
@@ -571,6 +578,19 @@ class _ReaderCanvas extends StatefulWidget {
 class _ReaderCanvasState extends State<_ReaderCanvas> {
   Region? _completedRegion;
   bool _layersPanelCollapsed = false;
+
+  @override
+  void didUpdateWidget(covariant _ReaderCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Leaving passage mode any way other than resolve/cancel (e.g. tapping
+    // the segmented control, which sits above the popover's tap-catcher) must
+    // drop the just-dragged region — otherwise re-entering passage mode
+    // resurrects a phantom popover anchored to it with no fresh drag.
+    if (oldWidget.state.mode == ScoreMode.regionSelect &&
+        widget.state.mode != ScoreMode.regionSelect) {
+      _completedRegion = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
