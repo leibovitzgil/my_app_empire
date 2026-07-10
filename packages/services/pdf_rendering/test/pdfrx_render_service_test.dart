@@ -6,13 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 
 void main() {
-  group('PdfxRenderService', () {
+  group('PdfrxRenderService', () {
     late Directory tempDir;
-    late PdfxRenderService service;
+    late PdfrxRenderService service;
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('pdf_render_test');
-      service = PdfxRenderService();
+      service = PdfrxRenderService();
     });
 
     tearDown(() async {
@@ -75,17 +75,12 @@ void main() {
       );
     });
 
-    // `open` and `renderPage`'s actual pdfx interaction both require a real
-    // platform channel (Android/iOS/macOS/Windows/Web) and aren't testable
-    // in a plain `flutter test` VM run here: `pdfx.PdfDocument.openFile`
-    // calls `assertHasPdfSupport()` as an un-awaited, fire-and-forget
-    // `Future` internally, so on a host platform pdfx doesn't recognize
-    // (this Linux sandbox), the resulting `PlatformNotSupportedException`
-    // surfaces as an *uncaught* zone error rather than a rejection our
-    // `try`/`catch` can map to a `Result` — a quirk of `pdfx` itself, not
-    // something `PdfxRenderService` can intercept. `open`'s success path
-    // and `renderPage`'s rasterization need on-device or integration-test
-    // verification instead; `renderPage`'s pre-`open()` guard above is
-    // exercised without touching pdfx at all, so it's safe to unit test.
+    // `open` and `renderPage`'s actual pdfrx interaction both need the PDFium
+    // engine initialized via a real platform (Android/iOS/macOS/Windows/Web)
+    // and aren't exercised in a plain `flutter test` VM run here, so `open`'s
+    // success path and `renderPage`'s rasterization need on-device or
+    // integration-test verification instead. `renderPage`'s pre-`open()`
+    // guard above is exercised without touching pdfrx at all, so it's safe to
+    // unit test.
   });
 }

@@ -14,7 +14,7 @@ dependencies:
   equatable: ^2.0.8
   flutter:
     sdk: flutter
-  pdfx: ^2.9.2
+  pdfrx: ^2.4.7
 
 dev_dependencies:
   flutter_test:

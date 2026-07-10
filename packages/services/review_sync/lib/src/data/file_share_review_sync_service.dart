@@ -258,9 +258,6 @@ class FileShareReviewSyncService implements ReviewSyncService {
     );
 
     final zipBytes = ZipEncoder().encode(archive);
-    if (zipBytes == null) {
-      throw const ReviewSyncException('Failed to encode the review bundle');
-    }
 
     final dir = await _bundlesDirectory();
     if (!dir.existsSync()) dir.createSync(recursive: true);
