@@ -133,7 +133,7 @@ in the Track B backlog.
 | M1.8 | ☑ Account deletion: purge Function v1 | M0.4, M1.4 |
 | M1.9 | ☑ Account deletion: client flow in Settings | M1.8, M1.5 |
 | M1.10 | ☑ Auth lifecycle emulator E2E | M1.2–M1.9 |
-| M2.1 | ☐ Cloud schema design doc (pieces) | — |
+| M2.1 | ☑ Cloud schema design doc (pieces) | — |
 | M2.2 | ☐ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
 | M2.3 | ☐ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
 | M2.4 | ☐ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
@@ -860,6 +860,20 @@ server-side — sequencing demands it (see task).
 
 **Done when:** doc merged; M2.2/M3.x reference sections of it rather than
 re-deciding; no code changes in this task.
+
+**Landed.** `docs/duet_cloud_schema.md` — every field grounded in the
+current code (`Piece`/`piece_mappers`, `InkLayer`/`AudioNote`/
+`annotation_mappers`, `PdfRenderService.checksum` = sha256 hex,
+`_StoredInvite`, `LibraryState.isUnread`, `MonetizationService`'s `pro`
+entitlement). Covers all six collections + the three live M1 ones, the
+Storage layout + per-piece dedupe decision, region/offline/index stances,
+and the full ACL matrix with the six Function-only mutations named (G7).
+Records the three cloud-only deltas from the local model explicitly:
+`participantIds` derived-getter → **materialized** field, `layers`
+bundled blob → **per-author docs** (+ `updatedAt`/`rev`), and `notes`
+gain a `deletedAt` tombstone; plus the ISO-8601-string → `Timestamp`
+boundary conversion. Supersedes the `teacherId`/`collaboratorIds` sketch
+in `firestore.rules`. No code changed.
 
 ### M2.2 — `firestore.rules` + `storage.rules` + `firestore.indexes.json`
 
