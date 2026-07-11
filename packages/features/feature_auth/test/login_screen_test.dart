@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,16 @@ class _RecordingAuthRepository implements AuthRepository {
   @override
   Future<Result<void>> login(String email, String password) async {
     calls.add('login:$email:$password');
+    return _result;
+  }
+
+  @override
+  Future<Result<void>> signUp(
+    String email,
+    String password, {
+    String? displayName,
+  }) async {
+    calls.add('signup:$email:$password:${displayName ?? '<none>'}');
     return _result;
   }
 
@@ -119,6 +130,74 @@ void main() {
     await _submitEmailLogin(tester);
 
     expect(find.text('Email or password is incorrect.'), findsOneWidget);
+  });
+
+  testWidgets('the create-account footer switches to sign-up and submits', (
+    tester,
+  ) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLoginScreen(tester, repo);
+
+    final create = find.text('Create account');
+    await tester.ensureVisible(create);
+    await tester.tap(create);
+    await tester.pumpAndSettle();
+
+    // Now on the sign-up view: name + email + password fields.
+    expect(find.text('Name (optional)'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).at(0), 'Jane');
+    await tester.enterText(find.byType(TextField).at(1), 'new@b.com');
+    await tester.enterText(find.byType(TextField).at(2), 'pw');
+    final submit = find.widgetWithText(PrimaryButton, 'Create account');
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(repo.calls, contains('signup:new@b.com:pw:Jane'));
+  });
+
+  testWidgets('the sign-up footer returns to sign-in', (tester) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLoginScreen(tester, repo);
+
+    final create = find.text('Create account');
+    await tester.ensureVisible(create);
+    await tester.tap(create);
+    await tester.pumpAndSettle();
+
+    final back = find.text('I already have an account');
+    await tester.ensureVisible(back);
+    await tester.tap(back);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Log in'), findsOneWidget);
+    expect(find.text('Name (optional)'), findsNothing);
+  });
+
+  testWidgets('a duplicate-email sign-up renders the human message', (
+    tester,
+  ) async {
+    final repo = _RecordingAuthRepository(
+      failure: const AuthFailure.emailInUse(),
+    );
+    await _pumpLoginScreen(tester, repo);
+
+    final create = find.text('Create account');
+    await tester.ensureVisible(create);
+    await tester.tap(create);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(1), 'dup@b.com');
+    await tester.enterText(find.byType(TextField).at(2), 'pw');
+    final submit = find.widgetWithText(PrimaryButton, 'Create account');
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('An account already exists for that email.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a cancelled flow surfaces no error message', (tester) async {

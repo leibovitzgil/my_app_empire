@@ -393,5 +393,16 @@ Widget signInViewPreview() {
     logo: const AppLogoMark(icon: Icons.shopping_cart_checkout),
     onEmailSignIn: (_, _) {},
     socialButtons: [SocialSignInButton.google(onPressed: () {})],
+    onCreateAccount: () {},
+  );
+}
+
+@Preview(name: 'SignUpView')
+Widget signUpViewPreview() {
+  return SignUpView(
+    title: 'Tandem',
+    logo: const AppLogoMark(icon: Icons.shopping_cart_checkout),
+    onSignUp: (_, _, _) {},
+    onSignIn: () {},
   );
 }

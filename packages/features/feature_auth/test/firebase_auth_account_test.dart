@@ -23,7 +23,7 @@ void main() {
       when(() => user.email).thenReturn('sam@example.com');
       when(() => user.displayName).thenReturn('Sam');
       when(
-        () => firebaseAuth.authStateChanges(),
+        () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));
 
       final account = await repository.account.first;
@@ -40,7 +40,7 @@ void main() {
 
     test('signed-out (null user) maps to a null AuthAccount', () async {
       when(
-        () => firebaseAuth.authStateChanges(),
+        () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(null));
 
       final account = await repository.account.first;
@@ -51,6 +51,8 @@ void main() {
     test('AuthRepository.user still emits the bare uid, unaffected', () async {
       final user = _MockUser();
       when(() => user.uid).thenReturn('uid-1');
+      // The uid stream stays on authStateChanges (sign-in/out transitions
+      // only); it is the account stream that rides userChanges.
       when(
         () => firebaseAuth.authStateChanges(),
       ).thenAnswer((_) => Stream.value(user));
@@ -60,13 +62,34 @@ void main() {
       expect(uid, 'uid-1');
     });
 
+    test('a profile update re-emits the account (userChanges)', () async {
+      final before = _MockUser();
+      when(() => before.uid).thenReturn('uid-1');
+      when(() => before.email).thenReturn('sam@example.com');
+      when(() => before.displayName).thenReturn(null);
+      final after = _MockUser();
+      when(() => after.uid).thenReturn('uid-1');
+      when(() => after.email).thenReturn('sam@example.com');
+      when(() => after.displayName).thenReturn('Sam');
+      when(
+        () => firebaseAuth.userChanges(),
+      ).thenAnswer((_) => Stream.fromIterable([before, after]));
+
+      final names = await repository.account
+          .map((account) => account?.displayName)
+          .take(2)
+          .toList();
+
+      expect(names, [null, 'Sam']);
+    });
+
     test('a user with no email maps to a null AuthAccount.email', () async {
       final user = _MockUser();
       when(() => user.uid).thenReturn('uid-2');
       when(() => user.email).thenReturn(null);
       when(() => user.displayName).thenReturn(null);
       when(
-        () => firebaseAuth.authStateChanges(),
+        () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));
 
       final account = await repository.account.first;

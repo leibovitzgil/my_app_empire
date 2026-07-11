@@ -118,7 +118,7 @@ in the Track B backlog.
 | --- | --- | --- |
 | M0.4 | ☑ `firebase.json` deploy targets + Functions scaffold | — |
 | M1.1 | ☑ Auth error taxonomy over `Result` | — |
-| M1.2 | ☐ Email/password sign-up | M1.1 |
+| M1.2 | ☑ Email/password sign-up | M1.1 |
 | M1.3 | ☐ Password reset + email verification | M1.2 |
 | M1.4 | ☐ Re-authentication for sensitive ops | M1.1 |
 | M1.5 | ☐ Profile: display-name editing + sign-out in Settings | M1.1 |
@@ -464,13 +464,18 @@ green; no `e.toString()` left in `auth_bloc.dart` (G1, G4).
 1. Contract: `Future<Result<void>> signUp(String email, String password,
    {String? displayName})` on `AuthRepository`; implement via
    `createUserWithEmailAndPassword` (+ `updateDisplayName` when provided)
-   in `FirebaseAuthRepository`; mirror in mocks.
+   in `FirebaseAuthRepository`; mirror in mocks. The `account` stream
+   moved from `authStateChanges` to `userChanges` so the just-set display
+   name (and M1.5's edits) actually reach account listeners — the uid
+   `user` stream stays on `authStateChanges`.
 2. Bloc: `AuthSignUpRequested` event + handling (reuses M1.1 taxonomy —
    `emailInUse`, `weakPassword` are the key paths).
 3. UI: extend `core_ui`'s `SignInView` with a mode toggle or a sibling
    `SignUpView` (keep the design-system pattern: it's a presentation
    widget; `feature_auth` adds a `SignUpScreen` or a mode on
    `LoginScreen`). Add "Create account" affordance to the login screen.
+   (Built as a sibling `SignUpView` + an in-place mode toggle on
+   `LoginScreen`, so no app router changes were needed.)
 4. On success: signed in + the `usersByEmail` upsert listener
    (`apps/duet/lib/injection.dart` ~L114–127) publishes the directory
    entry automatically — assert this in the E2E later (M1.10).

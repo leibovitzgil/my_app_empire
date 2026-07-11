@@ -9,6 +9,8 @@ class _MockFirebaseAuth extends Mock implements firebase_auth.FirebaseAuth {}
 class _MockUserCredential extends Mock
     implements firebase_auth.UserCredential {}
 
+class _MockUser extends Mock implements firebase_auth.User {}
+
 void main() {
   group('mapFirebaseAuthCode', () {
     const expectations = <String, AuthFailure>{
@@ -107,6 +109,71 @@ void main() {
           (f) => f.error,
           'error',
           AuthFailure.unknown(boom),
+        ),
+      );
+    });
+
+    test('signUp sets the display name on the fresh profile', () async {
+      final user = _MockUser();
+      final credential = _MockUserCredential();
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => user.updateDisplayName(any<String>()),
+      ).thenAnswer((_) async {});
+      when(user.reload).thenAnswer((_) async {});
+      when(
+        () => firebaseAuth.createUserWithEmailAndPassword(
+          email: any<String>(named: 'email'),
+          password: any<String>(named: 'password'),
+        ),
+      ).thenAnswer((_) async => credential);
+
+      final result = await repository.signUp(
+        'new@b.com',
+        'pw',
+        displayName: '  Jane Doe  ',
+      );
+
+      expect(result, isA<Success<void>>());
+      verify(() => user.updateDisplayName('Jane Doe')).called(1);
+      verify(user.reload).called(1);
+    });
+
+    test('signUp without a display name skips the profile update', () async {
+      final user = _MockUser();
+      final credential = _MockUserCredential();
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => firebaseAuth.createUserWithEmailAndPassword(
+          email: any<String>(named: 'email'),
+          password: any<String>(named: 'password'),
+        ),
+      ).thenAnswer((_) async => credential);
+
+      final result = await repository.signUp('new@b.com', 'pw');
+
+      expect(result, isA<Success<void>>());
+      verifyNever(() => user.updateDisplayName(any<String>()));
+    });
+
+    test('signUp maps a duplicate email to emailInUse', () async {
+      when(
+        () => firebaseAuth.createUserWithEmailAndPassword(
+          email: any<String>(named: 'email'),
+          password: any<String>(named: 'password'),
+        ),
+      ).thenThrow(
+        firebase_auth.FirebaseAuthException(code: 'email-already-in-use'),
+      );
+
+      final result = await repository.signUp('dup@b.com', 'pw');
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.emailInUse(),
         ),
       );
     });
