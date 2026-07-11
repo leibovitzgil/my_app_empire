@@ -127,7 +127,7 @@ in the Track B backlog.
 | M1.2 | ☑ Email/password sign-up | M1.1 |
 | M1.3 | ☑ Password reset + email verification | M1.2 |
 | M1.4 | ☑ Re-authentication for sensitive ops | M1.1 |
-| M1.5 | ☐ Profile: display-name editing + sign-out in Settings | M1.1 |
+| M1.5 | ☑ Profile: display-name editing + sign-out in Settings | M1.1 |
 | M1.6 | ☐ `discoverable` toggle (and stop clobbering it) | M1.5 |
 | M1.7 | ☐ Rules-test harness (npm) + current-rules coverage | M0.4 |
 | M1.8 | ☐ Account deletion: purge Function v1 | M0.4, M1.4 |
@@ -563,7 +563,12 @@ calls `updateDisplayName` anywhere.
 **Steps**
 1. `feature_settings`: widen `SettingsScreen`'s `extraTile` to
    `List<Widget> extraTiles` (or a sections API) — update `showcase`/other
-   callers.
+   callers. (Done as `extraTiles` with a `const []` default; only Duet
+   passed a tile. While in this file, "Manage plan" moved to a `/paywall`
+   route per G8, and the account→directory upsert listener in
+   `injection.dart` was hoisted out of the Firebase branch so the mock
+   flow publishes through the same seam — which is what makes the
+   in-memory re-publish test in step 4 possible.)
 2. Contract: `Future<Result<void>> updateDisplayName(String name)` on
    `AuthRepository` (implemented with `updateDisplayName` + `reload`, then
    re-emit on the `account` stream so `CurrentUserName` and the upsert

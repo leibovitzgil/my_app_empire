@@ -94,6 +94,30 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
   }
 
   @override
+  Future<Result<void>> updateDisplayName(String name) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final account = _lastAccount;
+    if (account == null) {
+      return const ResultFailure(AuthFailure.unknown('no-signed-in-user'));
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return const ResultFailure(AuthFailure.unknown('empty-display-name'));
+    }
+    _displayNameController.add(trimmed);
+    _emitAccount(
+      AuthAccount(
+        uid: account.uid,
+        email: account.email,
+        displayName: trimmed,
+        emailVerified: account.emailVerified,
+        provider: account.provider,
+      ),
+    );
+    return const Success(null);
+  }
+
+  @override
   Future<Result<void>> reauthenticate({String? password}) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     return const Success(null);

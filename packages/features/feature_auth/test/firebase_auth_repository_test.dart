@@ -223,6 +223,72 @@ void main() {
       expect(result, isA<Success<void>>());
     });
 
+    test('updateDisplayName trims, updates, and reloads', () async {
+      final user = _MockUser();
+      when(
+        () => user.updateDisplayName(any<String>()),
+      ).thenAnswer((_) async {});
+      when(user.reload).thenAnswer((_) async {});
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      final result = await repository.updateDisplayName('  Jane D.  ');
+
+      expect(result, isA<Success<void>>());
+      verify(() => user.updateDisplayName('Jane D.')).called(1);
+      verify(user.reload).called(1);
+    });
+
+    test('updateDisplayName rejects a blank name', () async {
+      final user = _MockUser();
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      final result = await repository.updateDisplayName('   ');
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.unknown('empty-display-name'),
+        ),
+      );
+      verifyNever(() => user.updateDisplayName(any<String>()));
+    });
+
+    test('updateDisplayName fails when signed out', () async {
+      when(() => firebaseAuth.currentUser).thenReturn(null);
+
+      final result = await repository.updateDisplayName('Jane');
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.unknown('no-signed-in-user'),
+        ),
+      );
+    });
+
+    test('updateDisplayName maps requires-recent-login', () async {
+      final user = _MockUser();
+      when(() => user.updateDisplayName(any<String>())).thenThrow(
+        firebase_auth.FirebaseAuthException(code: 'requires-recent-login'),
+      );
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      final result = await repository.updateDisplayName('Jane');
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.requiresRecentLogin(),
+        ),
+      );
+    });
+
     test('reauthenticate with a password confirms the credential', () async {
       final user = _MockUser();
       when(() => user.email).thenReturn('sam@example.com');

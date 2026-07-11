@@ -146,6 +146,28 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
   }
 
   @override
+  Future<Result<void>> updateDisplayName(String name) {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return Future.value(
+        const ResultFailure(AuthFailure.unknown('no-signed-in-user')),
+      );
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return Future.value(
+        const ResultFailure(AuthFailure.unknown('empty-display-name')),
+      );
+    }
+    return _guard(() async {
+      await user.updateDisplayName(trimmed);
+      // Refresh the cached profile so userChanges re-emits with the new
+      // name (same reasoning as signUp's post-update reload).
+      await user.reload();
+    });
+  }
+
+  @override
   Future<Result<void>> reauthenticate({String? password}) {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
