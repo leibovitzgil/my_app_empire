@@ -5,6 +5,7 @@
 // is bound, so invite-by-email resolves the freshest name. Runs against the
 // default in-memory branch; the Firestore variant of the same seam is the
 // M1.10 emulator E2E's concern.
+import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,4 +36,35 @@ void main() {
     final after = await directory.lookupByEmail('jane.doe@example.com');
     expect(after.valueOrNull?.displayName, 'Jane D.');
   });
+
+  test(
+    'a discoverable=false choice survives a fresh sign-in (clobber '
+    'regression, M1.6)',
+    () async {
+      await configureDependencies();
+      final auth = getIt<AuthRepository>();
+      final directory = getIt<UserDirectory>();
+
+      await auth.login('jane.doe@example.com', 'pw');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      // Visible by default…
+      final before = await directory.lookupByEmail('jane.doe@example.com');
+      expect(before.valueOrNull, isNotNull);
+
+      // …until the user opts out.
+      await getIt<DirectoryPublisher>().setDiscoverable(false);
+      final hidden = await directory.lookupByEmail('jane.doe@example.com');
+      expect(hidden.valueOrNull, isNull);
+
+      // A fresh sign-in used to force-write discoverable: true; the choice
+      // must survive the re-login upsert.
+      await auth.logout();
+      await auth.login('jane.doe@example.com', 'pw');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final after = await directory.lookupByEmail('jane.doe@example.com');
+      expect(after.valueOrNull, isNull);
+    },
+  );
 }

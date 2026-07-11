@@ -9,6 +9,7 @@ import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
@@ -146,24 +147,18 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   }
 
   // Keeps this device's own directory entry current whenever the signed-in
-  // identity changes (sign-in, sign-up, display-name edits — the account
-  // stream re-emits on each), so other users can resolve an invite to this
-  // account by email. Backend-agnostic on purpose: the mock flow exercises
-  // the same publication path the Firestore-backed one uses.
-  getIt<AuthAccountProvider>().account.listen((account) {
-    final email = account?.email;
-    if (account == null || email == null) return;
-    unawaited(
-      _upsertDirectoryEntry(
-        getIt<UserDirectory>(),
-        DirectoryUser(
-          uid: account.uid,
-          email: email,
-          displayName: account.displayName,
-        ),
-      ),
-    );
-  });
+  // identity changes, threading the locally-stored `discoverable` choice
+  // into every upsert (M1.6's clobber fix — see the class doc). Eager, like
+  // `CurrentUser`: the account subscription must exist before login can
+  // happen. Backend-agnostic on purpose: the mock flow exercises the same
+  // publication path the Firestore-backed one uses.
+  getIt.registerSingleton<DirectoryPublisher>(
+    DirectoryPublisher(
+      directory: getIt<UserDirectory>(),
+      storage: getIt<LocalStorageService>(),
+      accounts: getIt<AuthAccountProvider>().account,
+    ),
+  );
 
   // `DeviceTokenSync`'s token source is always injected (FIX-3): the default
   // branch binds a fake that never resolves a token and never rotates, so
@@ -278,16 +273,6 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   getIt.registerLazySingleton<DeepLinkService>(FakeDeepLinkService.new);
   // generated:register — `create_feature/create_package --wire duet` adds
   // registrations above this line. Do not remove this marker.
-}
-
-/// Publishes [user] to [directory], discarding the `Result` — a
-/// best-effort background sync, not something the auth-change listener
-/// blocks on or surfaces a failure for.
-Future<void> _upsertDirectoryEntry(
-  UserDirectory directory,
-  DirectoryUser user,
-) async {
-  await directory.upsertSelf(user);
 }
 
 /// Bridges the generic message inbox for whoever is currently signed in to a
