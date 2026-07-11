@@ -56,7 +56,11 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
 
   @override
   Stream<AuthAccount?> get account {
-    return _firebaseAuth.authStateChanges().map((firebaseUser) {
+    // userChanges (not authStateChanges): a superset that also fires on
+    // profile mutations, so a display name set right after sign-up (or
+    // edited later, M1.5) reaches account listeners — notably Duet's
+    // directory upsert — without bespoke re-emission plumbing.
+    return _firebaseAuth.userChanges().map((firebaseUser) {
       if (firebaseUser == null) return null;
       return AuthAccount(
         uid: firebaseUser.uid,
@@ -74,6 +78,29 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
         password: password,
       ),
     );
+  }
+
+  @override
+  Future<Result<void>> signUp(
+    String email,
+    String password, {
+    String? displayName,
+  }) {
+    return _guard(() async {
+      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final name = displayName?.trim();
+      if (name == null || name.isEmpty) return;
+      final user = credential.user;
+      if (user == null) return;
+      await user.updateDisplayName(name);
+      // Refresh the cached profile so the userChanges emission carries the
+      // name (updateDisplayName alone updates the backend, not the local
+      // User snapshot on all platforms).
+      await user.reload();
+    });
   }
 
   @override

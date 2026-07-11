@@ -19,6 +19,16 @@ class LoginEmittingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> signUp(
+    String email,
+    String password, {
+    String? displayName,
+  }) async {
+    _controller.add('new_user_id');
+    return const Success(null);
+  }
+
+  @override
   Future<Result<void>> signInWithGoogle() async {
     _controller.add('google_user_id');
     return const Success(null);
@@ -50,6 +60,13 @@ class FakeAuthRepository implements AuthRepository {
       const Success(null);
 
   @override
+  Future<Result<void>> signUp(
+    String email,
+    String password, {
+    String? displayName,
+  }) async => const Success(null);
+
+  @override
   Future<Result<void>> signInWithGoogle() async => const Success(null);
 
   @override
@@ -72,6 +89,13 @@ class FailingAuthRepository implements AuthRepository {
   @override
   Future<Result<void>> login(String email, String password) async =>
       ResultFailure(failure);
+
+  @override
+  Future<Result<void>> signUp(
+    String email,
+    String password, {
+    String? displayName,
+  }) async => ResultFailure(failure);
 
   @override
   Future<Result<void>> signInWithGoogle() async => ResultFailure(failure);
@@ -131,6 +155,24 @@ void main() {
       build: () => AuthBloc(authRepository: LoginEmittingAuthRepository()),
       act: (bloc) => bloc.add(AuthAppleSignInRequested()),
       expect: () => [const AuthState.authenticated('apple_user_id')],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits [authenticated] after AuthSignUpRequested succeeds',
+      build: () => AuthBloc(authRepository: LoginEmittingAuthRepository()),
+      act: (bloc) => bloc.add(
+        const AuthSignUpRequested('new@b.com', 'pw', displayName: 'New'),
+      ),
+      expect: () => [const AuthState.authenticated('new_user_id')],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'folds a duplicate-email sign-up into [failure] with emailInUse',
+      build: () => AuthBloc(
+        authRepository: FailingAuthRepository(const AuthFailure.emailInUse()),
+      ),
+      act: (bloc) => bloc.add(const AuthSignUpRequested('a@b.com', 'pw')),
+      expect: () => [const AuthState.failure(AuthFailure.emailInUse())],
     );
 
     blocTest<AuthBloc, AuthState>(

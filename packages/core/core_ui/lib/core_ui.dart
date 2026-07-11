@@ -21,5 +21,6 @@ export 'src/widgets/loading_view.dart';
 export 'src/widgets/primary_button.dart';
 export 'src/widgets/secondary_button.dart';
 export 'src/widgets/sign_in_view.dart';
+export 'src/widgets/sign_up_view.dart';
 export 'src/widgets/skeleton.dart';
 export 'src/widgets/social_sign_in_button.dart';

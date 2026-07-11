@@ -84,5 +84,39 @@ void main() {
 
       expect(find.text('Wrong password'), findsOneWidget);
     });
+
+    testWidgets('wires the create-account footer when provided', (
+      tester,
+    ) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SignInView(
+            onEmailSignIn: (_, _) {},
+            onCreateAccount: () => taps++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final create = find.text('Create account');
+      expect(create, findsOneWidget);
+      await tester.ensureVisible(create);
+      await tester.tap(create);
+      await tester.pumpAndSettle();
+
+      expect(taps, 1);
+    });
+
+    testWidgets('omits the create-account footer when absent', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SignInView(onEmailSignIn: (_, _) {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create account'), findsNothing);
+    });
   });
 }

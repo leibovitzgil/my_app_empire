@@ -16,6 +16,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthStatusChanged>(_onAuthStatusChanged);
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
     on<AuthLoginRequested>(_onAuthLoginRequested);
+    on<AuthSignUpRequested>(_onAuthSignUpRequested);
     on<AuthGoogleSignInRequested>(_onAuthGoogleSignInRequested);
     on<AuthAppleSignInRequested>(_onAuthAppleSignInRequested);
     _userSubscription = _authRepository.user.listen(
@@ -66,6 +67,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     _emitOnFailure(
       await _authRepository.login(event.email, event.password),
+      emit,
+    );
+  }
+
+  Future<void> _onAuthSignUpRequested(
+    AuthSignUpRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    _emitOnFailure(
+      await _authRepository.signUp(
+        event.email,
+        event.password,
+        displayName: event.displayName,
+      ),
       emit,
     );
   }

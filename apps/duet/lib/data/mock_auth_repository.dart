@@ -50,6 +50,26 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
   }
 
   @override
+  Future<Result<void>> signUp(
+    String email,
+    String password, {
+    String? displayName,
+  }) async {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    const uid = 'user_id_123';
+    final trimmed = displayName?.trim();
+    final name = trimmed == null || trimmed.isEmpty
+        ? _nameFromEmail(email)
+        : trimmed;
+    _controller.add(uid);
+    _displayNameController.add(name);
+    _accountController.add(
+      AuthAccount(uid: uid, email: email, displayName: name),
+    );
+    return const Success(null);
+  }
+
+  @override
   Future<Result<void>> signInWithGoogle() async {
     await Future<void>.delayed(const Duration(seconds: 1));
     const uid = 'google_user_123';
