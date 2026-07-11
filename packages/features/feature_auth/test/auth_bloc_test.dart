@@ -29,6 +29,13 @@ class LoginEmittingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> sendPasswordReset(String email) async =>
+      const Success(null);
+
+  @override
+  Future<Result<void>> sendEmailVerification() async => const Success(null);
+
+  @override
   Future<Result<void>> signInWithGoogle() async {
     _controller.add('google_user_id');
     return const Success(null);
@@ -67,6 +74,13 @@ class FakeAuthRepository implements AuthRepository {
   }) async => const Success(null);
 
   @override
+  Future<Result<void>> sendPasswordReset(String email) async =>
+      const Success(null);
+
+  @override
+  Future<Result<void>> sendEmailVerification() async => const Success(null);
+
+  @override
   Future<Result<void>> signInWithGoogle() async => const Success(null);
 
   @override
@@ -96,6 +110,13 @@ class FailingAuthRepository implements AuthRepository {
     String password, {
     String? displayName,
   }) async => ResultFailure(failure);
+
+  @override
+  Future<Result<void>> sendPasswordReset(String email) async =>
+      ResultFailure(failure);
+
+  @override
+  Future<Result<void>> sendEmailVerification() async => ResultFailure(failure);
 
   @override
   Future<Result<void>> signInWithGoogle() async => ResultFailure(failure);
@@ -204,6 +225,55 @@ void main() {
       ),
       act: (bloc) => bloc.add(AuthAppleSignInRequested()),
       expect: () => [const AuthState.failure(AuthFailure.network())],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'a password-reset request confirms via passwordResetSentTo',
+      build: () => AuthBloc(authRepository: FakeAuthRepository()),
+      act: (bloc) => bloc.add(const AuthPasswordResetRequested('a@b.com')),
+      expect: () => [
+        isA<AuthState>().having(
+          (s) => s.passwordResetSentTo,
+          'passwordResetSentTo',
+          'a@b.com',
+        ),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      're-sending a reset clears the marker first so listeners re-fire',
+      build: () => AuthBloc(authRepository: FakeAuthRepository()),
+      act: (bloc) => bloc
+        ..add(const AuthPasswordResetRequested('a@b.com'))
+        ..add(const AuthPasswordResetRequested('a@b.com')),
+      expect: () => [
+        isA<AuthState>().having(
+          (s) => s.passwordResetSentTo,
+          'passwordResetSentTo',
+          'a@b.com',
+        ),
+        isA<AuthState>().having(
+          (s) => s.passwordResetSentTo,
+          'passwordResetSentTo',
+          isNull,
+        ),
+        isA<AuthState>().having(
+          (s) => s.passwordResetSentTo,
+          'passwordResetSentTo',
+          'a@b.com',
+        ),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'folds a password-reset failure into [failure]',
+      build: () => AuthBloc(
+        authRepository: FailingAuthRepository(
+          const AuthFailure.invalidEmail(),
+        ),
+      ),
+      act: (bloc) => bloc.add(const AuthPasswordResetRequested('nope')),
+      expect: () => [const AuthState.failure(AuthFailure.invalidEmail())],
     );
 
     blocTest<AuthBloc, AuthState>(

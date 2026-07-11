@@ -29,6 +29,14 @@ abstract class AuthRepository {
   /// emitted on [user].
   Future<Result<void>> signInWithApple();
 
+  /// Sends a password-reset email to [email]. Succeeds without revealing
+  /// whether an account exists (backends suppress enumeration).
+  Future<Result<void>> sendPasswordReset(String email);
+
+  /// Sends a verification email to the signed-in account's address. Fails
+  /// with an `AuthFailure` when no user is signed in.
+  Future<Result<void>> sendEmailVerification();
+
   /// Signs out.
   Future<Result<void>> logout();
 }

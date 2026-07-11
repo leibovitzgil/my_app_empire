@@ -10,7 +10,12 @@ import 'package:equatable/equatable.dart';
 /// directory.
 class AuthAccount extends Equatable {
   /// Creates an [AuthAccount].
-  const AuthAccount({required this.uid, this.email, this.displayName});
+  const AuthAccount({
+    required this.uid,
+    this.email,
+    this.displayName,
+    this.emailVerified = false,
+  });
 
   /// The signed-in account's id.
   final String uid;
@@ -21,6 +26,12 @@ class AuthAccount extends Equatable {
   /// The account's display name, if known.
   final String? displayName;
 
+  /// Whether the account's email address has been verified. Rides the
+  /// `account` stream (refreshed via `AuthAccountProvider.refreshAccount`)
+  /// so UI like the verify-email banner can react; nothing gates on it in
+  /// 1.0 and security rules never depend on it.
+  final bool emailVerified;
+
   @override
-  List<Object?> get props => [uid, email, displayName];
+  List<Object?> get props => [uid, email, displayName, emailVerified];
 }

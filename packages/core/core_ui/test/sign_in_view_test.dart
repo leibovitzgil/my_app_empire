@@ -118,5 +118,39 @@ void main() {
 
       expect(find.text('Create account'), findsNothing);
     });
+
+    testWidgets('wires the forgot-password link when provided', (
+      tester,
+    ) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SignInView(
+            onEmailSignIn: (_, _) {},
+            onForgotPassword: () => taps++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final forgot = find.text('Forgot password?');
+      expect(forgot, findsOneWidget);
+      await tester.ensureVisible(forgot);
+      await tester.tap(forgot);
+      await tester.pumpAndSettle();
+
+      expect(taps, 1);
+    });
+
+    testWidgets('omits the forgot-password link when absent', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SignInView(onEmailSignIn: (_, _) {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Forgot password?'), findsNothing);
+    });
   });
 }

@@ -22,6 +22,7 @@ void main() {
       when(() => user.uid).thenReturn('uid-1');
       when(() => user.email).thenReturn('sam@example.com');
       when(() => user.displayName).thenReturn('Sam');
+      when(() => user.emailVerified).thenReturn(false);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));
@@ -67,10 +68,12 @@ void main() {
       when(() => before.uid).thenReturn('uid-1');
       when(() => before.email).thenReturn('sam@example.com');
       when(() => before.displayName).thenReturn(null);
+      when(() => before.emailVerified).thenReturn(false);
       final after = _MockUser();
       when(() => after.uid).thenReturn('uid-1');
       when(() => after.email).thenReturn('sam@example.com');
       when(() => after.displayName).thenReturn('Sam');
+      when(() => after.emailVerified).thenReturn(false);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.fromIterable([before, after]));
@@ -83,11 +86,27 @@ void main() {
       expect(names, [null, 'Sam']);
     });
 
+    test('a verified address maps to emailVerified: true', () async {
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('uid-1');
+      when(() => user.email).thenReturn('sam@example.com');
+      when(() => user.displayName).thenReturn('Sam');
+      when(() => user.emailVerified).thenReturn(true);
+      when(
+        () => firebaseAuth.userChanges(),
+      ).thenAnswer((_) => Stream.value(user));
+
+      final account = await repository.account.first;
+
+      expect(account?.emailVerified, isTrue);
+    });
+
     test('a user with no email maps to a null AuthAccount.email', () async {
       final user = _MockUser();
       when(() => user.uid).thenReturn('uid-2');
       when(() => user.email).thenReturn(null);
       when(() => user.displayName).thenReturn(null);
+      when(() => user.emailVerified).thenReturn(false);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));

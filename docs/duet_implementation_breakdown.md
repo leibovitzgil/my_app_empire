@@ -69,6 +69,12 @@ identifier, stays undecided.
 - **G7 — Server-authoritative where trust matters.** Cross-user mutations
   (invite delivery/acceptance, purge, entitlement-gated caps) go through
   Cloud Functions; client-side checks remain for UX only.
+- **G8 — Routing standard.** Every full-screen destination in an app is a
+  `go_router` route; feature packages never navigate or reference route
+  names (callbacks only); the redirect owns auth reachability; deep-link
+  intents ride `_dispatchIntent` (go when signed in, held until login
+  otherwise). See CLAUDE.md "Routing & navigation";
+  `apps/duet/lib/app.dart` is the reference.
 
 ## Two tracks: emulator-first now, name-gated later
 
@@ -119,7 +125,7 @@ in the Track B backlog.
 | M0.4 | ☑ `firebase.json` deploy targets + Functions scaffold | — |
 | M1.1 | ☑ Auth error taxonomy over `Result` | — |
 | M1.2 | ☑ Email/password sign-up | M1.1 |
-| M1.3 | ☐ Password reset + email verification | M1.2 |
+| M1.3 | ☑ Password reset + email verification | M1.2 |
 | M1.4 | ☐ Re-authentication for sensitive ops | M1.1 |
 | M1.5 | ☐ Profile: display-name editing + sign-out in Settings | M1.1 |
 | M1.6 | ☐ `discoverable` toggle (and stop clobbering it) | M1.5 |
@@ -496,7 +502,9 @@ the typed error; gate green.
    prefer adding a `bool emailVerified` field to `AuthAccount`
    [`feature_auth/lib/src/domain/auth_account.dart`] so the existing
    `account` stream carries it; remember `AuthAccount` is `Equatable` —
-   update `props`).
+   update `props`). (Built with the `AuthAccount` field;
+   `AuthAccountProvider` gained `refreshAccount()` as the
+   reload-on-resume seam the banner calls.)
 2. Implement in `FirebaseAuthRepository` (`sendPasswordResetEmail`,
    `currentUser.sendEmailVerification`, `reload()` on resume to refresh
    `emailVerified`); mirror in mocks (instant-verify).
@@ -504,7 +512,10 @@ the typed error; gate green.
    confirmation snackbar; a dismissible "Verify your email" banner on
    `/home` while unverified with a resend action. Do **not** hard-gate the
    app on verification in 1.0 (decision recorded here; rules never depend
-   on it).
+   on it). (Reset rides the bloc — `AuthPasswordResetRequested` +
+   `AuthState.passwordResetSentTo` one-shot marker; the banner is
+   `EmailVerificationBanner` in `feature_auth`, wired by Duet's home via
+   `Result`-returning callbacks, refreshing on app resume.)
 4. Tests: bloc + widget; emulator behavior (reset emails are retrievable
    via the Auth emulator REST API — cover in M1.10).
 
@@ -1549,24 +1560,24 @@ Track A); real delivery rides M5.3's ▸B backlog item; gate green.
 taps, tests) are Track A — `FakeDeepLinkService.ingest` drives them; step
 2's FCM tap wiring is the ▸B item (needs M5.1/M5.3 live).
 
-**Context (gaps).** There is **no `/piece/:id` route** — pieces open only
-via in-process `Navigator.push` from the library
-(`apps/duet/lib/app.dart` `_openScore`). `DeepLinkService.ingest(Uri)` is
-the designed seam but is only called from tests.
+**Context (gaps).** The **`/score/:pieceId` route already exists** —
+added in the post-M1.3 routing standardization (every full-screen
+destination in Duet is a go_router route; `_dispatchIntent` in `app.dart`
+navigates signed-in intents with `go` and holds signed-out ones until
+login). `DeepLinkService.ingest(Uri)` is the designed seam but is only
+called from tests, and `duetDeepLinkParser` doesn't map piece URIs yet.
 `PluginLocalNotificationPort.initialize` sets **no**
 `onDidReceiveNotificationResponse` (no tap callback, no payload).
 
 **Steps**
-1. Routing: add `/piece/:id` to the `GoRouter` table (app.dart) →
-   resolves the piece (`PieceRepository.getPiece`) → `DuetScorePage`;
-   extend `duetDeepLinkParser` to map `/piece/<id>` URIs; unknown/denied
-   ids land on `/home` with an `AppSnackbar` (G4).
+1. Routing: extend `duetDeepLinkParser` to map `/piece/<id>` URIs onto
+   the existing `/score/:pieceId` route; unknown/denied ids land on
+   `/home` with an `AppSnackbar` (G4).
 2. **[Track B]** FCM taps: in the Firebase entry points, wire
    `FirebaseMessaging.onMessageOpenedApp` +
    `getInitialMessage()` → extract `data.deepLink` →
    `getIt<DeepLinkService>().ingest(uri)` — the existing
-   `onIntent → _pendingIntent → router.refresh()` machinery in `app.dart`
-   does the rest.
+   `onIntent → _dispatchIntent` machinery in `app.dart` does the rest.
 3. Local notifications: extend `LocalNotificationPort.show` with a
    `payload` param + a tap stream; `PluginLocalNotificationPort` passes
    `onDidReceiveNotificationResponse`; the inbox bridge sets the piece

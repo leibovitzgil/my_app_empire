@@ -45,6 +45,18 @@ class _RecordingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> sendPasswordReset(String email) async {
+    calls.add('reset:$email');
+    return _result;
+  }
+
+  @override
+  Future<Result<void>> sendEmailVerification() async {
+    calls.add('verify');
+    return _result;
+  }
+
+  @override
   Future<Result<void>> signInWithGoogle() async {
     calls.add('google');
     return _result;
@@ -198,6 +210,51 @@ void main() {
       find.text('An account already exists for that email.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('forgot password opens the dialog and sends the reset link', (
+    tester,
+  ) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLoginScreen(tester, repo);
+
+    final forgot = find.text('Forgot password?');
+    await tester.ensureVisible(forgot);
+    await tester.tap(forgot);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reset password'), findsOneWidget);
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      ' reset@b.com ',
+    );
+    await tester.tap(find.text('Send link'));
+    await tester.pumpAndSettle();
+
+    // Email is trimmed, the repo is hit, and the confirmation snackbar
+    // renders on success.
+    expect(repo.calls, contains('reset:reset@b.com'));
+    expect(
+      find.text('Password reset link sent to reset@b.com.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cancelling the reset dialog sends nothing', (tester) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLoginScreen(tester, repo);
+
+    final forgot = find.text('Forgot password?');
+    await tester.ensureVisible(forgot);
+    await tester.tap(forgot);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(repo.calls, isEmpty);
   });
 
   testWidgets('a cancelled flow surfaces no error message', (tester) async {

@@ -37,6 +37,14 @@ final class AuthSignUpRequested extends AuthEvent {
   List<Object?> get props => [email, password, displayName];
 }
 
+/// The user asked for a password-reset email ("Forgot password?").
+final class AuthPasswordResetRequested extends AuthEvent {
+  const AuthPasswordResetRequested(this.email);
+  final String email;
+  @override
+  List<Object?> get props => [email];
+}
+
 /// The user tapped "Continue with Google".
 final class AuthGoogleSignInRequested extends AuthEvent {}
 

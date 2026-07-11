@@ -394,6 +394,7 @@ Widget signInViewPreview() {
     onEmailSignIn: (_, _) {},
     socialButtons: [SocialSignInButton.google(onPressed: () {})],
     onCreateAccount: () {},
+    onForgotPassword: () {},
   );
 }
 

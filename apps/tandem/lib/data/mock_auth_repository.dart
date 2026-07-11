@@ -28,6 +28,13 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> sendPasswordReset(String email) async =>
+      const Success(null);
+
+  @override
+  Future<Result<void>> sendEmailVerification() async => const Success(null);
+
+  @override
   Future<Result<void>> signInWithGoogle() async {
     _controller.add('tandem-google-user');
     return const Success(null);
