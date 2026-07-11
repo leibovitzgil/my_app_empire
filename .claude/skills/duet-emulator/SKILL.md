@@ -18,10 +18,13 @@ cd apps/duet
 ```
 
 That one command resolves the Firebase CLI (falling back to `npx
-firebase-tools`), generates the web platform on first run, starts the Auth
-(`:9099`) + Firestore (`:8080`) emulators in the `demo-duet` project, seeds two
-demo accounts, waits for both to be healthy, then runs the app wired to them.
-Quitting the app (`q`) also stops the emulators.
+firebase-tools`), generates the web platform on first run, builds the Cloud
+Functions workspace (`functions/`, npm — skipped when already fresh), starts
+the Auth (`:9099`) + Firestore (`:8080`) + Functions (`:5001`) + Storage
+(`:9199`) emulators in the `demo-duet` project, seeds two demo accounts, waits
+until all are healthy (the Functions probe calls the `healthcheck` callable),
+then runs the app wired to them. Quitting the app (`q`) also stops the
+emulators.
 
 **Sign in with** `you@duet.dev` / `password` (and `friend@duet.dev` /
 `password`, so the invite-by-email flow resolves a real account).
@@ -62,8 +65,9 @@ the in-memory fakes via `test/`).
 
 ## Requirements / gotchas
 
-- **Java** (the Firestore emulator is a Java process) and the **Firebase CLI**
-  (or Node/`npx` for the `npx firebase-tools` fallback).
+- **Java** (the Firestore emulator is a Java process) and **Node/npm** (builds
+  `functions/`; also the `npx firebase-tools` fallback when the Firebase CLI
+  isn't installed).
 - **Android emulator:** `main_emulator.dart` targets `127.0.0.1`, which on
   Android is the device, not the host — prefer web / desktop / iOS simulator
   (all reach `127.0.0.1` directly), or remap the host to `10.0.2.2`.

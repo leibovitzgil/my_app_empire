@@ -8,16 +8,17 @@
 #   ./dev.sh --emulators-only   # just the backend (e.g. to run e2e tests)
 #   ./dev.sh -- --profile       # everything after `--` is passed to flutter run
 #
-# Auth + Firestore run entirely on your machine in the "demo-duet" project:
-# no real Firebase project, no login, nothing ever touches production. The
-# emulators start empty each run; two demo accounts are seeded so you can sign
-# in immediately (and invite each other by email):
+# Auth + Firestore + Functions + Storage run entirely on your machine in the
+# "demo-duet" project: no real Firebase project, no login, nothing ever
+# touches production. The emulators start empty each run; two demo accounts
+# are seeded so you can sign in immediately (and invite each other by email):
 #
 #     you@duet.dev  /  password        friend@duet.dev  /  password
 #
-# Requirements: Flutter, Java (for the Firestore emulator), and either the
-# Firebase CLI on your PATH (`npm i -g firebase-tools`) or Node/npx (the
-# script falls back to `npx firebase-tools`, downloaded on first run).
+# Requirements: Flutter, Java (for the Firestore emulator), and Node/npm —
+# npm builds the Cloud Functions in functions/, and the script falls back to
+# `npx firebase-tools` when the Firebase CLI isn't on your PATH
+# (`npm i -g firebase-tools` for the snappiest start).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +31,10 @@ ENTRYPOINT="lib/main_emulator.dart"
 EMU_LOG="$SCRIPT_DIR/emulators-debug.log"
 AUTH_HOST="127.0.0.1"; AUTH_PORT="9099"
 FS_HOST="127.0.0.1";   FS_PORT="8080"
+FN_HOST="127.0.0.1";   FN_PORT="5001"
+ST_HOST="127.0.0.1";   ST_PORT="9199"
+# Functions region — keep in sync with functions/src/region.ts (TODO(M0.H)).
+REGION="europe-west1"
 SEED=1
 RUN_APP=1
 FLUTTER_ARGS=()
@@ -83,6 +88,27 @@ if [ -n "$PLATFORM" ] && [ ! -d "$SCRIPT_DIR/$PLATFORM" ]; then
   rm -f "$SCRIPT_DIR/test/widget_test.dart"
 fi
 
+# ---- build the Cloud Functions (the emulator serves compiled lib/) ----------
+# npm install + tsc, each skipped when its output is newer than its inputs so
+# repeat runs stay fast.
+FUNCTIONS_DIR="$SCRIPT_DIR/functions"
+command -v npm >/dev/null 2>&1 || die "npm is required to build functions/. Install Node: https://nodejs.org"
+if [ ! -d "$FUNCTIONS_DIR/node_modules" ] || \
+   [ "$FUNCTIONS_DIR/package-lock.json" -nt "$FUNCTIONS_DIR/node_modules" ]; then
+  say "Installing functions dependencies (first run / lockfile change)…"
+  npm --prefix "$FUNCTIONS_DIR" ci --no-audit --no-fund >/dev/null
+fi
+if [ ! -d "$FUNCTIONS_DIR/lib" ] || \
+   [ -n "$(find "$FUNCTIONS_DIR/src" "$FUNCTIONS_DIR/tsconfig.json" \
+             "$FUNCTIONS_DIR/package.json" -newer "$FUNCTIONS_DIR/lib" \
+             -print -quit)" ]; then
+  say "Compiling functions…"
+  npm --prefix "$FUNCTIONS_DIR" run build >/dev/null
+  # Rewriting files inside lib/ doesn't bump the dir mtime — stamp it so the
+  # freshness check above holds on the next run.
+  touch "$FUNCTIONS_DIR/lib"
+fi
+
 # ---- teardown ---------------------------------------------------------------
 EMU_PID=""
 cleanup() {
@@ -95,26 +121,35 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ---- start the emulators ----------------------------------------------------
-say "Starting Firebase emulators (Auth + Firestore, project $PROJECT)…"
+say "Starting Firebase emulators (Auth + Firestore + Functions + Storage, project $PROJECT)…"
 printf '  logs → %s\n' "$EMU_LOG"
-"${FIREBASE[@]}" emulators:start --project "$PROJECT" --only auth,firestore \
+"${FIREBASE[@]}" emulators:start --project "$PROJECT" \
+  --only auth,firestore,functions,storage \
   >"$EMU_LOG" 2>&1 &
 EMU_PID=$!
 
 # ---- wait until healthy -----------------------------------------------------
-wait_for() { # host port label
-  local i
+# Pass -f where a 2xx is expected; the Storage emulator answers its root with
+# a 501, so for it any HTTP response (vs. connection refused) means ready.
+wait_for() { # url label [extra curl args...]
+  local url="$1" label="$2" i; shift 2
   for i in $(seq 1 90); do
-    if curl -fs -o /dev/null --max-time 2 "http://$1:$2/"; then
-      say "$3 ready (http://$1:$2)"; return 0
+    if curl -s -o /dev/null --max-time 2 "$@" "$url"; then
+      say "$label ready ($url)"; return 0
     fi
     kill -0 "$EMU_PID" 2>/dev/null || { tail -25 "$EMU_LOG" >&2; die "Emulators exited during startup."; }
     sleep 1
   done
-  tail -25 "$EMU_LOG" >&2; die "Timed out waiting for $3 (http://$1:$2)."
+  tail -25 "$EMU_LOG" >&2; die "Timed out waiting for $label ($url)."
 }
-wait_for "$AUTH_HOST" "$AUTH_PORT" "Auth emulator"
-wait_for "$FS_HOST"   "$FS_PORT"   "Firestore emulator"
+wait_for "http://$AUTH_HOST:$AUTH_PORT/" "Auth emulator" -f
+wait_for "http://$FS_HOST:$FS_PORT/"     "Firestore emulator" -f
+wait_for "http://$ST_HOST:$ST_PORT/"     "Storage emulator"
+# The callable answering proves the Functions emulator actually loaded the
+# compiled functions, not just that its port is open.
+wait_for "http://$FN_HOST:$FN_PORT/$PROJECT/$REGION/healthcheck" \
+  "Functions emulator (healthcheck)" \
+  -f -X POST -H 'Content-Type: application/json' -d '{"data":{}}'
 
 # ---- seed demo accounts so you can sign in immediately ---------------------
 # The app has no in-app sign-up (login is sign-in only), so a fresh emulator

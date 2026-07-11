@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:core_utils/core_utils.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,23 +13,27 @@ class LoginEmittingAuthRepository implements AuthRepository {
   Stream<String?> get user => _controller.stream;
 
   @override
-  Future<void> login(String email, String password) async {
+  Future<Result<void>> login(String email, String password) async {
     _controller.add('user_id');
+    return const Success(null);
   }
 
   @override
-  Future<void> signInWithGoogle() async {
+  Future<Result<void>> signInWithGoogle() async {
     _controller.add('google_user_id');
+    return const Success(null);
   }
 
   @override
-  Future<void> signInWithApple() async {
+  Future<Result<void>> signInWithApple() async {
     _controller.add('apple_user_id');
+    return const Success(null);
   }
 
   @override
-  Future<void> logout() async {
+  Future<Result<void>> logout() async {
     _controller.add(null);
+    return const Success(null);
   }
 }
 
@@ -41,39 +46,41 @@ class FakeAuthRepository implements AuthRepository {
   Stream<String?> get user => _userStream;
 
   @override
-  Future<void> login(String email, String password) async {}
+  Future<Result<void>> login(String email, String password) async =>
+      const Success(null);
 
   @override
-  Future<void> signInWithGoogle() async {}
+  Future<Result<void>> signInWithGoogle() async => const Success(null);
 
   @override
-  Future<void> signInWithApple() async {}
+  Future<Result<void>> signInWithApple() async => const Success(null);
 
   @override
-  Future<void> logout() async {}
+  Future<Result<void>> logout() async => const Success(null);
 }
 
-/// Records which sign-in method was invoked and fails the flow, so we can
-/// assert the bloc surfaces provider errors as [AuthState.failure].
-class ThrowingAuthRepository implements AuthRepository {
+/// Fails every flow with [failure], so we can assert the bloc folds
+/// repository failures into [AuthState.failure] (never a thrown error).
+class FailingAuthRepository implements AuthRepository {
+  FailingAuthRepository([this.failure = const AuthFailure.unknown()]);
+
+  final AuthFailure failure;
+
   @override
   Stream<String?> get user => const Stream.empty();
 
   @override
-  Future<void> login(String email, String password) async {}
+  Future<Result<void>> login(String email, String password) async =>
+      ResultFailure(failure);
 
   @override
-  Future<void> signInWithGoogle() async {
-    throw Exception('google failed');
-  }
+  Future<Result<void>> signInWithGoogle() async => ResultFailure(failure);
 
   @override
-  Future<void> signInWithApple() async {
-    throw Exception('apple failed');
-  }
+  Future<Result<void>> signInWithApple() async => ResultFailure(failure);
 
   @override
-  Future<void> logout() async {}
+  Future<Result<void>> logout() async => ResultFailure(failure);
 }
 
 void main() {
@@ -127,29 +134,44 @@ void main() {
     );
 
     blocTest<AuthBloc, AuthState>(
-      'emits [failure] when AuthGoogleSignInRequested throws',
-      build: () => AuthBloc(authRepository: ThrowingAuthRepository()),
-      act: (bloc) => bloc.add(AuthGoogleSignInRequested()),
-      expect: () => [
-        isA<AuthState>().having(
-          (s) => s.status,
-          'status',
-          AuthStatus.failure,
+      'folds a login failure into [failure] carrying the typed AuthFailure',
+      build: () => AuthBloc(
+        authRepository: FailingAuthRepository(
+          const AuthFailure.invalidCredentials(),
         ),
+      ),
+      act: (bloc) => bloc.add(const AuthLoginRequested('a@b.com', 'nope')),
+      expect: () => [
+        const AuthState.failure(AuthFailure.invalidCredentials()),
       ],
     );
 
     blocTest<AuthBloc, AuthState>(
-      'emits [failure] when AuthAppleSignInRequested throws',
-      build: () => AuthBloc(authRepository: ThrowingAuthRepository()),
+      'folds a Google sign-in failure into [failure]',
+      build: () => AuthBloc(
+        authRepository: FailingAuthRepository(const AuthFailure.cancelled()),
+      ),
+      act: (bloc) => bloc.add(AuthGoogleSignInRequested()),
+      expect: () => [const AuthState.failure(AuthFailure.cancelled())],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'folds an Apple sign-in failure into [failure]',
+      build: () => AuthBloc(
+        authRepository: FailingAuthRepository(const AuthFailure.network()),
+      ),
       act: (bloc) => bloc.add(AuthAppleSignInRequested()),
-      expect: () => [
-        isA<AuthState>().having(
-          (s) => s.status,
-          'status',
-          AuthStatus.failure,
-        ),
-      ],
+      expect: () => [const AuthState.failure(AuthFailure.network())],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'a logout failure emits nothing (sign-out is fire-and-forget until '
+      'Settings surfaces it, M1.5)',
+      build: () => AuthBloc(
+        authRepository: FailingAuthRepository(const AuthFailure.network()),
+      ),
+      act: (bloc) => bloc.add(AuthLogoutRequested()),
+      expect: () => <AuthState>[],
     );
   });
 }

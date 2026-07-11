@@ -1,8 +1,45 @@
+import 'package:core_utils/core_utils.dart';
 import 'package:feature_auth/src/domain/auth_account.dart';
 import 'package:feature_auth/src/domain/auth_account_provider.dart';
+import 'package:feature_auth/src/domain/auth_failure.dart';
 import 'package:feature_auth/src/domain/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+
+/// Maps a [firebase_auth.FirebaseAuthException]'s `code` onto the domain
+/// [AuthFailure] taxonomy.
+///
+/// Unrecognized codes come back as [AuthFailure.unknown] carrying the code,
+/// so nothing user-facing ever renders a raw Firebase string. Visible only
+/// so tests can pin the mapping per code — everything else goes through the
+/// repository, which applies it in [FirebaseAuthRepository._guard].
+@visibleForTesting
+AuthFailure mapFirebaseAuthCode(String code) {
+  return switch (code) {
+    // Firebase deliberately collapses wrong-password/user-not-found into
+    // invalid-credential on newer backends; older ones still emit the
+    // specific codes.
+    'invalid-credential' ||
+    'wrong-password' ||
+    'user-not-found' ||
+    'INVALID_LOGIN_CREDENTIALS' => const AuthFailure.invalidCredentials(),
+    'email-already-in-use' => const AuthFailure.emailInUse(),
+    'weak-password' => const AuthFailure.weakPassword(),
+    'invalid-email' => const AuthFailure.invalidEmail(),
+    'user-disabled' => const AuthFailure.userDisabled(),
+    'requires-recent-login' => const AuthFailure.requiresRecentLogin(),
+    'network-request-failed' => const AuthFailure.network(),
+    // Cancel codes differ per platform/flow: web popups, native provider
+    // sheets, and sign_in_with_apple each spell it differently.
+    'canceled' ||
+    'cancelled' ||
+    'user-cancelled' ||
+    'popup-closed-by-user' ||
+    'web-context-canceled' ||
+    'web-context-cancelled' => const AuthFailure.cancelled(),
+    _ => AuthFailure.unknown(code),
+  };
+}
 
 class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
   FirebaseAuthRepository({firebase_auth.FirebaseAuth? firebaseAuth})
@@ -30,21 +67,25 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
   }
 
   @override
-  Future<void> login(String email, String password) async {
-    await _firebaseAuth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
+  Future<Result<void>> login(String email, String password) {
+    return _guard(
+      () => _firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      ),
     );
   }
 
   @override
-  Future<void> signInWithGoogle() {
-    return _signInWithProvider(firebase_auth.GoogleAuthProvider());
+  Future<Result<void>> signInWithGoogle() {
+    return _guard(
+      () => _signInWithProvider(firebase_auth.GoogleAuthProvider()),
+    );
   }
 
   @override
-  Future<void> signInWithApple() {
-    return _signInWithProvider(firebase_auth.AppleAuthProvider());
+  Future<Result<void>> signInWithApple() {
+    return _guard(() => _signInWithProvider(firebase_auth.AppleAuthProvider()));
   }
 
   /// Runs an OAuth provider flow, using the popup flow on web and the native
@@ -58,7 +99,20 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
   }
 
   @override
-  Future<void> logout() async {
-    await _firebaseAuth.signOut();
+  Future<Result<void>> logout() {
+    return _guard(_firebaseAuth.signOut);
+  }
+
+  /// Runs [action], translating thrown Firebase errors into the domain
+  /// taxonomy so no exception crosses the repository boundary (G4).
+  Future<Result<void>> _guard(Future<void> Function() action) async {
+    try {
+      await action();
+      return const Success(null);
+    } on firebase_auth.FirebaseAuthException catch (error, stackTrace) {
+      return ResultFailure(mapFirebaseAuthCode(error.code), stackTrace);
+    } on Object catch (error, stackTrace) {
+      return ResultFailure(AuthFailure.unknown(error), stackTrace);
+    }
   }
 }

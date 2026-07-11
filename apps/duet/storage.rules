@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Deny-all placeholder: no client code touches Cloud Storage yet.
+// M2.2 (docs/duet_implementation_breakdown.md) replaces this with the
+// participant-scoped rules for /pieces/{pieceId}/** per the M2.1 schema.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

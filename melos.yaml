@@ -42,6 +42,17 @@ scripts:
     run: melos exec --dir-exists="integration_test" -- flutter test integration_test
     description: Run integration_test end-to-end flows headlessly.
 
+  functions-test:
+    run: >-
+      npm --prefix apps/duet/functions ci --no-audit --no-fund &&
+      npm --prefix apps/duet/functions run lint &&
+      npm --prefix apps/duet/functions run build &&
+      npm --prefix apps/duet/functions test
+    description: |
+      Install, lint, build, and test the Duet Cloud Functions workspace
+      (apps/duet/functions — npm/TypeScript, outside the melos packages).
+      The single entry point CI uses (see task M0.5).
+
   format:
     run: melos exec -- dart format .
     description: Format all packages.

@@ -108,16 +108,16 @@ M7.6 real Remote Config keys + review-prompt check on staging.
 
 ## Task index
 
-Legend: ☐ not started · [HUMAN] needs non-agent access · ▸B = built in
-Track A with emulators/fakes, keeps one live-verification step in the
-Track B backlog.
+Legend: ☐ not started · ☑ done · [HUMAN] needs non-agent access · ▸B =
+built in Track A with emulators/fakes, keeps one live-verification step
+in the Track B backlog.
 
 ### Track A — emulator-first (start now)
 
 | ID | Task | Depends on |
 | --- | --- | --- |
-| M0.4 | ☐ `firebase.json` deploy targets + Functions scaffold | — |
-| M1.1 | ☐ Auth error taxonomy over `Result` | — |
+| M0.4 | ☑ `firebase.json` deploy targets + Functions scaffold | — |
+| M1.1 | ☑ Auth error taxonomy over `Result` | — |
 | M1.2 | ☐ Email/password sign-up | M1.1 |
 | M1.3 | ☐ Password reset + email verification | M1.2 |
 | M1.4 | ☐ Re-authentication for sensitive ops | M1.1 |
@@ -442,9 +442,14 @@ app_template/showcase mocks, and all `feature_auth` tests.
    (one private mapper, unit-tested per code).
 4. `AuthBloc` folds `ResultFailure` into `AuthState.failure` carrying the
    typed failure; `LoginScreen`/`SignInView` renders a human message per
-   failure kind (message mapping lives UI-side).
+   failure kind (message mapping lives UI-side; `cancelled` maps to no
+   message at all). Sign-in flows only: logout stays fire-and-forget in
+   the bloc — a failure status while still authenticated would fight the
+   routers' auth redirects, and Settings surfaces sign-out failures when
+   it gains the row (M1.5).
 5. Update every implementation and test double
-   (`MockAuthRepository`s, `FakeAuthRepository`, `ThrowingAuthRepository`)
+   (`MockAuthRepository`s, `FakeAuthRepository`, `ThrowingAuthRepository`
+   — now `FailingAuthRepository`, returning failures instead of throwing)
    and the consuming apps' compilations.
 
 **Done when:** wrong-password on the emulator shows "Email or password is

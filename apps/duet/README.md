@@ -25,9 +25,9 @@ cd apps/duet
 ./dev.sh
 ```
 
-That's it. `dev.sh` starts the Auth + Firestore emulators, seeds two demo
-accounts, and launches Duet (in Chrome by default) wired to them. When it's up,
-**sign in with:**
+That's it. `dev.sh` builds the Cloud Functions, starts the Auth + Firestore +
+Functions + Storage emulators, seeds two demo accounts, and launches Duet (in
+Chrome by default) wired to them. When it's up, **sign in with:**
 
 | Email | Password |
 | --- | --- |
@@ -57,10 +57,34 @@ DUET_DEVICE=chrome ./dev.sh  # device via env var
   project, no credentials, no login — and it's impossible to accidentally read
   or write production data. Config is in [`firebase.json`](firebase.json);
   [`.firebaserc`](.firebaserc) makes `demo-duet` the default project.
-- **Two emulators:** Auth on `127.0.0.1:9099`, Firestore on `127.0.0.1:8080`,
-  with [`firestore.rules`](firestore.rules) enforced (the same rules that ship
-  to production). The app points at them in
-  [`lib/main_emulator.dart`](lib/main_emulator.dart).
+- **The emulator suite:** Auth on `127.0.0.1:9099`, Firestore on
+  `127.0.0.1:8080` (with [`firestore.rules`](firestore.rules) enforced — the
+  same rules that ship to production), Cloud Functions on `127.0.0.1:5001`,
+  and Storage on `127.0.0.1:9199` (with [`storage.rules`](storage.rules) —
+  a deny-all placeholder until the pieces schema lands). The app points at
+  Auth + Firestore in [`lib/main_emulator.dart`](lib/main_emulator.dart).
+- **Cloud Functions** live in [`functions/`](functions/) — a TypeScript npm
+  workspace (deliberately outside melos). `dev.sh` installs + compiles it
+  before starting the emulators (skipped when already fresh) and waits until
+  the `healthcheck` callable answers:
+
+  ```bash
+  curl -X POST http://127.0.0.1:5001/demo-duet/europe-west1/healthcheck \
+    -H 'Content-Type: application/json' -d '{"data":{}}'
+  # → {"result":{"status":"ok","service":"duet-functions"}}
+  ```
+
+  Develop it with `npm run build` / `lint` / `test` from `functions/`, or run
+  the whole install→lint→build→test chain from the repo root with
+  `melos run functions-test` (the CI entry point).
+- **Deploy targets beyond dev.sh:** [`firebase.json`](firebase.json) also
+  configures Firestore indexes ([`firestore.indexes.json`](firestore.indexes.json),
+  empty for now) and Hosting ([`hosting/`](hosting/), a placeholder page the
+  invite-link fallback will replace). A plain `firebase emulators:start` (or
+  `npx firebase-tools emulators:start`) from `apps/duet/` boots all five
+  emulators including Hosting on `127.0.0.1:5000`; `firebase deploy` can
+  target `firestore`, `storage`, `functions`, and `hosting` once real
+  projects exist.
 - **Fresh each run.** The emulators start empty every time and the two demo
   accounts are re-seeded on startup, so sign-in always works. (Scores and
   annotations are stored on-device, not in Firestore, so they're independent
@@ -104,6 +128,7 @@ the in-memory fakes via `test/`).
 - **Flutter** (the repo's `melos bootstrap` handles Dart package deps).
 - **Java** — the Firestore emulator is a Java process. `java -version` should
   work.
+- **Node + npm** — builds the Cloud Functions workspace (`functions/`).
 - **Firebase CLI** — `dev.sh` uses `firebase` if it's on your PATH, otherwise
   falls back to `npx firebase-tools` (downloaded on first run). For the snappiest
   start: `npm i -g firebase-tools`.

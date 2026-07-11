@@ -17,12 +17,15 @@ final class AuthState extends Equatable {
   const AuthState.unauthenticated()
     : this._(status: AuthStatus.unauthenticated);
 
-  const AuthState.failure(String error)
+  const AuthState.failure(AuthFailure error)
     : this._(status: AuthStatus.failure, error: error);
 
   final AuthStatus status;
   final String? user;
-  final String? error;
+
+  /// The typed failure when [status] is [AuthStatus.failure]; UI maps it to
+  /// human copy (see `AuthFailureMessage`).
+  final AuthFailure? error;
 
   @override
   List<Object?> get props => [status, user, error];

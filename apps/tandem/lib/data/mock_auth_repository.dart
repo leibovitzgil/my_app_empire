@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_utils/core_utils.dart';
 import 'package:feature_auth/feature_auth.dart';
 
 /// An in-memory [AuthRepository] so Tandem runs without a real backend. Any
@@ -11,22 +12,26 @@ class MockAuthRepository implements AuthRepository {
   Stream<String?> get user => _controller.stream;
 
   @override
-  Future<void> login(String email, String password) async {
+  Future<Result<void>> login(String email, String password) async {
     _controller.add('tandem-user');
+    return const Success(null);
   }
 
   @override
-  Future<void> signInWithGoogle() async {
+  Future<Result<void>> signInWithGoogle() async {
     _controller.add('tandem-google-user');
+    return const Success(null);
   }
 
   @override
-  Future<void> signInWithApple() async {
+  Future<Result<void>> signInWithApple() async {
     _controller.add('tandem-apple-user');
+    return const Success(null);
   }
 
   @override
-  Future<void> logout() async {
+  Future<Result<void>> logout() async {
     _controller.add(null);
+    return const Success(null);
   }
 }

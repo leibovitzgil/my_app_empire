@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:core_utils/core_utils.dart';
 import 'package:feature_auth/feature_auth.dart';
 
 /// An in-memory [AuthRepository] for local development.
@@ -36,7 +37,7 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
   Stream<AuthAccount?> get account => _accountController.stream;
 
   @override
-  Future<void> login(String email, String password) async {
+  Future<Result<void>> login(String email, String password) async {
     await Future<void>.delayed(const Duration(seconds: 1));
     const uid = 'user_id_123';
     final name = _nameFromEmail(email);
@@ -45,10 +46,11 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     _accountController.add(
       AuthAccount(uid: uid, email: email, displayName: name),
     );
+    return const Success(null);
   }
 
   @override
-  Future<void> signInWithGoogle() async {
+  Future<Result<void>> signInWithGoogle() async {
     await Future<void>.delayed(const Duration(seconds: 1));
     const uid = 'google_user_123';
     const name = 'Google User';
@@ -58,10 +60,11 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     _accountController.add(
       const AuthAccount(uid: uid, email: email, displayName: name),
     );
+    return const Success(null);
   }
 
   @override
-  Future<void> signInWithApple() async {
+  Future<Result<void>> signInWithApple() async {
     await Future<void>.delayed(const Duration(seconds: 1));
     const uid = 'apple_user_123';
     const name = 'Apple User';
@@ -71,14 +74,16 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     _accountController.add(
       const AuthAccount(uid: uid, email: email, displayName: name),
     );
+    return const Success(null);
   }
 
   @override
-  Future<void> logout() async {
+  Future<Result<void>> logout() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
     _controller.add(null);
     _displayNameController.add(null);
     _accountController.add(null);
+    return const Success(null);
   }
 
   /// Derives a friendly display name from an email's local part (e.g.
