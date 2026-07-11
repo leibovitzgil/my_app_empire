@@ -132,7 +132,7 @@ in the Track B backlog.
 | M1.7 | ☑ Rules-test harness (npm) + current-rules coverage | M0.4 |
 | M1.8 | ☑ Account deletion: purge Function v1 | M0.4, M1.4 |
 | M1.9 | ☑ Account deletion: client flow in Settings | M1.8, M1.5 |
-| M1.10 | ☐ Auth lifecycle emulator E2E | M1.2–M1.9 |
+| M1.10 | ☑ Auth lifecycle emulator E2E | M1.2–M1.9 |
 | M2.1 | ☐ Cloud schema design doc (pieces) | — |
 | M2.2 | ☐ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
 | M2.3 | ☐ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
@@ -774,6 +774,32 @@ directly. Keep that harness pattern.
 
 **Done when:** test passes locally per the skill recipe; wired into the CI
 emulator job when M4.5/M9.1 land (do not block M1 on CI plumbing).
+
+**Landed.** `integration_test/auth_lifecycle_test.dart` covers the full
+sequence against the live Auth + Firestore + **Functions** emulators
+(deletion verified via the admin REST surface: directory-by-uid, device
+tokens, and inbox all gone; sign-in then fails). It lives in
+`integration_test/` (outside the `test/`-only headless gate), so `melos
+run test` skips it and `melos run e2e` runs it — no tag needed. `dev.sh`
++ the `duet-emulator` skill now name both e2e suites and the Functions
+requirement.
+
+*Bug this E2E surfaced (fixed in the same PR).* Writing the
+discoverable-off step showed `FirestoreUserDirectory.lookupByEmail`
+leaked a hidden entry as a **failure**, not `Success(null)`: with the
+real rules a stranger's exact-key GET of a non-discoverable doc is
+*denied* (proven: emulator returns 403), and `Result.guard` surfaced the
+`permission-denied` as `ResultFailure`. That breaks the design invariant
+(a hidden entry must be indistinguishable from an absent one — the rules'
+own words) and the invite-by-email UX (a hidden user would show an error,
+not "no account found"). Fixed by mapping `permission-denied` → `null` in
+`lookupByEmail`, matching `InMemoryUserDirectory`; covered headlessly via
+`mock_exceptions`' GET interception (`fake_cloud_firestore` evaluates no
+rules, so only the emulator — or an injected throw — reaches this path).
+
+**M1 exit criteria met:** auth error taxonomy (M1.1), full account
+lifecycle incl. deletion (M1.8/M1.9), and this emulator E2E — the
+"usersByEmail rules tests in CI" criterion landed with M1.7.
 
 ---
 

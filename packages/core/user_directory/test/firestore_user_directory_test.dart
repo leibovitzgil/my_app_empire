@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mock_exceptions/mock_exceptions.dart';
 import 'package:user_directory/user_directory.dart';
 
 void main() {
@@ -144,6 +146,51 @@ void main() {
       final result = await directory.lookupByEmail('sam@example.com');
 
       expect(result.valueOrNull?.displayName, 'Sam Smith');
+    });
+
+    // `fake_cloud_firestore` evaluates no security rules, so the two paths
+    // below — where the emulator's rules make a GET *throw* rather than
+    // return data — are driven by intercepting the GET on the target doc
+    // (the fake's own `whenCalling(...).on(...)` API) and throwing.
+    group('when a GET throws (rules deny a stranger reading a hidden '
+        'entry)', () {
+      DocumentReference<Map<String, dynamic>> docFor(String email) =>
+          firestore.collection('usersByEmail').doc(email);
+
+      test(
+        'a permission-denied GET resolves to Success(null) — hidden is '
+        'indistinguishable from absent (M1.10 regression)',
+        () async {
+          whenCalling(Invocation.method(#get, null))
+              .on(docFor('hidden@example.com'))
+              .thenThrow(
+                FirebaseException(
+                  plugin: 'cloud_firestore',
+                  code: 'permission-denied',
+                ),
+              );
+
+          final result = await directory.lookupByEmail('hidden@example.com');
+
+          expect(result, isA<Success<DirectoryUser?>>());
+          expect(result.valueOrNull, isNull);
+        },
+      );
+
+      test('any other FirebaseException still surfaces as a failure', () async {
+        whenCalling(Invocation.method(#get, null))
+            .on(docFor('sam@example.com'))
+            .thenThrow(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'unavailable',
+              ),
+            );
+
+        final result = await directory.lookupByEmail('sam@example.com');
+
+        expect(result, isA<ResultFailure<DirectoryUser?>>());
+      });
     });
   });
 }

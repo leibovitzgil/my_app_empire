@@ -51,17 +51,24 @@ emulators.
 
 ## Emulator-backed e2e
 
-`integration_test/collaborator_flow_test.dart` drives invite → accept against
-the real emulators (it seeds its own accounts). It needs the backend up and a
-device/engine:
+Two integration tests drive the real emulators (each seeds its own accounts).
+They need the backend up and a device/engine:
 
 ```bash
 ./dev.sh --emulators-only                                            # terminal 1
 flutter test integration_test/collaborator_flow_test.dart -d chrome  # terminal 2
+flutter test integration_test/auth_lifecycle_test.dart   -d chrome   # (or all via melos run e2e)
 ```
 
-It's opt-in and excluded from the standard headless gate (which only exercises
-the in-memory fakes via `test/`).
+- `collaborator_flow_test.dart` — the email invite → accept funnel.
+- `auth_lifecycle_test.dart` — the full identity lifecycle (sign-up →
+  directory publish → rename → discoverable toggle → password reset +
+  email-verification oobCodes → re-auth → **account deletion**). It also
+  exercises the **Functions** emulator (the M1.8 deletion callable), which
+  `dev.sh` already boots — no extra setup.
+
+Both are opt-in and excluded from the standard headless gate (which only
+exercises the in-memory fakes via `test/`).
 
 ## Requirements / gotchas
 

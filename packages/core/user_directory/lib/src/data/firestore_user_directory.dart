@@ -26,7 +26,23 @@ class FirestoreUserDirectory implements UserDirectory {
   @override
   Future<Result<DirectoryUser?>> lookupByEmail(String email) =>
       Result.guard(() async {
-        final data = (await _doc(email).get()).data();
+        final Map<String, dynamic>? data;
+        try {
+          data = (await _doc(email).get()).data();
+        } on FirebaseException catch (e) {
+          // The security rules deny a stranger's GET of a *non-discoverable*
+          // entry (see `apps/duet/firestore.rules`) — so a denial reaches
+          // the client, not empty data. By design that must be
+          // indistinguishable from "no account exists" (the rules' own
+          // words), and the invite-by-email UX treats a resolved-null as
+          // "no account found". Mapping the denial to null keeps hidden and
+          // absent identical to the caller — matching `InMemoryUserDirectory`
+          // — instead of leaking a hidden account as a lookup *failure*.
+          // (Found by the M1.10 auth-lifecycle emulator E2E; `fake_cloud_
+          // firestore` evaluates no rules, so only the emulator surfaces it.)
+          if (e.code == 'permission-denied') return null;
+          rethrow;
+        }
         if (data == null) return null;
         final discoverable = data['discoverable'] as bool? ?? false;
         if (!discoverable) return null;

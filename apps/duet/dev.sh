@@ -5,7 +5,9 @@
 #   ./dev.sh                    # emulators + app in Chrome (web)
 #   ./dev.sh -d macos           # pick a device (chrome, macos, linux, ...)
 #   ./dev.sh --no-seed          # don't create the demo accounts
-#   ./dev.sh --emulators-only   # just the backend (e.g. to run e2e tests)
+#   ./dev.sh --emulators-only   # just the backend (Auth+Firestore+Functions+
+#                               # Storage) — e.g. to run the integration_test/
+#                               # e2e suites (collaborator_flow, auth_lifecycle)
 #   ./dev.sh -- --profile       # everything after `--` is passed to flutter run
 #
 # Auth + Firestore + Functions + Storage run entirely on your machine in the
