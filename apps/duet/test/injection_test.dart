@@ -5,6 +5,7 @@
 // a Firebase object (there's no `Firebase.initializeApp()` anywhere in this
 // file; any accidental real-Firebase call site would throw for lack of an
 // initialized app, which this test would then fail on).
+import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/mock_auth_repository.dart';
@@ -87,5 +88,14 @@ void main() {
         isA<DefaultCollaboratorInviteService>(),
       );
     });
+
+    test(
+      'binds a MockAccountPurge — never the callable (no Firebase)',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<AccountPurge>(), isA<MockAccountPurge>());
+      },
+    );
   });
 }

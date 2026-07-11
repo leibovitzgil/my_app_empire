@@ -8,6 +8,7 @@
 // ignore_for_file: cascade_invocations
 
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/injection.dart';
@@ -23,6 +24,22 @@ import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
+
+/// A recording [AccountPurge]: pops scripted results in order (succeeding
+/// once the script runs dry) and counts calls.
+class _FakeAccountPurge implements AccountPurge {
+  _FakeAccountPurge([List<Result<void>>? results]) : _results = [...?results];
+
+  final List<Result<void>> _results;
+  int calls = 0;
+
+  @override
+  Future<Result<void>> deleteAccount() async {
+    calls++;
+    if (_results.isEmpty) return const Success(null);
+    return _results.removeAt(0);
+  }
+}
 
 /// Grants push permission immediately, avoiding the platform channel a real
 /// `NotificationsManager` needs.
@@ -44,16 +61,19 @@ class _FakeNotificationPermissionGateway
 
 void main() {
   late MockAuthRepository mockAuth;
+  late _FakeAccountPurge fakePurge;
 
   tearDown(() async => getIt.reset());
 
-  Future<void> registerFakes() async {
+  Future<void> registerFakes({List<Result<void>>? purgeResults}) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final storage = await LocalStorageService.init();
     getIt.registerSingleton<LocalStorageService>(storage);
     mockAuth = MockAuthRepository();
     getIt.registerSingleton<AuthRepository>(mockAuth);
     getIt.registerSingleton<AuthAccountProvider>(mockAuth);
+    fakePurge = _FakeAccountPurge(purgeResults);
+    getIt.registerSingleton<AccountPurge>(fakePurge);
     getIt.registerLazySingleton<SettingsRepository>(
       () => LocalSettingsRepository(getIt<LocalStorageService>()),
     );
@@ -105,6 +125,16 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await login;
     await tester.pump();
+  }
+
+  /// Bounded stand-in for `pumpAndSettle` while the danger-zone flow is
+  /// active: once deletion starts, the Danger zone row shows an
+  /// indeterminate `CircularProgressIndicator` whose animation never lets
+  /// the tree go quiet (same reasoning as `duet_flow_harness.dart`).
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
   }
 
   testWidgets('shows the push-notifications toggle once the async gateway '
@@ -227,5 +257,147 @@ void main() {
     await tester.pump();
 
     await signedOut;
+  });
+
+  /// Drives the danger-zone flow up to and including the re-auth dialog's
+  /// password confirmation (the mock account is a password account).
+  Future<void> confirmDeleteAndReauth(WidgetTester tester) async {
+    await tester.scrollUntilVisible(find.text('Delete Account'), 250);
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete Account?'), findsOneWidget);
+
+    await tester.tap(find.text('Delete'));
+    // Tapping Delete starts `_deleteAccount` (spinner up), so bounded pumps.
+    await settle(tester);
+    expect(find.text("Confirm it's you"), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'pw');
+    await tester.tap(find.text('Confirm'));
+    // The mock's reauthenticate has a 300ms delay; the purge fake and the
+    // spinner row need a few more frames (fixed pumps — the indeterminate
+    // progress indicator never lets pumpAndSettle go quiet).
+    await tester.pump(const Duration(milliseconds: 300));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
+  testWidgets('deleting the account purges, wipes local storage, and signs '
+      'out', (tester) async {
+    await registerFakes();
+    await pumpSettings(tester);
+    await signIn(tester);
+    final storage = getIt<LocalStorageService>();
+    await storage.setString('pieces.records', 'cached-pieces');
+    final signedOut = mockAuth.user.firstWhere((uid) => uid == null);
+
+    await confirmDeleteAndReauth(tester);
+    // The mock's logout has a 500ms delay.
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(fakePurge.calls, 1);
+    expect(storage.getString('pieces.records'), isNull);
+    await signedOut;
+  });
+
+  testWidgets('a stale-sign-in rejection re-runs re-auth and retries the '
+      'purge', (tester) async {
+    await registerFakes(
+      purgeResults: [
+        const ResultFailure<void>(AuthFailure.requiresRecentLogin()),
+        const Success<void>(null),
+      ],
+    );
+    await pumpSettings(tester);
+    await signIn(tester);
+    final signedOut = mockAuth.user.firstWhere((uid) => uid == null);
+
+    await confirmDeleteAndReauth(tester);
+
+    // The stale rejection re-opened the re-auth dialog: confirm once more.
+    expect(find.text("Confirm it's you"), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'pw');
+    await tester.tap(find.text('Confirm'));
+    await tester.pump(const Duration(milliseconds: 300));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(fakePurge.calls, 2);
+    await signedOut;
+  });
+
+  testWidgets('a network failure shows a retry snackbar and leaves the '
+      'session fully intact', (tester) async {
+    await registerFakes(
+      purgeResults: [const ResultFailure<void>(AuthFailure.network())],
+    );
+    await pumpSettings(tester);
+    await signIn(tester);
+    final storage = getIt<LocalStorageService>();
+    await storage.setString('pieces.records', 'cached-pieces');
+    var sawSignOut = false;
+    final subscription = mockAuth.user.listen((uid) {
+      if (uid == null) sawSignOut = true;
+    });
+    addTearDown(subscription.cancel);
+
+    await confirmDeleteAndReauth(tester);
+
+    expect(fakePurge.calls, 1);
+    expect(
+      find.text('No connection. Check your network and retry.'),
+      findsOneWidget,
+    );
+    expect(find.text('Retry'), findsOneWidget);
+    expect(storage.getString('pieces.records'), 'cached-pieces');
+    expect(sawSignOut, isFalse);
+  });
+
+  testWidgets('cancelling the confirmation dialog never purges', (
+    tester,
+  ) async {
+    await registerFakes();
+    await pumpSettings(tester);
+    await signIn(tester);
+
+    await tester.scrollUntilVisible(find.text('Delete Account'), 250);
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(fakePurge.calls, 0);
+    expect(find.text("Confirm it's you"), findsNothing);
+  });
+
+  testWidgets('backing out of re-auth aborts the deletion', (tester) async {
+    await registerFakes();
+    await pumpSettings(tester);
+    await signIn(tester);
+    var sawSignOut = false;
+    final subscription = mockAuth.user.listen((uid) {
+      if (uid == null) sawSignOut = true;
+    });
+    addTearDown(subscription.cancel);
+
+    await tester.scrollUntilVisible(find.text('Delete Account'), 250);
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    // Deletion is now underway (spinner up), so bounded pumps until the
+    // re-auth dialog is on screen.
+    await settle(tester);
+    expect(find.text("Confirm it's you"), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+
+    expect(fakePurge.calls, 0);
+    expect(sawSignOut, isFalse);
   });
 }

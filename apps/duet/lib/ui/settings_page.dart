@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
@@ -9,6 +10,8 @@ import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:legal_compliance/legal_compliance.dart';
+import 'package:local_storage/local_storage.dart';
 
 /// Hosts `feature_settings`'s Settings screen, plus the app-glue this
 /// package can't own directly: a "Profile" group (display-name editing,
@@ -34,6 +37,7 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
   // time Settings is actually opened.
   NotificationPermissionGateway? _gateway;
   var _signingOut = false;
+  var _deleting = false;
   late bool _discoverable = getIt<DirectoryPublisher>().discoverable;
 
   @override
@@ -96,6 +100,62 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
     // On success the auth redirect lands on /login by itself.
   }
 
+  /// The post-confirmation deletion flow (M1.9): re-authenticate (the M1.8
+  /// callable rejects any sign-in older than 5 minutes, so a fresh
+  /// credential is collected up front, not just reactively), purge
+  /// server-side, and only then wipe local caches and sign out — a failed
+  /// purge leaves the session fully intact, never half-signed-out.
+  Future<void> _deleteAccount(AuthProviderKind provider) async {
+    if (_deleting) return;
+    setState(() => _deleting = true);
+    try {
+      Future<bool> reauth() => showReauthDialog(
+        context,
+        provider: provider,
+        reauthenticate: getIt<AuthRepository>().reauthenticate,
+      );
+      if (!await reauth() || !mounted) return;
+
+      bool needsFreshLogin(Result<void> result) => switch (result) {
+        ResultFailure<void>(
+          error: AuthFailure(code: AuthFailureCode.requiresRecentLogin),
+        ) =>
+          true,
+        _ => false,
+      };
+
+      var result = await getIt<AccountPurge>().deleteAccount();
+      // The freshness window can still lapse (e.g. the OAuth sheet sat open
+      // too long): collect another credential and retry until the user
+      // backs out.
+      while (needsFreshLogin(result)) {
+        if (!mounted || !await reauth() || !mounted) return;
+        result = await getIt<AccountPurge>().deleteAccount();
+      }
+      if (!mounted) return;
+
+      switch (result) {
+        case Success<void>():
+          // The server-side account no longer exists. Wipe every local
+          // cache (pieces, annotations, invites, review-sync cursors,
+          // settings — the whole store is account-scoped), then sign out;
+          // the auth redirect lands on /login.
+          await getIt<LocalStorageService>().clear();
+          await getIt<AuthRepository>().logout();
+        case ResultFailure<void>(:final error):
+          AppSnackbar.error(
+            context,
+            (error is AuthFailure ? error.message : null) ??
+                'Could not delete your account. Please try again.',
+            actionLabel: 'Retry',
+            onAction: () => unawaited(_deleteAccount(provider)),
+          );
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final gateway = _gateway;
@@ -150,6 +210,32 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/paywall'),
               ),
+              // The App-Store-mandated in-app account deletion (M1.9).
+              // `DeleteAccountButton` owns the confirm dialog; everything
+              // after confirmation lives in `_deleteAccount`.
+              const SectionHeader('Danger zone'),
+              if (_deleting)
+                const AppListTile(
+                  leading: SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                  title: Text('Deleting your account…'),
+                )
+              else
+                DeleteAccountButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  confirmationContent:
+                      'This permanently deletes your account, your sheet '
+                      'music, annotations, and recordings, and removes you '
+                      'from the collaborator directory. This cannot be '
+                      'undone.',
+                  onDelete: () => _deleteAccount(
+                    account?.provider ?? AuthProviderKind.unknown,
+                  ),
+                ),
             ],
           );
         },

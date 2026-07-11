@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:duet/app.dart';
+import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/injection.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -57,6 +59,11 @@ Future<void> main() async {
   );
   await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
   FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
+  // The same region-pinned instance `injection.dart` resolves for the
+  // account-deletion callable (`instanceFor` caches per app+region).
+  FirebaseFunctions.instanceFor(
+    region: duetFunctionsRegion,
+  ).useFunctionsEmulator(_emulatorHost, 5001);
   await configureDependencies(useFirebase: true);
   runApp(const App());
 }

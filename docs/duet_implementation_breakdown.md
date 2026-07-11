@@ -131,7 +131,7 @@ in the Track B backlog.
 | M1.6 | ☑ `discoverable` toggle (and stop clobbering it) | M1.5 |
 | M1.7 | ☑ Rules-test harness (npm) + current-rules coverage | M0.4 |
 | M1.8 | ☑ Account deletion: purge Function v1 | M0.4, M1.4 |
-| M1.9 | ☐ Account deletion: client flow in Settings | M1.8, M1.5 |
+| M1.9 | ☑ Account deletion: client flow in Settings | M1.8, M1.5 |
 | M1.10 | ☐ Auth lifecycle emulator E2E | M1.2–M1.9 |
 | M2.1 | ☐ Cloud schema design doc (pieces) | — |
 | M2.2 | ☐ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
@@ -715,16 +715,39 @@ picks the function up with no further wiring.)
    local sign-out + wipe local caches (`LocalStorageService` keys:
    `pieces.records`, `pieces.annotations.*`, `pairing.invites`,
    `review_sync.last_applied.*`, settings keys) → land on login.
+   (Re-auth is collected **up front**, not just reactively: the M1.8
+   callable rejects any sign-in older than 5 min, so a fresh credential is
+   always needed. Local wipe uses `LocalStorageService.clear()` — the whole
+   store is account-scoped, so a blanket clear is both simpler and safer
+   than key-by-key, and it can't drift as new keys are added.)
 3. Failure paths per G4: `requiresRecentLogin` → re-run re-auth; network →
-   retry snackbar; never leave a half-signed-out state.
+   retry snackbar; never leave a half-signed-out state. (Local wipe +
+   sign-out happen only *after* a `Success`, so any purge failure leaves
+   the session fully intact — pinned by a test. The retry loop re-opens
+   re-auth on `requiresRecentLogin` and gives up cleanly if the user backs
+   out.)
 4. Mock path: `MockAuthRepository` + an injectable `AccountPurge` seam so
-   the headless flow test can drive the UI without functions (G2).
+   the headless flow test can drive the UI without functions (G2). (Seam
+   is `data/account_purge.dart`; `CallableAccountPurge`
+   (`data/callable_account_purge.dart`) wraps the callable under
+   `useFirebase: true` and maps `FirebaseFunctionsException` codes onto
+   the `AuthFailure` taxonomy — `failed-precondition`/`unauthenticated` →
+   `requiresRecentLogin`. `main_emulator.dart` points the region-pinned
+   Functions instance at the emulator.)
 5. Tests: widget test of the full dialog→reauth→purge-called sequence with
-   fakes; `duet_flow_test.dart`-style coverage if cheap.
+   fakes; `duet_flow_test.dart`-style coverage if cheap. (Six danger-zone
+   widget tests: happy path with storage-wipe + sign-out, stale-login
+   re-auth-and-retry, network failure leaving the session intact, and the
+   two back-out paths; plus a `mapCallableError` code-table unit test and
+   an injection assertion that the default branch binds `MockAccountPurge`.
+   The full emulator lifecycle proof is M1.10's `auth_lifecycle_test`.)
 
 **Done when:** on the emulator, deleting account removes auth user +
 directory entry + tokens + inbox and lands on login; App Review checklist
-item "account deletion" satisfiable in-app (M9.4 references this).
+item "account deletion" satisfiable in-app (M9.4 references this). (Client
+flow + all failure paths covered headlessly; the end-to-end emulator
+removal is exactly what M1.10 automates — the M1.8 manual proof already
+showed the server side purges correctly.)
 
 ### M1.10 — Auth lifecycle emulator E2E
 

@@ -11,6 +11,7 @@ dependencies:
     path: ../../packages/services/audio
   bloc: ^9.2.1
   cloud_firestore: ^6.0.0
+  cloud_functions: ^6.0.0
   core_ui:
     path: ../../packages/core/core_ui
   core_utils:
@@ -38,6 +39,8 @@ dependencies:
   flutter_bloc: ^9.1.1
   get_it: ^9.2.1
   go_router: ^17.3.0
+  legal_compliance:
+    path: ../../packages/core/legal_compliance
   local_storage:
     path: ../../packages/core/local_storage
   monetization:

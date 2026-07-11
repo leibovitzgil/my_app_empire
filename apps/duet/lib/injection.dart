@@ -5,7 +5,10 @@ import 'dart:async';
 
 import 'package:audio/audio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:deep_linking/deep_linking.dart';
+import 'package:duet/data/account_purge.dart';
+import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
@@ -159,6 +162,23 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       accounts: getIt<AuthAccountProvider>().account,
     ),
   );
+
+  // Server-side account deletion (M1.9): the Firebase branch calls the
+  // `deleteAccount` callable (M1.8) on the region-pinned Functions
+  // instance; the default branch simulates success — the mock identity has
+  // no server state to purge. Lazy on purpose: only Settings' danger-zone
+  // flow ever resolves it.
+  if (useFirebase) {
+    getIt.registerLazySingleton<AccountPurge>(
+      () => CallableAccountPurge(
+        functions: FirebaseFunctions.instanceFor(
+          region: duetFunctionsRegion,
+        ),
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<AccountPurge>(MockAccountPurge.new);
+  }
 
   // `DeviceTokenSync`'s token source is always injected (FIX-3): the default
   // branch binds a fake that never resolves a token and never rotates, so
