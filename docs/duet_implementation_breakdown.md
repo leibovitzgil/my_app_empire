@@ -1554,24 +1554,24 @@ Track A); real delivery rides M5.3's ▸B backlog item; gate green.
 taps, tests) are Track A — `FakeDeepLinkService.ingest` drives them; step
 2's FCM tap wiring is the ▸B item (needs M5.1/M5.3 live).
 
-**Context (gaps).** There is **no `/piece/:id` route** — pieces open only
-via in-process `Navigator.push` from the library
-(`apps/duet/lib/app.dart` `_openScore`). `DeepLinkService.ingest(Uri)` is
-the designed seam but is only called from tests.
+**Context (gaps).** The **`/score/:pieceId` route already exists** —
+added in the post-M1.3 routing standardization (every full-screen
+destination in Duet is a go_router route; `_dispatchIntent` in `app.dart`
+navigates signed-in intents with `go` and holds signed-out ones until
+login). `DeepLinkService.ingest(Uri)` is the designed seam but is only
+called from tests, and `duetDeepLinkParser` doesn't map piece URIs yet.
 `PluginLocalNotificationPort.initialize` sets **no**
 `onDidReceiveNotificationResponse` (no tap callback, no payload).
 
 **Steps**
-1. Routing: add `/piece/:id` to the `GoRouter` table (app.dart) →
-   resolves the piece (`PieceRepository.getPiece`) → `DuetScorePage`;
-   extend `duetDeepLinkParser` to map `/piece/<id>` URIs; unknown/denied
-   ids land on `/home` with an `AppSnackbar` (G4).
+1. Routing: extend `duetDeepLinkParser` to map `/piece/<id>` URIs onto
+   the existing `/score/:pieceId` route; unknown/denied ids land on
+   `/home` with an `AppSnackbar` (G4).
 2. **[Track B]** FCM taps: in the Firebase entry points, wire
    `FirebaseMessaging.onMessageOpenedApp` +
    `getInitialMessage()` → extract `data.deepLink` →
    `getIt<DeepLinkService>().ingest(uri)` — the existing
-   `onIntent → _pendingIntent → router.refresh()` machinery in `app.dart`
-   does the rest.
+   `onIntent → _dispatchIntent` machinery in `app.dart` does the rest.
 3. Local notifications: extend `LocalNotificationPort.show` with a
    `payload` param + a tap stream; `PluginLocalNotificationPort` passes
    `onDidReceiveNotificationResponse`; the inbox bridge sets the piece

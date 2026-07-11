@@ -51,7 +51,20 @@ class _AppViewState extends State<AppView> {
     _router = GoRouter(
       redirect: _redirect,
       routes: [
-        GoRoute(path: '/', builder: (context, state) => const _RootScreen()),
+        // `_redirect` immediately resolves `/` to `/login` or `/home`; this
+        // builder only covers the transient frame between an auth change and
+        // the next redirect evaluation.
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const LoadingView(),
+        ),
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => const LoginScreen(
+            title: 'Duet',
+            logo: AppLogoMark(icon: Icons.music_note),
+          ),
+        ),
         GoRoute(
           path: '/home',
           builder: (context, state) => const HomeScreen(),
@@ -59,6 +72,28 @@ class _AppViewState extends State<AppView> {
         GoRoute(
           path: '/settings',
           builder: (context, state) => const DuetSettingsPage(),
+        ),
+        GoRoute(
+          path: '/score/:pieceId',
+          builder: (context, state) =>
+              DuetScorePage(pieceId: state.pathParameters['pieceId']!),
+        ),
+        GoRoute(
+          path: '/collaborators/:pieceId',
+          builder: (context, state) {
+            final pieceId = state.pathParameters['pieceId']!;
+            final currentUserId = getIt<CurrentUser>().call();
+            return CollaboratorsPage(
+              pieceRepository: getIt<PieceRepository>(),
+              pieceId: pieceId,
+              currentUserId: currentUserId,
+              onInvite: () => showInviteSheetFor(
+                context,
+                pieceId: pieceId,
+                ownerId: currentUserId,
+              ),
+            );
+          },
         ),
         GoRoute(
           path: '/invite/accept/:token',
@@ -79,22 +114,15 @@ class _AppViewState extends State<AppView> {
         ),
       ],
     );
-    // A single subscription drives both updating `_pendingIntent` and
-    // triggering go_router to re-run `_redirect`, in that order. Splitting
-    // this into two independent subscriptions (e.g. a `GoRouterRefreshStream`
-    // wired as `refreshListenable` alongside this listener) is racy: for a
-    // broadcast stream, listeners fire in subscription order, so the
-    // refresh-triggered redirect check could run before `_pendingIntent` is
-    // actually set, silently dropping the very first navigation.
     _intentSubscription = _deepLinks.onIntent.listen((result) {
       if (result case Success<DeepLinkIntent>(:final value)) {
-        setState(() => _pendingIntent = value);
-        _router.refresh();
+        _dispatchIntent(value);
       }
     });
     // Auth changes don't otherwise tell go_router to re-evaluate `_redirect`
     // (nothing navigates on their own), so this refresh-triggering
-    // subscription mirrors the deep-link one above.
+    // subscription drives both the signed-out → `/login` bounce and the
+    // post-login consumption of a held intent.
     _authSubscription = context.read<AuthBloc>().stream.listen(
       (_) => _router.refresh(),
     );
@@ -104,24 +132,48 @@ class _AppViewState extends State<AppView> {
   Future<void> _seedInitialIntent() async {
     final result = await _deepLinks.getInitialIntent();
     if (result case Success<DeepLinkIntent>(:final value)) {
-      setState(() => _pendingIntent = value);
-      _router.refresh();
+      _dispatchIntent(value);
     }
   }
 
-  // The factory's reference redirect-wiring pattern for deep links: a pending
-  // deep link always wins (e.g. an invite link arriving mid-session), and an
-  // authenticated user never lingers on the bare `/` root — they land on the
-  // library. No role gate anymore: sign-in leads straight to the library.
-  String? _redirect(BuildContext context, GoRouterState state) {
-    final pending = _pendingIntent;
-    if (pending != null && pending.location != state.matchedLocation) {
-      _pendingIntent = null;
-      return pending.location;
+  /// Routes a deep-link intent. Signed in, it navigates immediately with
+  /// `go` — which also collapses any pushed stack, so the destination is
+  /// actually visible (a `refresh`-driven redirect can't do that: over a
+  /// pushed stack go_router reports the base location, and an intent for
+  /// that same base would be swallowed). Signed out, the intent is held for
+  /// `_redirect` to consume right after login.
+  void _dispatchIntent(DeepLinkIntent intent) {
+    final authenticated =
+        context.read<AuthBloc>().state.status == AuthStatus.authenticated;
+    if (authenticated) {
+      _router.go(intent.location);
+      return;
     }
+    _pendingIntent = intent;
+    _router.refresh();
+  }
+
+  // The redirect owns ALL screen selection at the full-screen level: every
+  // destination in this app is a go_router route, and auth decides which are
+  // reachable. Signed out, everything funnels to `/login`; a deep link that
+  // arrived while signed out is *held* (see `_dispatchIntent`) and consumed
+  // here on the first post-login pass, winning over the default `/home`
+  // landing — so a link opened while signed out survives the login
+  // round-trip instead of dropping the user on a screen that needs an
+  // identity.
+  String? _redirect(BuildContext context, GoRouterState state) {
     final authStatus = context.read<AuthBloc>().state.status;
-    if (authStatus != AuthStatus.authenticated) return null;
-    if (state.matchedLocation == '/') return '/home';
+    final loggedIn = authStatus == AuthStatus.authenticated;
+    final atLogin = state.matchedLocation == '/login';
+
+    if (!loggedIn) return atLogin ? null : '/login';
+
+    final pending = _pendingIntent;
+    if (pending != null) {
+      _pendingIntent = null;
+      if (pending.location != state.matchedLocation) return pending.location;
+    }
+    if (atLogin || state.matchedLocation == '/') return '/home';
     return null;
   }
 
@@ -142,24 +194,25 @@ class _AppViewState extends State<AppView> {
   }
 }
 
-class _RootScreen extends StatelessWidget {
-  const _RootScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    final authState = context.watch<AuthBloc>().state;
-    if (authState.status == AuthStatus.authenticated) {
-      // `AppView`'s redirect always diverts an authenticated user away from
-      // `/` (to home) before this would otherwise render; this is just a safe
-      // placeholder for the brief frame in between the auth state changing and
-      // the next redirect evaluation.
-      return const LoadingView();
-    }
-    return const LoginScreen(
-      title: 'Duet',
-      logo: AppLogoMark(icon: Icons.music_note),
-    );
-  }
+/// Opens the collaborator invite sheet for [pieceId] — shared by the
+/// library's invite affordance and the collaborators route.
+void showInviteSheetFor(
+  BuildContext context, {
+  required String pieceId,
+  required String ownerId,
+}) {
+  unawaited(
+    showInviteSheet(
+      context,
+      collaboratorInviteService: getIt<CollaboratorInviteService>(),
+      inviteService: getIt<InviteService>(),
+      monetizationService: getIt<MonetizationService>(),
+      pieceRepository: getIt<PieceRepository>(),
+      ownerId: ownerId,
+      pieceId: pieceId,
+      ownerName: getIt<CurrentUserName>().call(),
+    ),
+  );
 }
 
 /// The signed-in Home screen: `feature_library`'s unified Sheet Library,
@@ -184,61 +237,26 @@ class HomeScreen extends StatelessWidget {
             pieceRepository: getIt<PieceRepository>(),
             renderService: getIt<PdfRenderService>(),
             currentUserId: currentUserId,
-            onOpenScore: (piece) => _openScore(context, piece),
-            onInvitePiece: (piece) =>
-                _openInvite(context, piece, currentUserId),
-            onOpenCollaborators: (piece) =>
-                _openCollaborators(context, piece, currentUserId),
+            // Full-screen destinations go through the router (score,
+            // collaborators); transient UI (the invite sheet) stays an
+            // overlay.
+            onOpenScore: (piece) => context.push(
+              '/score/${Uri.encodeComponent(piece.id)}',
+            ),
+            onInvitePiece: (piece) => showInviteSheetFor(
+              context,
+              pieceId: piece.id,
+              ownerId: currentUserId,
+            ),
+            onOpenCollaborators: (piece) => context.push(
+              '/collaborators/${Uri.encodeComponent(piece.id)}',
+            ),
             onOpenSettings: () => context.push('/settings'),
             currentUserName: getIt<CurrentUserName>().call(),
             appName: 'Duet',
           ),
         ),
       ],
-    );
-  }
-
-  void _openScore(BuildContext context, Piece piece) {
-    unawaited(
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => DuetScorePage(pieceId: piece.id),
-        ),
-      ),
-    );
-  }
-
-  void _openInvite(BuildContext context, Piece piece, String ownerId) {
-    unawaited(
-      showInviteSheet(
-        context,
-        collaboratorInviteService: getIt<CollaboratorInviteService>(),
-        inviteService: getIt<InviteService>(),
-        monetizationService: getIt<MonetizationService>(),
-        pieceRepository: getIt<PieceRepository>(),
-        ownerId: ownerId,
-        pieceId: piece.id,
-        ownerName: getIt<CurrentUserName>().call(),
-      ),
-    );
-  }
-
-  void _openCollaborators(
-    BuildContext context,
-    Piece piece,
-    String currentUserId,
-  ) {
-    unawaited(
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => CollaboratorsPage(
-            pieceRepository: getIt<PieceRepository>(),
-            pieceId: piece.id,
-            currentUserId: currentUserId,
-            onInvite: () => _openInvite(context, piece, currentUserId),
-          ),
-        ),
-      ),
     );
   }
 }
