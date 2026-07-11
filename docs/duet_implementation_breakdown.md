@@ -130,7 +130,7 @@ in the Track B backlog.
 | M1.5 | ☑ Profile: display-name editing + sign-out in Settings | M1.1 |
 | M1.6 | ☑ `discoverable` toggle (and stop clobbering it) | M1.5 |
 | M1.7 | ☑ Rules-test harness (npm) + current-rules coverage | M0.4 |
-| M1.8 | ☐ Account deletion: purge Function v1 | M0.4, M1.4 |
+| M1.8 | ☑ Account deletion: purge Function v1 | M0.4, M1.4 |
 | M1.9 | ☐ Account deletion: client flow in Settings | M1.8, M1.5 |
 | M1.10 | ☐ Auth lifecycle emulator E2E | M1.2–M1.9 |
 | M2.1 | ☐ Cloud schema design doc (pieces) | — |
@@ -672,20 +672,34 @@ UX + a clean re-auth check).
 **Steps**
 1. `functions/src/deleteAccount.ts` — callable, requires App Check (when
    enforced later) and a **recent** ID token (`auth_time` within ~5 min;
-   client re-authenticates first via M1.4).
+   client re-authenticates first via M1.4). (App Check is a
+   `TODO(M0.3): enforceAppCheck` comment until M0.3 ships.)
 2. Purge in order (idempotent, batched):
    `usersByEmail` docs `where uid == caller` (the doc id is the email
    key, so query by field — never assume the caller's current email),
    `deviceTokens/{uid}`, recursive-delete `userInbox/{uid}`. Leave a
    `// M3.8 extends: pieces, layers, notes, storage` marker.
+   (Batching is a `BulkWriter` — no 500-op batch ceiling; the inbox count
+   for the summary comes from a `count()` aggregate before the recursive
+   delete. Admin SDK handles live in `src/firebase.ts` as lazy singletons
+   so import stays side-effect-free.)
 3. Finish with `admin.auth().deleteUser(uid)`; return a summary payload.
+   (`auth/user-not-found` is swallowed so a retry after a partial run
+   completes instead of failing.)
 4. Emulator tests in the functions workspace: seeds data for two users,
    calls the function, asserts only the caller's data vanished.
+   (Also covers: the stale-sign-in gate firing *before* any purge, and a
+   full idempotent re-run returning zero counts. `npm test` now wraps
+   vitest in `firebase emulators:exec --only auth,firestore` —
+   `firebase-tools` joined the workspace's devDependencies, and
+   `test:against-running` mirrors `firestore_tests`' convention.)
 5. Log a structured audit line (uid, counts) — Cloud Logging is the
    record; no PII beyond uid.
 
 **Done when:** functions tests green; manual emulator run leaves the other
-seeded account untouched; deploy target from M0.5 picks it up.
+seeded account untouched; deploy target from M0.5 picks it up. (First two
+verified — see PR; the barrel export means M0.5's future deploy target
+picks the function up with no further wiring.)
 
 ### M1.9 — Account deletion: client flow in Settings
 

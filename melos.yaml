@@ -51,7 +51,8 @@ scripts:
     description: |
       Install, lint, build, and test the Duet Cloud Functions workspace
       (apps/duet/functions — npm/TypeScript, outside the melos packages).
-      The single entry point CI uses (see task M0.5).
+      Tests boot the Auth + Firestore emulators around vitest, so Java is
+      required. The single entry point CI uses (see task M0.5).
 
   rules-test:
     run: >-

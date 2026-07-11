@@ -5,4 +5,5 @@
  * them via this barrel). Keep one file per function/domain under src/ and
  * re-export; pin every function to the shared region (src/region.ts).
  */
+export { deleteAccount } from './deleteAccount';
 export { healthcheck } from './healthcheck';
