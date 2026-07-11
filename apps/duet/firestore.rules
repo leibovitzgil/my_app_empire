@@ -37,7 +37,14 @@ service cloud.firestore {
           resource.data.uid == request.auth.uid);
       // Never a list/query — see the risk note above.
       allow list: if false;
-      allow create, update: if request.auth != null &&
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid;
+      // Update additionally requires owning the EXISTING doc: without the
+      // `resource.data.uid` check a signed-in stranger could re-point an
+      // email's mapping at their own uid (invite hijack) — found by the
+      // M1.7 rules-test harness.
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.uid &&
         request.auth.uid == request.resource.data.uid;
       allow delete: if request.auth != null &&
         request.auth.uid == resource.data.uid;

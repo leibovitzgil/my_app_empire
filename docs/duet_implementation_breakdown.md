@@ -129,7 +129,7 @@ in the Track B backlog.
 | M1.4 | ☑ Re-authentication for sensitive ops | M1.1 |
 | M1.5 | ☑ Profile: display-name editing + sign-out in Settings | M1.1 |
 | M1.6 | ☑ `discoverable` toggle (and stop clobbering it) | M1.5 |
-| M1.7 | ☐ Rules-test harness (npm) + current-rules coverage | M0.4 |
+| M1.7 | ☑ Rules-test harness (npm) + current-rules coverage | M0.4 |
 | M1.8 | ☐ Account deletion: purge Function v1 | M0.4, M1.4 |
 | M1.9 | ☐ Account deletion: client flow in Settings | M1.8, M1.5 |
 | M1.10 | ☐ Auth lifecycle emulator E2E | M1.2–M1.9 |
@@ -392,7 +392,8 @@ the two existing workflows stop drifting.
 PR-side functions build/test job early via M9.1 instead (and the two
 workflow fixes below can ride any Track A CI change).
 
-**Context (bugs to fix while here).**
+**Context (bugs to fix while here).** *(Both fixed — rode with M1.7's CI
+change, per the Track B note above.)*
 - `.github/workflows/deploy_apps.yaml` calls `melos run analyze` — that
   script does not exist in `melos.yaml` (it's `lint`).
 - `ci.yaml` triggers on `master`; `deploy_apps.yaml` on `main`. The repo's
@@ -407,7 +408,8 @@ workflow fixes below can ride any Track A CI change).
    approval.
 2. PR job: `functions/` lint+build+test (no deploy).
 3. Fix `deploy_apps.yaml` (`analyze`→`lint`, branch `main`→`master`); keep
-   its mock-signing build matrix as-is (M9.2 upgrades it).
+   its mock-signing build matrix as-is (M9.2 upgrades it). (Done with
+   M1.7.)
 4. Document rollback: `firebase deploy` of the previous git revision of the
    rules files (the runbook task M9.5 links here).
 
@@ -632,7 +634,12 @@ coverage today (`fake_cloud_firestore` does not evaluate rules).
 2. Cover the **current** rules file:
    - `usersByEmail`: owner create/update/delete; `get` allowed only when
      `discoverable == true` or self; `list` always denied; stranger writes
-     denied.
+     denied. (Writing this coverage found a live hole: `create, update`
+     shared one rule checking only `request.resource.data.uid`, so a
+     signed-in stranger could overwrite an existing mapping with their own
+     uid — an invite hijack. Fixed in the same PR by splitting the rules
+     so update also requires owning the existing doc, pinned by a
+     regression test.)
    - `deviceTokens/{uid}`: self read/write only.
    - `userInbox/{uid}/messages`: recipient read/update; `create` with
      matching `toUid` (v1 behavior — M2.4 will change this and this test);
@@ -640,7 +647,11 @@ coverage today (`fake_cloud_firestore` does not evaluate rules).
    - deny-by-default catch-all.
 3. CI (`ci.yaml`): new job `rules-tests` (node + firebase-tools cache) —
    required on PRs touching `apps/duet/firestore.rules` or the harness;
-   cheap enough to run always.
+   cheap enough to run always. (Landed node-only — no Flutter setup —
+   running unconditionally; `melos run rules-test` is the root-level
+   entry point. M0.5's two legacy-workflow fixes rode along:
+   `deploy_apps.yaml` now triggers on `master` and calls
+   `melos run lint`.)
 4. README in the harness dir: how to run locally, how M2.3 extends it.
 
 **Done when:** the job is green in CI and fails when a rule is

@@ -38,6 +38,9 @@ firebase-export-*/
 apps/duet/functions/node_modules/
 apps/duet/functions/lib/
 
+# Duet Firestore rules-test harness (npm — outside melos).
+apps/duet/firestore_tests/node_modules/
+
 # Duet local dev (apps/duet/dev.sh): generated, regenerable platform
 # scaffolding (the factory commits no platform dirs).
 apps/duet/web/

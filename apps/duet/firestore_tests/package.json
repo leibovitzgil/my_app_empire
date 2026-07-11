@@ -1,0 +1,21 @@
+{
+  "name": "duet-firestore-tests",
+  "description": "Executable security-rules tests for apps/duet/firestore.rules (npm — outside melos). `npm test` boots the Firestore emulator around vitest via `firebase emulators:exec`.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-duet \"vitest run\"",
+    "test:against-running": "vitest run"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@types/node": "^22.15.0",
+    "firebase": "^12.0.0",
+    "firebase-tools": "^14.9.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

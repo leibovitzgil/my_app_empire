@@ -2,7 +2,7 @@ name: Deploy Apps
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
     inputs:
       deploy_all:
@@ -24,7 +24,7 @@ jobs:
       - name: Bootstrap
         run: melos bootstrap
       - name: Analyze
-        run: melos run analyze
+        run: melos run lint
       - name: Test
         run: melos run test
 
