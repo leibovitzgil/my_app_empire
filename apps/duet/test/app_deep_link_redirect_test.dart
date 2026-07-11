@@ -17,6 +17,7 @@ import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/app.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
@@ -32,6 +33,7 @@ import 'package:local_storage/local_storage.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:user_directory/user_directory.dart';
 
 /// Grants everything without platform channels — mirrors
 /// `app_settings_navigation_test.dart`'s fake.
@@ -118,6 +120,14 @@ void main() {
     );
     getIt.registerLazySingleton<SettingsRepository>(
       () => LocalSettingsRepository(getIt<LocalStorageService>()),
+    );
+    getIt.registerLazySingleton<UserDirectory>(InMemoryUserDirectory.new);
+    getIt.registerSingleton<DirectoryPublisher>(
+      DirectoryPublisher(
+        directory: getIt<UserDirectory>(),
+        storage: getIt<LocalStorageService>(),
+        accounts: mockAuthRepository.account,
+      ),
     );
     getIt.registerLazySingletonAsync<NotificationPermissionGateway>(
       () async => _FakeNotificationPermissionGateway(),

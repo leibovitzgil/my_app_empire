@@ -8,6 +8,7 @@
 // ignore_for_file: cascade_invocations
 
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/settings_page.dart';
@@ -21,6 +22,7 @@ import 'package:go_router/go_router.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:user_directory/user_directory.dart';
 
 /// Grants push permission immediately, avoiding the platform channel a real
 /// `NotificationsManager` needs.
@@ -60,6 +62,14 @@ void main() {
     );
     getIt.registerLazySingleton<MonetizationService>(
       SimulatedMonetizationService.new,
+    );
+    getIt.registerLazySingleton<UserDirectory>(InMemoryUserDirectory.new);
+    getIt.registerSingleton<DirectoryPublisher>(
+      DirectoryPublisher(
+        directory: getIt<UserDirectory>(),
+        storage: getIt<LocalStorageService>(),
+        accounts: mockAuth.account,
+      ),
     );
   }
 
@@ -176,6 +186,31 @@ void main() {
       find.widgetWithText(TextButton, 'Save'),
     );
     expect(save.onPressed, isNull);
+  });
+
+  testWidgets('the Privacy switch persists and applies the discoverable '
+      'choice', (tester) async {
+    await registerFakes();
+    await pumpSettings(tester);
+    await signIn(tester);
+
+    final publisher = getIt<DirectoryPublisher>();
+    final directory = getIt<UserDirectory>();
+    expect(publisher.discoverable, isTrue);
+    final visible = await directory.lookupByEmail('jane.doe@example.com');
+    expect(visible.valueOrNull, isNotNull);
+
+    final toggle = find.text('Discoverable by email');
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    // The mock login already emitted; publishing is synchronous-ish but
+    // storage + upsert are async.
+    await tester.pump();
+    await tester.pump();
+
+    expect(publisher.discoverable, isFalse);
+    final hidden = await directory.lookupByEmail('jane.doe@example.com');
+    expect(hidden.valueOrNull, isNull);
   });
 
   testWidgets('sign out signs the account out', (tester) async {

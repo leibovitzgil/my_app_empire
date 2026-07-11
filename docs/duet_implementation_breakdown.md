@@ -128,7 +128,7 @@ in the Track B backlog.
 | M1.3 | ☑ Password reset + email verification | M1.2 |
 | M1.4 | ☑ Re-authentication for sensitive ops | M1.1 |
 | M1.5 | ☑ Profile: display-name editing + sign-out in Settings | M1.1 |
-| M1.6 | ☐ `discoverable` toggle (and stop clobbering it) | M1.5 |
+| M1.6 | ☑ `discoverable` toggle (and stop clobbering it) | M1.5 |
 | M1.7 | ☐ Rules-test harness (npm) + current-rules coverage | M0.4 |
 | M1.8 | ☐ Account deletion: purge Function v1 | M0.4, M1.4 |
 | M1.9 | ☐ Account deletion: client flow in Settings | M1.8, M1.5 |
@@ -600,10 +600,14 @@ Rules already support the flag (`firestore.rules` ~L34–44). No UI exists.
 1. Persist the user's choice locally (`LocalSettingsRepository` /
    `local_storage`, key e.g. `settings.discoverable`) **and** in the
    directory doc; treat local as the write-through source when composing
-   upserts.
+   upserts. (Built as a Duet-local `DirectoryPublisher` over
+   `local_storage` — Duet-specific privacy state doesn't belong in the
+   generic `feature_settings` slice.)
 2. Fix the listener: thread the stored preference into the
    `DirectoryUser(discoverable: …)` it writes (default `true` only when
-   the user never chose).
+   the user never chose). (The raw injection listener was replaced by
+   `DirectoryPublisher`, which centralizes entry composition for both
+   the account stream and the Settings toggle.)
 3. Settings UI: "Privacy" group — "Discoverable by email" switch with a
    one-line explanation (copy: invites to your email only work when on).
 4. `UserDirectory` contract stays as-is (`upsertSelf` already carries the

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
@@ -33,11 +34,26 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
   // time Settings is actually opened.
   NotificationPermissionGateway? _gateway;
   var _signingOut = false;
+  late bool _discoverable = getIt<DirectoryPublisher>().discoverable;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadGateway());
+  }
+
+  Future<void> _setDiscoverable(bool value) async {
+    // Optimistic flip; reverted below if persisting/publishing fails.
+    setState(() => _discoverable = value);
+    final result = await getIt<DirectoryPublisher>().setDiscoverable(value);
+    if (!mounted) return;
+    if (result case ResultFailure<void>()) {
+      setState(() => _discoverable = !value);
+      AppSnackbar.error(
+        context,
+        'Could not update your visibility. Please try again.',
+      );
+    }
   }
 
   Future<void> _loadGateway() async {
@@ -116,6 +132,16 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
                 title: const Text('Sign out'),
                 enabled: !_signingOut,
                 onTap: _signingOut ? null : () => unawaited(_signOut()),
+              ),
+              const SectionHeader('Privacy'),
+              SwitchListTile(
+                secondary: const Icon(Icons.visibility_outlined),
+                title: const Text('Discoverable by email'),
+                subtitle: const Text(
+                  'Invites to your email only work when this is on.',
+                ),
+                value: _discoverable,
+                onChanged: (value) => unawaited(_setDiscoverable(value)),
               ),
               const SectionHeader('Plan'),
               AppListTile(

@@ -57,6 +57,41 @@ void main() {
     });
 
     test(
+      'a re-upsert carrying discoverable:false keeps the document hidden '
+      '(M1.6 clobber regression, Firestore variant)',
+      () async {
+        // A sign-in style upsert that threads the stored false choice —
+        // upsertSelf is a full set, so whatever the caller composes wins;
+        // the historical bug was the caller not passing the flag at all.
+        await directory.upsertSelf(
+          const DirectoryUser(
+            uid: 'uid-1',
+            email: 'sam@example.com',
+            discoverable: false,
+          ),
+        );
+        await directory.upsertSelf(
+          const DirectoryUser(
+            uid: 'uid-1',
+            email: 'sam@example.com',
+            displayName: 'Sam',
+            discoverable: false,
+          ),
+        );
+
+        final lookup = await directory.lookupByEmail('sam@example.com');
+        expect(lookup.valueOrNull, isNull);
+
+        final raw = await firestore
+            .collection('usersByEmail')
+            .doc('sam@example.com')
+            .get();
+        expect(raw.data()?['discoverable'], isFalse);
+        expect(raw.data()?['displayName'], 'Sam');
+      },
+    );
+
+    test(
       'a document with discoverable:false resolves to Success(null)',
       () async {
         await firestore
