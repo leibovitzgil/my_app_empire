@@ -108,15 +108,15 @@ M7.6 real Remote Config keys + review-prompt check on staging.
 
 ## Task index
 
-Legend: ☐ not started · [HUMAN] needs non-agent access · ▸B = built in
-Track A with emulators/fakes, keeps one live-verification step in the
-Track B backlog.
+Legend: ☐ not started · ☑ done · [HUMAN] needs non-agent access · ▸B =
+built in Track A with emulators/fakes, keeps one live-verification step
+in the Track B backlog.
 
 ### Track A — emulator-first (start now)
 
 | ID | Task | Depends on |
 | --- | --- | --- |
-| M0.4 | ☐ `firebase.json` deploy targets + Functions scaffold | — |
+| M0.4 | ☑ `firebase.json` deploy targets + Functions scaffold | — |
 | M1.1 | ☐ Auth error taxonomy over `Result` | — |
 | M1.2 | ☐ Email/password sign-up | M1.1 |
 | M1.3 | ☐ Password reset + email verification | M1.2 |

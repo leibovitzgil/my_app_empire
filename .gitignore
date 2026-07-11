@@ -33,6 +33,11 @@ packages/**/pubspec.lock
 firebase-export-*/
 .firebase/
 
+# Duet Cloud Functions workspace (npm — outside melos): dependencies and
+# the tsc build output the emulator serves.
+apps/duet/functions/node_modules/
+apps/duet/functions/lib/
+
 # Duet local dev (apps/duet/dev.sh): generated, regenerable platform
 # scaffolding (the factory commits no platform dirs).
 apps/duet/web/

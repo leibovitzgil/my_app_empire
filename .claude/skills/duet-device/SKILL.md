@@ -34,8 +34,9 @@ Force the host IP (e.g. multiple interfaces / VPN) with
 - **`lib/main_emulator.dart`** reads the emulator host from
   `String.fromEnvironment('EMU_HOST', defaultValue: '127.0.0.1')`, so the
   simulator/web flow is unchanged and only the device flow overrides it.
-- **`firebase.json`** binds the Auth (`:9099`) + Firestore (`:8080`) emulators
-  to `0.0.0.0` (not `127.0.0.1`) so other devices on the LAN can reach them.
+- **`firebase.json`** binds the emulators — Auth (`:9099`), Firestore
+  (`:8080`), Functions (`:5001`), Storage (`:9199`) — to `0.0.0.0` (not
+  `127.0.0.1`) so other devices on the LAN can reach them.
 - **`fvm flutter`** is used because the workspace pins the SDK via FVM
   (`.fvmrc` / `.fvm/`). A mismatched global `flutter` fails `pub get`
   (`very_good_analysis` needs a newer Dart).
