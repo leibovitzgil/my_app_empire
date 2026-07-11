@@ -19,4 +19,9 @@ dev_dependencies:
   fake_cloud_firestore: ^4.0.0
   flutter_test:
     sdk: flutter
+  # Bundled with fake_cloud_firestore; its `whenCalling(...).on(doc)` API
+  # lets a test make a specific GET throw (e.g. the emulator's
+  # permission-denied), which the fake itself never raises (it evaluates no
+  # rules).
+  mock_exceptions: ^0.8.0
   very_good_analysis: ^10.3.0
