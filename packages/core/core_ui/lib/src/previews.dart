@@ -95,6 +95,11 @@ Widget labeledDividerPreview() {
   return const LabeledDivider(label: 'or');
 }
 
+@Preview(name: 'SectionHeader')
+Widget sectionHeaderPreview() {
+  return const SectionHeader('Profile');
+}
+
 @Preview(name: 'LabeledToggleChip • unselected')
 Widget labeledToggleChipUnselectedPreview() {
   return LabeledToggleChip(

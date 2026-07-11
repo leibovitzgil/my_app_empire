@@ -97,8 +97,8 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
           final account = snapshot.data;
           return SettingsScreen(
             extraTiles: [
-              const _SectionHeader('Profile'),
-              ListTile(
+              const SectionHeader('Profile'),
+              AppListTile(
                 leading: const Icon(Icons.person_outline),
                 title: Text(account?.displayName ?? 'Set your name'),
                 subtitle: const Text('Display name'),
@@ -106,19 +106,19 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
                 onTap: () => unawaited(_editDisplayName(account?.displayName)),
               ),
               if (account?.email != null)
-                ListTile(
+                AppListTile(
                   leading: const Icon(Icons.alternate_email),
                   title: Text(account!.email!),
                   subtitle: const Text('Email'),
                 ),
-              ListTile(
+              AppListTile(
                 leading: const Icon(Icons.logout),
                 title: const Text('Sign out'),
                 enabled: !_signingOut,
                 onTap: _signingOut ? null : () => unawaited(_signOut()),
               ),
-              const _SectionHeader('Plan'),
-              ListTile(
+              const SectionHeader('Plan'),
+              AppListTile(
                 leading: const Icon(Icons.workspace_premium_outlined),
                 title: const Text('Manage plan'),
                 trailing: const Icon(Icons.chevron_right),
@@ -127,27 +127,6 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-/// A low-key group label between settings rows.
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
-      child: Text(
-        label,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: theme.colorScheme.primary,
-        ),
       ),
     );
   }
