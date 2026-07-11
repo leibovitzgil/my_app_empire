@@ -29,6 +29,14 @@ abstract class AuthRepository {
   /// emitted on [user].
   Future<Result<void>> signInWithApple();
 
+  /// Confirms the signed-in user's identity with a fresh credential, as
+  /// backends demand before sensitive operations (account deletion, email
+  /// change). Pass [password] for password accounts; leave it null to
+  /// re-run the account's OAuth provider flow. Trigger reactively — when an
+  /// operation fails with `AuthFailure.requiresRecentLogin` — rather than
+  /// preemptively.
+  Future<Result<void>> reauthenticate({String? password});
+
   /// Sends a password-reset email to [email]. Succeeds without revealing
   /// whether an account exists (backends suppress enumeration).
   Future<Result<void>> sendPasswordReset(String email);

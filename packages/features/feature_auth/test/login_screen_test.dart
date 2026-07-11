@@ -45,6 +45,12 @@ class _RecordingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> reauthenticate({String? password}) async {
+    calls.add('reauth:${password ?? '<provider>'}');
+    return _result;
+  }
+
+  @override
   Future<Result<void>> sendPasswordReset(String email) async {
     calls.add('reset:$email');
     return _result;

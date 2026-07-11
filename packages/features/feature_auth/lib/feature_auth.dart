@@ -7,3 +7,4 @@ export 'src/domain/auth_repository.dart';
 export 'src/ui/auth_failure_messages.dart';
 export 'src/ui/email_verification_banner.dart';
 export 'src/ui/login_screen.dart';
+export 'src/ui/reauth_dialog.dart';

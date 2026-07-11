@@ -1,5 +1,22 @@
 import 'package:equatable/equatable.dart';
 
+/// How a signed-in account authenticates — which credential a
+/// re-authentication flow must collect (see `AuthRepository.reauthenticate`
+/// and `ReauthDialog`).
+enum AuthProviderKind {
+  /// Email + password.
+  password,
+
+  /// Google OAuth.
+  google,
+
+  /// Sign in with Apple.
+  apple,
+
+  /// Unrecognized/unavailable (e.g. a mock without provider data).
+  unknown,
+}
+
 /// A signed-in identity's account details (email, display name), alongside
 /// the bare user id `AuthRepository.user` already emits.
 ///
@@ -15,6 +32,7 @@ class AuthAccount extends Equatable {
     this.email,
     this.displayName,
     this.emailVerified = false,
+    this.provider = AuthProviderKind.unknown,
   });
 
   /// The signed-in account's id.
@@ -32,6 +50,10 @@ class AuthAccount extends Equatable {
   /// 1.0 and security rules never depend on it.
   final bool emailVerified;
 
+  /// How this account authenticates — what a re-authentication flow must
+  /// collect (password entry vs. re-running an OAuth provider).
+  final AuthProviderKind provider;
+
   @override
-  List<Object?> get props => [uid, email, displayName, emailVerified];
+  List<Object?> get props => [uid, email, displayName, emailVerified, provider];
 }
