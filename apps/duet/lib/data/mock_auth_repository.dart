@@ -60,6 +60,7 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
         email: email,
         displayName: name,
         emailVerified: true,
+        provider: AuthProviderKind.password,
       ),
     );
     return const Success(null);
@@ -81,7 +82,20 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     _displayNameController.add(name);
     // Fresh sign-ups start unverified — exercises the verify-email banner;
     // the mock's sendEmailVerification instantly verifies.
-    _emitAccount(AuthAccount(uid: uid, email: email, displayName: name));
+    _emitAccount(
+      AuthAccount(
+        uid: uid,
+        email: email,
+        displayName: name,
+        provider: AuthProviderKind.password,
+      ),
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> reauthenticate({String? password}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     return const Success(null);
   }
 
@@ -106,6 +120,7 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
         email: account.email,
         displayName: account.displayName,
         emailVerified: true,
+        provider: account.provider,
       ),
     );
     return const Success(null);
@@ -130,6 +145,7 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
         email: email,
         displayName: name,
         emailVerified: true,
+        provider: AuthProviderKind.google,
       ),
     );
     return const Success(null);
@@ -149,6 +165,7 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
         email: email,
         displayName: name,
         emailVerified: true,
+        provider: AuthProviderKind.apple,
       ),
     );
     return const Success(null);

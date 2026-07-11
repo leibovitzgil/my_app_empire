@@ -7,6 +7,14 @@ class _MockFirebaseAuth extends Mock implements firebase_auth.FirebaseAuth {}
 
 class _MockUser extends Mock implements firebase_auth.User {}
 
+class _MockUserInfo extends Mock implements firebase_auth.UserInfo {}
+
+firebase_auth.UserInfo _providerInfo(String providerId) {
+  final info = _MockUserInfo();
+  when(() => info.providerId).thenReturn(providerId);
+  return info;
+}
+
 void main() {
   group('FirebaseAuthRepository as AuthAccountProvider', () {
     late _MockFirebaseAuth firebaseAuth;
@@ -23,6 +31,7 @@ void main() {
       when(() => user.email).thenReturn('sam@example.com');
       when(() => user.displayName).thenReturn('Sam');
       when(() => user.emailVerified).thenReturn(false);
+      when(() => user.providerData).thenReturn(const []);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));
@@ -69,11 +78,13 @@ void main() {
       when(() => before.email).thenReturn('sam@example.com');
       when(() => before.displayName).thenReturn(null);
       when(() => before.emailVerified).thenReturn(false);
+      when(() => before.providerData).thenReturn(const []);
       final after = _MockUser();
       when(() => after.uid).thenReturn('uid-1');
       when(() => after.email).thenReturn('sam@example.com');
       when(() => after.displayName).thenReturn('Sam');
       when(() => after.emailVerified).thenReturn(false);
+      when(() => after.providerData).thenReturn(const []);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.fromIterable([before, after]));
@@ -92,6 +103,7 @@ void main() {
       when(() => user.email).thenReturn('sam@example.com');
       when(() => user.displayName).thenReturn('Sam');
       when(() => user.emailVerified).thenReturn(true);
+      when(() => user.providerData).thenReturn(const []);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));
@@ -101,12 +113,40 @@ void main() {
       expect(account?.emailVerified, isTrue);
     });
 
+    test('linked providers map to the domain kind, password first', () async {
+      Future<AuthProviderKind?> kindFor(List<String> providerIds) async {
+        final user = _MockUser();
+        final providers = providerIds.map(_providerInfo).toList();
+        when(() => user.uid).thenReturn('uid-1');
+        when(() => user.email).thenReturn('sam@example.com');
+        when(() => user.displayName).thenReturn('Sam');
+        when(() => user.emailVerified).thenReturn(false);
+        when(() => user.providerData).thenReturn(providers);
+        when(
+          () => firebaseAuth.userChanges(),
+        ).thenAnswer((_) => Stream.value(user));
+        final account = await repository.account.first;
+        return account?.provider;
+      }
+
+      expect(await kindFor(['password']), AuthProviderKind.password);
+      expect(await kindFor(['google.com']), AuthProviderKind.google);
+      expect(await kindFor(['apple.com']), AuthProviderKind.apple);
+      // Multiple linked providers prefer the password credential.
+      expect(
+        await kindFor(['google.com', 'password']),
+        AuthProviderKind.password,
+      );
+      expect(await kindFor([]), AuthProviderKind.unknown);
+    });
+
     test('a user with no email maps to a null AuthAccount.email', () async {
       final user = _MockUser();
       when(() => user.uid).thenReturn('uid-2');
       when(() => user.email).thenReturn(null);
       when(() => user.displayName).thenReturn(null);
       when(() => user.emailVerified).thenReturn(false);
+      when(() => user.providerData).thenReturn(const []);
       when(
         () => firebaseAuth.userChanges(),
       ).thenAnswer((_) => Stream.value(user));

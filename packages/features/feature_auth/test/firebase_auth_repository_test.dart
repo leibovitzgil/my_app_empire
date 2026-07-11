@@ -11,6 +11,14 @@ class _MockUserCredential extends Mock
 
 class _MockUser extends Mock implements firebase_auth.User {}
 
+class _MockUserInfo extends Mock implements firebase_auth.UserInfo {}
+
+firebase_auth.UserInfo _providerInfo(String providerId) {
+  final info = _MockUserInfo();
+  when(() => info.providerId).thenReturn(providerId);
+  return info;
+}
+
 void main() {
   group('mapFirebaseAuthCode', () {
     const expectations = <String, AuthFailure>{
@@ -52,6 +60,12 @@ void main() {
 
     setUpAll(() {
       registerFallbackValue(firebase_auth.GoogleAuthProvider());
+      registerFallbackValue(
+        firebase_auth.EmailAuthProvider.credential(
+          email: 'fallback@x.y',
+          password: 'fallback',
+        ),
+      );
     });
 
     setUp(() {
@@ -207,6 +221,138 @@ void main() {
       final result = await repository.signInWithApple();
 
       expect(result, isA<Success<void>>());
+    });
+
+    test('reauthenticate with a password confirms the credential', () async {
+      final user = _MockUser();
+      when(() => user.email).thenReturn('sam@example.com');
+      when(
+        () => user.reauthenticateWithCredential(
+          any<firebase_auth.AuthCredential>(),
+        ),
+      ).thenAnswer((_) async => _MockUserCredential());
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      final result = await repository.reauthenticate(password: 'secret');
+
+      expect(result, isA<Success<void>>());
+      verify(
+        () => user.reauthenticateWithCredential(
+          any<firebase_auth.AuthCredential>(),
+        ),
+      ).called(1);
+    });
+
+    test(
+      'reauthenticate maps a wrong password to invalidCredentials',
+      () async {
+        final user = _MockUser();
+        when(() => user.email).thenReturn('sam@example.com');
+        when(
+          () => user.reauthenticateWithCredential(
+            any<firebase_auth.AuthCredential>(),
+          ),
+        ).thenThrow(
+          firebase_auth.FirebaseAuthException(code: 'wrong-password'),
+        );
+        when(() => firebaseAuth.currentUser).thenReturn(user);
+
+        final result = await repository.reauthenticate(password: 'nope');
+
+        expect(
+          result,
+          isA<ResultFailure<void>>().having(
+            (f) => f.error,
+            'error',
+            const AuthFailure.invalidCredentials(),
+          ),
+        );
+      },
+    );
+
+    test(
+      'reauthenticate re-runs the OAuth flow for provider accounts',
+      () async {
+        final user = _MockUser();
+        // Built before the `when` below: constructing this mock inside the
+        // thenReturn argument would run its own `when` mid-registration.
+        final providers = [_providerInfo('google.com')];
+        when(() => user.providerData).thenReturn(providers);
+        when(
+          () => user.reauthenticateWithProvider(
+            any<firebase_auth.AuthProvider>(),
+          ),
+        ).thenAnswer((_) async => _MockUserCredential());
+        when(() => firebaseAuth.currentUser).thenReturn(user);
+
+        final result = await repository.reauthenticate();
+
+        expect(result, isA<Success<void>>());
+        verify(
+          () => user.reauthenticateWithProvider(
+            any<firebase_auth.AuthProvider>(),
+          ),
+        ).called(1);
+      },
+    );
+
+    test('a cancelled provider re-auth maps to cancelled', () async {
+      final user = _MockUser();
+      final providers = [_providerInfo('apple.com')];
+      when(() => user.providerData).thenReturn(providers);
+      when(
+        () => user.reauthenticateWithProvider(
+          any<firebase_auth.AuthProvider>(),
+        ),
+      ).thenThrow(firebase_auth.FirebaseAuthException(code: 'canceled'));
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      final result = await repository.reauthenticate();
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.cancelled(),
+        ),
+      );
+    });
+
+    test(
+      'a password account without a password fails with invalidCredentials',
+      () async {
+        final user = _MockUser();
+        final providers = [_providerInfo('password')];
+        when(() => user.providerData).thenReturn(providers);
+        when(() => firebaseAuth.currentUser).thenReturn(user);
+
+        final result = await repository.reauthenticate();
+
+        expect(
+          result,
+          isA<ResultFailure<void>>().having(
+            (f) => f.error,
+            'error',
+            const AuthFailure.invalidCredentials(),
+          ),
+        );
+      },
+    );
+
+    test('reauthenticate fails when signed out', () async {
+      when(() => firebaseAuth.currentUser).thenReturn(null);
+
+      final result = await repository.reauthenticate(password: 'secret');
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.unknown('no-signed-in-user'),
+        ),
+      );
     });
 
     test('sendPasswordReset succeeds with a Success', () async {

@@ -126,7 +126,7 @@ in the Track B backlog.
 | M1.1 | ☑ Auth error taxonomy over `Result` | — |
 | M1.2 | ☑ Email/password sign-up | M1.1 |
 | M1.3 | ☑ Password reset + email verification | M1.2 |
-| M1.4 | ☐ Re-authentication for sensitive ops | M1.1 |
+| M1.4 | ☑ Re-authentication for sensitive ops | M1.1 |
 | M1.5 | ☐ Profile: display-name editing + sign-out in Settings | M1.1 |
 | M1.6 | ☐ `discoverable` toggle (and stop clobbering it) | M1.5 |
 | M1.7 | ☐ Rules-test harness (npm) + current-rules coverage | M0.4 |
@@ -535,8 +535,14 @@ and dismisses; gate green.
 2. Map `requires-recent-login` → `AuthFailure.requiresRecentLogin` so
    callers know to trigger this flow reactively, not preemptively.
 3. Reusable UI: a `ReauthDialog` in `feature_auth` (password field or
-   provider button matched to the account's provider).
-4. Mocks: configurable success/failure.
+   provider button matched to the account's provider). (Built as
+   `showReauthDialog(context, provider:, reauthenticate:)` resolving to
+   a bool; `AuthAccount` gained an `AuthProviderKind provider` field —
+   password preferred when several are linked — so consumers can match
+   the dialog to the account without probing Firebase directly.)
+4. Mocks: configurable success/failure. (The feature_auth test doubles
+   `FakeAuthRepository`/`FailingAuthRepository` are the configurable
+   pair; app mocks succeed.)
 
 **Done when:** unit tests cover password + provider paths; the dialog has
 a widget test; M1.9 can consume it; gate green.

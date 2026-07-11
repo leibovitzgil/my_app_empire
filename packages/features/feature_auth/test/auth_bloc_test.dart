@@ -29,6 +29,10 @@ class LoginEmittingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> reauthenticate({String? password}) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> sendPasswordReset(String email) async =>
       const Success(null);
 
@@ -74,6 +78,10 @@ class FakeAuthRepository implements AuthRepository {
   }) async => const Success(null);
 
   @override
+  Future<Result<void>> reauthenticate({String? password}) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> sendPasswordReset(String email) async =>
       const Success(null);
 
@@ -110,6 +118,10 @@ class FailingAuthRepository implements AuthRepository {
     String password, {
     String? displayName,
   }) async => ResultFailure(failure);
+
+  @override
+  Future<Result<void>> reauthenticate({String? password}) async =>
+      ResultFailure(failure);
 
   @override
   Future<Result<void>> sendPasswordReset(String email) async =>

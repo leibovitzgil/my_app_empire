@@ -67,8 +67,19 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
         emailVerified: firebaseUser.emailVerified,
+        provider: _providerKindOf(firebaseUser),
       );
     });
+  }
+
+  /// Maps the linked providers onto the domain kind, preferring the
+  /// password credential when several are linked (cheapest re-auth UX).
+  static AuthProviderKind _providerKindOf(firebase_auth.User user) {
+    final ids = user.providerData.map((info) => info.providerId).toSet();
+    if (ids.contains('password')) return AuthProviderKind.password;
+    if (ids.contains('google.com')) return AuthProviderKind.google;
+    if (ids.contains('apple.com')) return AuthProviderKind.apple;
+    return AuthProviderKind.unknown;
   }
 
   @override
@@ -132,6 +143,52 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
     } else {
       await _firebaseAuth.signInWithProvider(provider);
     }
+  }
+
+  @override
+  Future<Result<void>> reauthenticate({String? password}) {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return Future.value(
+        const ResultFailure(AuthFailure.unknown('no-signed-in-user')),
+      );
+    }
+    return _guard(() async {
+      if (password != null) {
+        final email = user.email;
+        if (email == null) {
+          // A password credential can't exist without an email — the caller
+          // picked the wrong path for this account.
+          throw firebase_auth.FirebaseAuthException(
+            code: 'invalid-credential',
+          );
+        }
+        await user.reauthenticateWithCredential(
+          firebase_auth.EmailAuthProvider.credential(
+            email: email,
+            password: password,
+          ),
+        );
+        return;
+      }
+      final provider = switch (_providerKindOf(user)) {
+        AuthProviderKind.google => firebase_auth.GoogleAuthProvider(),
+        AuthProviderKind.apple => firebase_auth.AppleAuthProvider(),
+        // A password (or unknown) account has no provider flow to re-run;
+        // the caller should have collected a password.
+        AuthProviderKind.password ||
+        AuthProviderKind.unknown => throw firebase_auth.FirebaseAuthException(
+          code: 'invalid-credential',
+        ),
+      };
+      // Same platform split as _signInWithProvider: popup on web, native
+      // provider flow elsewhere.
+      if (kIsWeb) {
+        await user.reauthenticateWithPopup(provider);
+      } else {
+        await user.reauthenticateWithProvider(provider);
+      }
+    });
   }
 
   @override
