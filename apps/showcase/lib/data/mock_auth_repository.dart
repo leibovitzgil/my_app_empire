@@ -27,6 +27,10 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> updateDisplayName(String name) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> reauthenticate({String? password}) async =>
       const Success(null);
 

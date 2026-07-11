@@ -20,6 +20,7 @@ export 'src/widgets/labeled_toggle_chip.dart';
 export 'src/widgets/loading_view.dart';
 export 'src/widgets/primary_button.dart';
 export 'src/widgets/secondary_button.dart';
+export 'src/widgets/section_header.dart';
 export 'src/widgets/sign_in_view.dart';
 export 'src/widgets/sign_up_view.dart';
 export 'src/widgets/skeleton.dart';

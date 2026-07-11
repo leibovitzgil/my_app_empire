@@ -17,11 +17,14 @@ import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
+import 'package:feature_paywall/feature_paywall.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_storage/local_storage.dart';
+import 'package:monetization/monetization.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:pieces/pieces.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,6 +137,9 @@ void main() {
       ..registerSingleton<CurrentUserName>(CurrentUserName(Stream.value(null)))
       ..registerSingleton<PieceRepository>(_EmptyPieceRepository())
       ..registerSingleton<PdfRenderService>(_UnusedPdfRenderService())
+      ..registerLazySingleton<MonetizationService>(
+        SimulatedMonetizationService.new,
+      )
       ..registerLazySingleton<SettingsRepository>(
         () => LocalSettingsRepository(getIt<LocalStorageService>()),
       )
@@ -141,10 +147,10 @@ void main() {
         () async => _FakeNotificationPermissionGateway(),
       );
 
-    // Mirrors `app.dart`'s `/home`/`/settings` `GoRoute`s exactly, minus the
-    // auth redirect wrapper `AppView` layers on top (that seam is
+    // Mirrors `app.dart`'s `/home`/`/settings`/`/paywall` `GoRoute`s exactly,
+    // minus the auth redirect wrapper `AppView` layers on top (that seam is
     // `app_deep_link_redirect_test.dart`'s concern) — this router proves the
-    // same two routes/builders app.dart registers.
+    // same routes/builders app.dart registers.
     final router = GoRouter(
       initialLocation: '/home',
       routes: [
@@ -152,6 +158,15 @@ void main() {
         GoRoute(
           path: '/settings',
           builder: (context, state) => const DuetSettingsPage(),
+        ),
+        GoRoute(
+          path: '/paywall',
+          builder: (context, state) => BlocProvider<PaywallBloc>(
+            create: (_) =>
+                PaywallBloc(monetizationService: getIt<MonetizationService>())
+                  ..add(const PaywallStarted()),
+            child: const PaywallScreen(),
+          ),
         ),
       ],
     );

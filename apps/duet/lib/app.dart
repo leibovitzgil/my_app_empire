@@ -12,6 +12,7 @@ import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_library/feature_library.dart';
 import 'package:feature_pairing/feature_pairing.dart';
+import 'package:feature_paywall/feature_paywall.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -72,6 +73,15 @@ class _AppViewState extends State<AppView> {
         GoRoute(
           path: '/settings',
           builder: (context, state) => const DuetSettingsPage(),
+        ),
+        GoRoute(
+          path: '/paywall',
+          builder: (context, state) => BlocProvider<PaywallBloc>(
+            create: (_) =>
+                PaywallBloc(monetizationService: getIt<MonetizationService>())
+                  ..add(const PaywallStarted()),
+            child: const PaywallScreen(),
+          ),
         ),
         GoRoute(
           path: '/score/:pieceId',

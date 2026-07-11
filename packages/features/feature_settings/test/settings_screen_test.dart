@@ -149,17 +149,17 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
     });
 
-    // extraTile is the app-glue slot for e.g. Duet's "Manage plan"
-    // row — absent by default, rendered when supplied.
-    testWidgets('renders no extra row by default', (tester) async {
+    // extraTiles is the app-glue slot for e.g. Duet's profile group and
+    // "Manage plan" row — absent by default, rendered in order when
+    // supplied.
+    testWidgets('renders no extra rows by default', (tester) async {
       await pump(tester, const SettingsState.loaded(pushEnabled: false));
 
       expect(find.text('Manage plan'), findsNothing);
     });
 
-    testWidgets('renders extraTile below the notifications toggle', (
-      tester,
-    ) async {
+    testWidgets('renders extraTiles, in order, below the notifications '
+        'toggle', (tester) async {
       whenListen(
         bloc,
         const Stream<SettingsState>.empty(),
@@ -171,14 +171,21 @@ void main() {
           home: BlocProvider<SettingsBloc>.value(
             value: bloc,
             child: const SettingsScreen(
-              extraTile: ListTile(title: Text('Manage plan')),
+              extraTiles: [
+                ListTile(title: Text('Sign out')),
+                ListTile(title: Text('Manage plan')),
+              ],
             ),
           ),
         ),
       );
       await tester.pump();
 
+      expect(find.text('Sign out'), findsOneWidget);
       expect(find.text('Manage plan'), findsOneWidget);
+      final signOutY = tester.getTopLeft(find.text('Sign out')).dy;
+      final managePlanY = tester.getTopLeft(find.text('Manage plan')).dy;
+      expect(signOutY, lessThan(managePlanY));
     });
   });
 }

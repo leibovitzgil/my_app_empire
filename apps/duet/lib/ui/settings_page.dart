@@ -1,20 +1,24 @@
 import 'dart:async';
 
 import 'package:core_ui/core_ui.dart';
+import 'package:core_utils/core_utils.dart';
 import 'package:duet/injection.dart';
-import 'package:feature_paywall/feature_paywall.dart';
+import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:monetization/monetization.dart';
+import 'package:go_router/go_router.dart';
 
 /// Hosts `feature_settings`'s Settings screen, plus the app-glue this
-/// package can't own directly: a "Manage plan" row that opens
-/// `feature_paywall`'s `PaywallScreen`, the same construction pattern already
-/// used for the invite-flow paywall gate (see `showInviteSheet`).
+/// package can't own directly: a "Profile" group (display-name editing,
+/// read-only email, sign-out — M1.5) sourced from the auth account stream,
+/// and a "Manage plan" row that opens `feature_paywall`'s screen via the
+/// `/paywall` route (G8: full-screen destinations are routes).
 ///
 /// Shown to every user: going Pro is per-account (it raises the per-sheet
-/// collaborator cap), so there's no role to gate it on.
+/// collaborator cap), so there's no role to gate it on. Sign-out needs no
+/// navigation here — the auth redirect in `app.dart` lands every signed-out
+/// location on `/login` automatically.
 class DuetSettingsPage extends StatefulWidget {
   /// Creates a [DuetSettingsPage].
   const DuetSettingsPage({super.key});
@@ -28,6 +32,7 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
   // `RecordingPathBuilder` loading pattern — fetched here, once, the first
   // time Settings is actually opened.
   NotificationPermissionGateway? _gateway;
+  var _signingOut = false;
 
   @override
   void initState() {
@@ -38,6 +43,41 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
   Future<void> _loadGateway() async {
     final gateway = await getIt.getAsync<NotificationPermissionGateway>();
     if (mounted) setState(() => _gateway = gateway);
+  }
+
+  Future<void> _editDisplayName(String? currentName) async {
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => _EditNameDialog(initialName: currentName),
+    );
+    if (newName == null || !mounted) return;
+    final result = await getIt<AuthRepository>().updateDisplayName(newName);
+    if (!mounted) return;
+    switch (result) {
+      case Success<void>():
+        AppSnackbar.success(context, 'Name updated.');
+      case ResultFailure<void>(:final error):
+        AppSnackbar.error(
+          context,
+          (error is AuthFailure ? error.message : null) ??
+              'Something went wrong. Please try again.',
+        );
+    }
+  }
+
+  Future<void> _signOut() async {
+    setState(() => _signingOut = true);
+    final result = await getIt<AuthRepository>().logout();
+    if (!mounted) return;
+    setState(() => _signingOut = false);
+    if (result case ResultFailure<void>(:final error)) {
+      AppSnackbar.error(
+        context,
+        (error is AuthFailure ? error.message : null) ??
+            'Could not sign out. Please try again.',
+      );
+    }
+    // On success the auth redirect lands on /login by itself.
   }
 
   @override
@@ -51,29 +91,103 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
         repository: getIt<SettingsRepository>(),
         gateway: gateway,
       )..add(const SettingsReconcileRequested()),
-      child: SettingsScreen(
-        extraTile: ListTile(
-          leading: const Icon(Icons.workspace_premium_outlined),
-          title: const Text('Manage plan'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _openPaywall(context),
-        ),
+      child: StreamBuilder<AuthAccount?>(
+        stream: getIt<AuthAccountProvider>().account,
+        builder: (context, snapshot) {
+          final account = snapshot.data;
+          return SettingsScreen(
+            extraTiles: [
+              const SectionHeader('Profile'),
+              AppListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(account?.displayName ?? 'Set your name'),
+                subtitle: const Text('Display name'),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: () => unawaited(_editDisplayName(account?.displayName)),
+              ),
+              if (account?.email != null)
+                AppListTile(
+                  leading: const Icon(Icons.alternate_email),
+                  title: Text(account!.email!),
+                  subtitle: const Text('Email'),
+                ),
+              AppListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Sign out'),
+                enabled: !_signingOut,
+                onTap: _signingOut ? null : () => unawaited(_signOut()),
+              ),
+              const SectionHeader('Plan'),
+              AppListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: const Text('Manage plan'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/paywall'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+}
 
-  void _openPaywall(BuildContext context) {
-    unawaited(
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => BlocProvider<PaywallBloc>(
-            create: (_) =>
-                PaywallBloc(monetizationService: getIt<MonetizationService>())
-                  ..add(const PaywallStarted()),
-            child: const PaywallScreen(),
-          ),
-        ),
+/// Collects a new display name; pops with the trimmed value on Save, null on
+/// cancel. Validation (non-empty, ≤ 50 chars) is enforced inline.
+class _EditNameDialog extends StatefulWidget {
+  const _EditNameDialog({this.initialName});
+
+  final String? initialName;
+
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+
+class _EditNameDialogState extends State<_EditNameDialog> {
+  static const _maxLength = 50;
+
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName ?? '',
+  );
+
+  String? get _validationError {
+    final trimmed = _controller.text.trim();
+    if (trimmed.isEmpty) return 'Name cannot be empty.';
+    if (trimmed.length > _maxLength) {
+      return 'Keep it under $_maxLength characters.';
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final error = _validationError;
+    return AlertDialog(
+      title: const Text('Display name'),
+      content: AppTextField(
+        controller: _controller,
+        label: 'Name',
+        errorText: error,
+        onChanged: (_) => setState(() {}),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: error != null
+              ? null
+              : () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

@@ -29,6 +29,13 @@ abstract class AuthRepository {
   /// emitted on [user].
   Future<Result<void>> signInWithApple();
 
+  /// Updates the signed-in account's display name (trimmed). On success the
+  /// `AuthAccountProvider` account stream re-emits with the new name, so
+  /// name consumers (and e.g. a directory upsert listener) follow
+  /// automatically. Fails with an `AuthFailure` when signed out or when
+  /// [name] is blank.
+  Future<Result<void>> updateDisplayName(String name);
+
   /// Confirms the signed-in user's identity with a fresh credential, as
   /// backends demand before sensitive operations (account deletion, email
   /// change). Pass [password] for password accounts; leave it null to

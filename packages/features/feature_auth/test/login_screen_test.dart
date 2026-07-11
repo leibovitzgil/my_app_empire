@@ -45,6 +45,12 @@ class _RecordingAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> updateDisplayName(String name) async {
+    calls.add('rename:$name');
+    return _result;
+  }
+
+  @override
   Future<Result<void>> reauthenticate({String? password}) async {
     calls.add('reauth:${password ?? '<provider>'}');
     return _result;

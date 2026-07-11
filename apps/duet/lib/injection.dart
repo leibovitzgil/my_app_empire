@@ -108,23 +108,6 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       firestore: FirebaseFirestore.instance,
     );
     getIt.registerSingleton<UserDirectory>(firestoreUserDirectory);
-    // Keeps this device's own directory entry current whenever the signed-in
-    // identity changes, so other users can resolve an invite to this
-    // account by email.
-    getIt<AuthAccountProvider>().account.listen((account) {
-      final email = account?.email;
-      if (account == null || email == null) return;
-      unawaited(
-        _upsertDirectoryEntry(
-          firestoreUserDirectory,
-          DirectoryUser(
-            uid: account.uid,
-            email: email,
-            displayName: account.displayName,
-          ),
-        ),
-      );
-    });
 
     final firestoreUserMessaging = FirestoreUserMessaging(
       firestore: FirebaseFirestore.instance,
@@ -161,6 +144,26 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt.registerSingleton<DeviceTokenRegistry>(inMemoryUserMessaging);
     getIt.registerSingleton<UserMessageGateway>(inMemoryUserMessaging);
   }
+
+  // Keeps this device's own directory entry current whenever the signed-in
+  // identity changes (sign-in, sign-up, display-name edits — the account
+  // stream re-emits on each), so other users can resolve an invite to this
+  // account by email. Backend-agnostic on purpose: the mock flow exercises
+  // the same publication path the Firestore-backed one uses.
+  getIt<AuthAccountProvider>().account.listen((account) {
+    final email = account?.email;
+    if (account == null || email == null) return;
+    unawaited(
+      _upsertDirectoryEntry(
+        getIt<UserDirectory>(),
+        DirectoryUser(
+          uid: account.uid,
+          email: email,
+          displayName: account.displayName,
+        ),
+      ),
+    );
+  });
 
   // `DeviceTokenSync`'s token source is always injected (FIX-3): the default
   // branch binds a fake that never resolves a token and never rotates, so
