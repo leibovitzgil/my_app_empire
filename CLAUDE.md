@@ -117,6 +117,37 @@ Conventions, as exemplified by `feature_auth`:
 - **Tests:** `bloc_test` with hand-written fakes or `mocktail`. Mock the
   repository, never the bloc.
 
+## Routing & navigation
+
+Apps own all navigation; feature packages never navigate. The reference
+implementation is `apps/duet/lib/app.dart`.
+
+- **Every full-screen destination in an app is a `go_router` route** in that
+  app's route table — never an imperative `Navigator.push`. Route params
+  carry ids (`/score/:pieceId`), never objects; the route builder re-resolves
+  from repositories. Transient UI is **not** a destination and stays out of
+  the route table: dialogs, bottom sheets, banners, and in-screen modes
+  (e.g. `LoginScreen`'s sign-in ↔ sign-up toggle) are widget-local.
+- **Feature packages never reference route names.** They export screens that
+  take callbacks (`onOpenScore`, `onOpenSettings`, …) and the app decides
+  which callback pushes which route — the same seam discipline as
+  repositories, applied to navigation. A hardcoded route string anywhere
+  under `packages/**` is a review flag.
+- **The redirect owns auth reachability.** There are no per-route guards:
+  signed out, every location funnels to the app's `/login`; signing out
+  anywhere lands back on login automatically. This makes
+  unauthorized-screen states unrepresentable instead of merely checked.
+- **Deep links go through `DeepLinkService` → `DeepLinkIntent`, never
+  straight to the router.** Dispatch signed-in intents with `go()` — it
+  collapses any pushed stack, which a refresh-driven redirect cannot (over a
+  pushed stack go_router reports the base location and would silently
+  swallow an intent for it). Hold signed-out intents and let the redirect
+  consume them on the first post-login pass, so a link opened while signed
+  out survives the login round-trip.
+- A minimal demo app with no deep links may skip the router entirely and use
+  a pure auth-state gate (`apps/showcase`); once an app has a router, all
+  full-screen destinations belong to it.
+
 ## Adding a new app
 
 Use the generator — it clones `app_template` and rewrites the package name:

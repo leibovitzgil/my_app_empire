@@ -69,6 +69,12 @@ identifier, stays undecided.
 - **G7 — Server-authoritative where trust matters.** Cross-user mutations
   (invite delivery/acceptance, purge, entitlement-gated caps) go through
   Cloud Functions; client-side checks remain for UX only.
+- **G8 — Routing standard.** Every full-screen destination in an app is a
+  `go_router` route; feature packages never navigate or reference route
+  names (callbacks only); the redirect owns auth reachability; deep-link
+  intents ride `_dispatchIntent` (go when signed in, held until login
+  otherwise). See CLAUDE.md "Routing & navigation";
+  `apps/duet/lib/app.dart` is the reference.
 
 ## Two tracks: emulator-first now, name-gated later
 
