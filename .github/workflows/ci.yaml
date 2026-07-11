@@ -47,6 +47,41 @@ jobs:
           path: packages/**/coverage/lcov.info
           if-no-files-found: ignore
 
+  rules-tests:
+    name: Firestore rules tests
+    # Guards apps/duet/firestore.rules (task M1.7). Node-only — no Flutter
+    # setup — and cheap enough to run on every PR rather than path-filter.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/duet/firestore_tests/package-lock.json
+
+      - name: Set up Java (Firestore emulator runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: apps/duet/firestore_tests
+
+      - name: Rules tests
+        run: npm test
+        working-directory: apps/duet/firestore_tests
+
   goldens:
     name: Golden screenshots
     runs-on: ubuntu-latest

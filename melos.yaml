@@ -53,6 +53,17 @@ scripts:
       (apps/duet/functions — npm/TypeScript, outside the melos packages).
       The single entry point CI uses (see task M0.5).
 
+  rules-test:
+    run: >-
+      npm --prefix apps/duet/firestore_tests ci --no-audit --no-fund &&
+      npm --prefix apps/duet/firestore_tests test
+    description: |
+      Install and run the Duet Firestore security-rules tests
+      (apps/duet/firestore_tests — npm/TypeScript, outside the melos
+      packages). Boots a Firestore emulator around vitest, so it needs
+      Java on PATH. CI runs the same suite via the `rules-tests` job in
+      ci.yaml (task M1.7).
+
   format:
     run: melos exec -- dart format .
     description: Format all packages.
