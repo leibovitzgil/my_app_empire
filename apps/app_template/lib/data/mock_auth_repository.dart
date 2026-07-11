@@ -29,6 +29,13 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> sendPasswordReset(String email) async =>
+      const Success(null);
+
+  @override
+  Future<Result<void>> sendEmailVerification() async => const Success(null);
+
+  @override
   Future<Result<void>> signInWithGoogle() async {
     await Future<void>.delayed(const Duration(seconds: 1));
     _controller.add('google_user_123');

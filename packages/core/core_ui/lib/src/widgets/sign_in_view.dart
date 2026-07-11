@@ -28,6 +28,7 @@ class SignInView extends StatefulWidget {
     this.isBusy = false,
     this.submitLabel = 'Log in',
     this.onCreateAccount,
+    this.onForgotPassword,
     super.key,
   });
 
@@ -38,6 +39,11 @@ class SignInView extends StatefulWidget {
   /// When non-null, renders a "Create account" footer link that invokes it —
   /// the entry point to the sign-up flow (e.g. `SignUpView`).
   final VoidCallback? onCreateAccount;
+
+  /// When non-null, renders a right-aligned "Forgot password?" link under
+  /// the password field that invokes it — the entry point to a
+  /// password-reset flow.
+  final VoidCallback? onForgotPassword;
 
   /// Alternative sign-in buttons shown below an "or" divider. When empty, no
   /// divider or social section is rendered.
@@ -112,6 +118,18 @@ class _SignInViewState extends State<SignInView> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   AppPasswordField(controller: _passwordController),
+                  if (widget.onForgotPassword != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: AppTextButton(
+                        onPressed: widget.isBusy
+                            ? null
+                            : widget.onForgotPassword,
+                        label: 'Forgot password?',
+                      ),
+                    ),
+                  ],
                   if (widget.errorText != null) ...[
                     const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
                     Text(

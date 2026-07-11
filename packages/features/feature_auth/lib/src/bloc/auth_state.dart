@@ -7,6 +7,7 @@ final class AuthState extends Equatable {
     this.status = AuthStatus.unauthenticated,
     this.user,
     this.error,
+    this.passwordResetSentTo,
   });
 
   const AuthState.unknown() : this._();
@@ -27,6 +28,11 @@ final class AuthState extends Equatable {
   /// human copy (see `AuthFailureMessage`).
   final AuthFailure? error;
 
+  /// The address a password-reset email was just sent to — a one-shot
+  /// confirmation signal for UI (snackbar); cleared before each new send so
+  /// listeners re-fire even for a repeated address.
+  final String? passwordResetSentTo;
+
   @override
-  List<Object?> get props => [status, user, error];
+  List<Object?> get props => [status, user, error, passwordResetSentTo];
 }

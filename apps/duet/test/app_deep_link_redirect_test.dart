@@ -46,6 +46,9 @@ void main() {
     getIt.registerSingleton<LocalStorageService>(storage);
     final mockAuthRepository = MockAuthRepository();
     getIt.registerSingleton<AuthRepository>(mockAuthRepository);
+    // HomeScreen's verify-email banner resolves the account seam too —
+    // same instance, both contracts, mirroring injection.dart.
+    getIt.registerSingleton<AuthAccountProvider>(mockAuthRepository);
 
     final currentUser = CurrentUser(getIt<AuthRepository>().user);
     getIt.registerSingleton<CurrentUser>(currentUser);

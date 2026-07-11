@@ -20,6 +20,10 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
   final _displayNameController = StreamController<String?>.broadcast();
   final _accountController = StreamController<AuthAccount?>.broadcast();
 
+  /// The last emitted account, so [sendEmailVerification] (instant-verify)
+  /// and [refreshAccount] can re-emit it.
+  AuthAccount? _lastAccount;
+
   @override
   Stream<String?> get user => _controller.stream;
 
@@ -36,6 +40,11 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
   @override
   Stream<AuthAccount?> get account => _accountController.stream;
 
+  void _emitAccount(AuthAccount? account) {
+    _lastAccount = account;
+    _accountController.add(account);
+  }
+
   @override
   Future<Result<void>> login(String email, String password) async {
     await Future<void>.delayed(const Duration(seconds: 1));
@@ -43,8 +52,15 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     final name = _nameFromEmail(email);
     _controller.add(uid);
     _displayNameController.add(name);
-    _accountController.add(
-      AuthAccount(uid: uid, email: email, displayName: name),
+    // Established accounts count as verified, so the verify banner only
+    // shows for the fresh sign-up path in local dev.
+    _emitAccount(
+      AuthAccount(
+        uid: uid,
+        email: email,
+        displayName: name,
+        emailVerified: true,
+      ),
     );
     return const Success(null);
   }
@@ -63,10 +79,41 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
         : trimmed;
     _controller.add(uid);
     _displayNameController.add(name);
-    _accountController.add(
-      AuthAccount(uid: uid, email: email, displayName: name),
+    // Fresh sign-ups start unverified — exercises the verify-email banner;
+    // the mock's sendEmailVerification instantly verifies.
+    _emitAccount(AuthAccount(uid: uid, email: email, displayName: name));
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> sendPasswordReset(String email) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> sendEmailVerification() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final account = _lastAccount;
+    if (account == null) {
+      return const ResultFailure(AuthFailure.unknown('no-signed-in-user'));
+    }
+    // Instant-verify: no inbox in local dev, so "sending" the email is the
+    // verification.
+    _emitAccount(
+      AuthAccount(
+        uid: account.uid,
+        email: account.email,
+        displayName: account.displayName,
+        emailVerified: true,
+      ),
     );
     return const Success(null);
+  }
+
+  @override
+  Future<void> refreshAccount() async {
+    _emitAccount(_lastAccount);
   }
 
   @override
@@ -77,8 +124,13 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     const email = 'google.user@duet.dev';
     _controller.add(uid);
     _displayNameController.add(name);
-    _accountController.add(
-      const AuthAccount(uid: uid, email: email, displayName: name),
+    _emitAccount(
+      const AuthAccount(
+        uid: uid,
+        email: email,
+        displayName: name,
+        emailVerified: true,
+      ),
     );
     return const Success(null);
   }
@@ -91,8 +143,13 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     const email = 'apple.user@duet.dev';
     _controller.add(uid);
     _displayNameController.add(name);
-    _accountController.add(
-      const AuthAccount(uid: uid, email: email, displayName: name),
+    _emitAccount(
+      const AuthAccount(
+        uid: uid,
+        email: email,
+        displayName: name,
+        emailVerified: true,
+      ),
     );
     return const Success(null);
   }
@@ -102,7 +159,7 @@ class MockAuthRepository implements AuthRepository, AuthAccountProvider {
     await Future<void>.delayed(const Duration(milliseconds: 500));
     _controller.add(null);
     _displayNameController.add(null);
-    _accountController.add(null);
+    _emitAccount(null);
     return const Success(null);
   }
 

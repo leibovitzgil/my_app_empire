@@ -31,12 +31,72 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  var _showSignUp = false;
+/// Email-entry dialog for the password-reset flow; pops with the trimmed
+/// address on "Send link", null on cancel. Owns its controller so disposal
+/// happens with the route, not while it's still animating out.
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog();
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
+    return AlertDialog(
+      title: const Text('Reset password'),
+      content: AppTextField(
+        controller: _controller,
+        label: 'Email',
+        keyboardType: TextInputType.emailAddress,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Send link'),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  var _showSignUp = false;
+
+  Future<void> _showPasswordResetDialog(BuildContext context) async {
+    final bloc = context.read<AuthBloc>();
+    final email = await showDialog<String>(
+      context: context,
+      builder: (_) => const _PasswordResetDialog(),
+    );
+    if (email != null && email.isNotEmpty) {
+      bloc.add(AuthPasswordResetRequested(email));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<AuthBloc, AuthState>(
+      listenWhen: (previous, current) =>
+          current.passwordResetSentTo != null &&
+          previous.passwordResetSentTo != current.passwordResetSentTo,
+      listener: (context, state) => AppSnackbar.success(
+        context,
+        'Password reset link sent to ${state.passwordResetSentTo}.',
+      ),
       builder: (context, state) {
         final bloc = context.read<AuthBloc>();
         final errorText = state.status == AuthStatus.failure
@@ -64,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
           onEmailSignIn: (email, password) =>
               bloc.add(AuthLoginRequested(email, password)),
           onCreateAccount: () => setState(() => _showSignUp = true),
+          onForgotPassword: () => _showPasswordResetDialog(context),
           socialButtons: [
             SocialSignInButton.google(
               onPressed: () => bloc.add(AuthGoogleSignInRequested()),

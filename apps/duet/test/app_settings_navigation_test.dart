@@ -13,8 +13,10 @@ import 'package:core_utils/core_utils.dart';
 import 'package:duet/app.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/settings_page.dart';
+import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -121,8 +123,13 @@ void main() {
   Future<void> pumpHome(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final storage = await LocalStorageService.init();
+    // HomeScreen's verify-email banner resolves both auth contracts —
+    // one mock instance serves both, mirroring injection.dart.
+    final mockAuthRepository = MockAuthRepository();
     getIt
       ..registerSingleton<LocalStorageService>(storage)
+      ..registerSingleton<AuthRepository>(mockAuthRepository)
+      ..registerSingleton<AuthAccountProvider>(mockAuthRepository)
       ..registerSingleton<CurrentUser>(CurrentUser(Stream.value('user-1')))
       ..registerSingleton<CurrentUserName>(CurrentUserName(Stream.value(null)))
       ..registerSingleton<PieceRepository>(_EmptyPieceRepository())

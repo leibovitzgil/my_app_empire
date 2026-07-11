@@ -119,7 +119,7 @@ in the Track B backlog.
 | M0.4 | ☑ `firebase.json` deploy targets + Functions scaffold | — |
 | M1.1 | ☑ Auth error taxonomy over `Result` | — |
 | M1.2 | ☑ Email/password sign-up | M1.1 |
-| M1.3 | ☐ Password reset + email verification | M1.2 |
+| M1.3 | ☑ Password reset + email verification | M1.2 |
 | M1.4 | ☐ Re-authentication for sensitive ops | M1.1 |
 | M1.5 | ☐ Profile: display-name editing + sign-out in Settings | M1.1 |
 | M1.6 | ☐ `discoverable` toggle (and stop clobbering it) | M1.5 |
@@ -496,7 +496,9 @@ the typed error; gate green.
    prefer adding a `bool emailVerified` field to `AuthAccount`
    [`feature_auth/lib/src/domain/auth_account.dart`] so the existing
    `account` stream carries it; remember `AuthAccount` is `Equatable` —
-   update `props`).
+   update `props`). (Built with the `AuthAccount` field;
+   `AuthAccountProvider` gained `refreshAccount()` as the
+   reload-on-resume seam the banner calls.)
 2. Implement in `FirebaseAuthRepository` (`sendPasswordResetEmail`,
    `currentUser.sendEmailVerification`, `reload()` on resume to refresh
    `emailVerified`); mirror in mocks (instant-verify).
@@ -504,7 +506,10 @@ the typed error; gate green.
    confirmation snackbar; a dismissible "Verify your email" banner on
    `/home` while unverified with a resend action. Do **not** hard-gate the
    app on verification in 1.0 (decision recorded here; rules never depend
-   on it).
+   on it). (Reset rides the bloc — `AuthPasswordResetRequested` +
+   `AuthState.passwordResetSentTo` one-shot marker; the banner is
+   `EmailVerificationBanner` in `feature_auth`, wired by Duet's home via
+   `Result`-returning callbacks, refreshing on app resume.)
 4. Tests: bloc + widget; emulator behavior (reset emails are retrievable
    via the Auth emulator REST API — cover in M1.10).
 

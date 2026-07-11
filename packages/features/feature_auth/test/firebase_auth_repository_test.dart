@@ -209,6 +209,82 @@ void main() {
       expect(result, isA<Success<void>>());
     });
 
+    test('sendPasswordReset succeeds with a Success', () async {
+      when(
+        () => firebaseAuth.sendPasswordResetEmail(
+          email: any<String>(named: 'email'),
+        ),
+      ).thenAnswer((_) async {});
+
+      final result = await repository.sendPasswordReset('a@b.com');
+
+      expect(result, isA<Success<void>>());
+      verify(
+        () => firebaseAuth.sendPasswordResetEmail(email: 'a@b.com'),
+      ).called(1);
+    });
+
+    test('sendPasswordReset maps an invalid email to the taxonomy', () async {
+      when(
+        () => firebaseAuth.sendPasswordResetEmail(
+          email: any<String>(named: 'email'),
+        ),
+      ).thenThrow(firebase_auth.FirebaseAuthException(code: 'invalid-email'));
+
+      final result = await repository.sendPasswordReset('not-an-email');
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.invalidEmail(),
+        ),
+      );
+    });
+
+    test('sendEmailVerification sends via the signed-in user', () async {
+      final user = _MockUser();
+      when(user.sendEmailVerification).thenAnswer((_) async {});
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      final result = await repository.sendEmailVerification();
+
+      expect(result, isA<Success<void>>());
+      verify(user.sendEmailVerification).called(1);
+    });
+
+    test('sendEmailVerification fails when signed out', () async {
+      when(() => firebaseAuth.currentUser).thenReturn(null);
+
+      final result = await repository.sendEmailVerification();
+
+      expect(
+        result,
+        isA<ResultFailure<void>>().having(
+          (f) => f.error,
+          'error',
+          const AuthFailure.unknown('no-signed-in-user'),
+        ),
+      );
+    });
+
+    test('refreshAccount reloads the signed-in profile', () async {
+      final user = _MockUser();
+      when(user.reload).thenAnswer((_) async {});
+      when(() => firebaseAuth.currentUser).thenReturn(user);
+
+      await repository.refreshAccount();
+
+      verify(user.reload).called(1);
+    });
+
+    test('refreshAccount is a no-op when signed out', () async {
+      when(() => firebaseAuth.currentUser).thenReturn(null);
+
+      await expectLater(repository.refreshAccount(), completes);
+    });
+
     test('logout maps a network failure to the taxonomy', () async {
       when(firebaseAuth.signOut).thenThrow(
         firebase_auth.FirebaseAuthException(code: 'network-request-failed'),

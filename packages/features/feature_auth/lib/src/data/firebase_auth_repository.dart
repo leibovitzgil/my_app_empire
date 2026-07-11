@@ -66,8 +66,17 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
+        emailVerified: firebaseUser.emailVerified,
       );
     });
+  }
+
+  @override
+  Future<void> refreshAccount() async {
+    // reload() re-reads the profile server-side and makes userChanges
+    // re-emit — how a verification completed in the user's inbox reaches
+    // the account stream after the app resumes.
+    await _firebaseAuth.currentUser?.reload();
   }
 
   @override
@@ -123,6 +132,22 @@ class FirebaseAuthRepository implements AuthRepository, AuthAccountProvider {
     } else {
       await _firebaseAuth.signInWithProvider(provider);
     }
+  }
+
+  @override
+  Future<Result<void>> sendPasswordReset(String email) {
+    return _guard(() => _firebaseAuth.sendPasswordResetEmail(email: email));
+  }
+
+  @override
+  Future<Result<void>> sendEmailVerification() {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return Future.value(
+        const ResultFailure(AuthFailure.unknown('no-signed-in-user')),
+      );
+    }
+    return _guard(user.sendEmailVerification);
   }
 
   @override

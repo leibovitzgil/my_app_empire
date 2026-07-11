@@ -17,6 +17,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
     on<AuthLoginRequested>(_onAuthLoginRequested);
     on<AuthSignUpRequested>(_onAuthSignUpRequested);
+    on<AuthPasswordResetRequested>(_onAuthPasswordResetRequested);
     on<AuthGoogleSignInRequested>(_onAuthGoogleSignInRequested);
     on<AuthAppleSignInRequested>(_onAuthAppleSignInRequested);
     _userSubscription = _authRepository.user.listen(
@@ -83,6 +84,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       ),
       emit,
     );
+  }
+
+  Future<void> _onAuthPasswordResetRequested(
+    AuthPasswordResetRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    // Clear any previous confirmation first, so re-sending (even to the
+    // same address) always produces a fresh state transition for listeners.
+    if (state.passwordResetSentTo != null) {
+      emit(
+        AuthState._(status: state.status, user: state.user),
+      );
+    }
+    final result = await _authRepository.sendPasswordReset(event.email);
+    switch (result) {
+      case Success<void>():
+        emit(
+          AuthState._(
+            status: state.status,
+            user: state.user,
+            passwordResetSentTo: event.email,
+          ),
+        );
+      case ResultFailure<void>(:final error):
+        emit(
+          AuthState.failure(
+            error is AuthFailure ? error : AuthFailure.unknown(error),
+          ),
+        );
+    }
   }
 
   Future<void> _onAuthGoogleSignInRequested(

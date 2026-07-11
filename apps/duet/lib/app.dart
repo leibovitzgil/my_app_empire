@@ -170,17 +170,31 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentUserId = getIt<CurrentUser>().call();
-    return LibraryPage(
-      pieceRepository: getIt<PieceRepository>(),
-      renderService: getIt<PdfRenderService>(),
-      currentUserId: currentUserId,
-      onOpenScore: (piece) => _openScore(context, piece),
-      onInvitePiece: (piece) => _openInvite(context, piece, currentUserId),
-      onOpenCollaborators: (piece) =>
-          _openCollaborators(context, piece, currentUserId),
-      onOpenSettings: () => context.push('/settings'),
-      currentUserName: getIt<CurrentUserName>().call(),
-      appName: 'Duet',
+    return Column(
+      children: [
+        // Nudges signed-in-but-unverified accounts (fresh sign-ups, M1.3);
+        // renders nothing once verified or dismissed. Nothing gates on it.
+        EmailVerificationBanner(
+          accounts: getIt<AuthAccountProvider>().account,
+          onResend: () => getIt<AuthRepository>().sendEmailVerification(),
+          onRefresh: () => getIt<AuthAccountProvider>().refreshAccount(),
+        ),
+        Expanded(
+          child: LibraryPage(
+            pieceRepository: getIt<PieceRepository>(),
+            renderService: getIt<PdfRenderService>(),
+            currentUserId: currentUserId,
+            onOpenScore: (piece) => _openScore(context, piece),
+            onInvitePiece: (piece) =>
+                _openInvite(context, piece, currentUserId),
+            onOpenCollaborators: (piece) =>
+                _openCollaborators(context, piece, currentUserId),
+            onOpenSettings: () => context.push('/settings'),
+            currentUserName: getIt<CurrentUserName>().call(),
+            appName: 'Duet',
+          ),
+        ),
+      ],
     );
   }
 
