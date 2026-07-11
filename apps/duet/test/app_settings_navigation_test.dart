@@ -11,6 +11,7 @@
 // which is a different concern.
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/app.dart';
+import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
@@ -143,6 +144,7 @@ void main() {
         SimulatedMonetizationService.new,
       )
       ..registerLazySingleton<UserDirectory>(InMemoryUserDirectory.new)
+      ..registerLazySingleton<AccountPurge>(MockAccountPurge.new)
       ..registerSingleton<DirectoryPublisher>(
         DirectoryPublisher(
           directory: getIt<UserDirectory>(),

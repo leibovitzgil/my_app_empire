@@ -15,6 +15,7 @@ import 'package:audio/audio.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/app.dart';
+import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
@@ -122,6 +123,7 @@ void main() {
       () => LocalSettingsRepository(getIt<LocalStorageService>()),
     );
     getIt.registerLazySingleton<UserDirectory>(InMemoryUserDirectory.new);
+    getIt.registerLazySingleton<AccountPurge>(MockAccountPurge.new);
     getIt.registerSingleton<DirectoryPublisher>(
       DirectoryPublisher(
         directory: getIt<UserDirectory>(),
