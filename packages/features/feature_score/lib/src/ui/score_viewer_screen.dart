@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:audio/audio.dart';
 import 'package:core_ui/core_ui.dart';
@@ -8,6 +9,7 @@ import 'package:feature_score/src/bloc/record_audio_cubit.dart';
 import 'package:feature_score/src/bloc/score_bloc.dart';
 import 'package:feature_score/src/participant_layer.dart';
 import 'package:feature_score/src/ui/practice_view.dart';
+import 'package:feature_score/src/ui/reader_theme.dart';
 import 'package:feature_score/src/ui/widgets/audio_pin_marker.dart';
 import 'package:feature_score/src/ui/widgets/draw_toolbar.dart';
 import 'package:feature_score/src/ui/widgets/fractional_region_align.dart';
@@ -19,6 +21,8 @@ import 'package:feature_score/src/ui/widgets/page_thumbnail_rail.dart';
 import 'package:feature_score/src/ui/widgets/passage_popover.dart';
 import 'package:feature_score/src/ui/widgets/playback_chip.dart';
 import 'package:feature_score/src/ui/widgets/reader_top_bar.dart';
+import 'package:feature_score/src/ui/widgets/record_note_card.dart';
+import 'package:feature_score/src/ui/widgets/region_highlight_overlay.dart';
 import 'package:feature_score/src/ui/widgets/region_selector.dart';
 import 'package:feature_score/src/ui/widgets/score_page_canvas.dart';
 import 'package:feature_score/src/ui/widgets/sync_status_badge.dart';
@@ -33,14 +37,6 @@ const double _kMediumBreakpoint = 600;
 /// At/above this width the Layers panel docks inline; below it (down to
 /// [_kMediumBreakpoint]) Layers moves to an `endDrawer`.
 const double _kWideBreakpoint = 840;
-
-/// The reader's forced-dark colour scheme (the app runs `ThemeMode.system`,
-/// but this screen is unconditionally dark). Computed once — `fromSeed` is a
-/// pure function of its inputs, so it never needs re-deriving per rebuild.
-final ColorScheme _readerDarkScheme = ColorScheme.fromSeed(
-  seedColor: Colors.blue,
-  brightness: Brightness.dark,
-);
 
 /// The Score Viewer: the app's core screen. Wired to [ScoreBloc] (read from
 /// context) for the heavy-lift annotation/state logic, and owns its own
@@ -150,10 +146,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
         builder: (context, state) {
           _maybeOpenPdf(state);
           return Theme(
-            data: Theme.of(context).copyWith(
-              brightness: Brightness.dark,
-              colorScheme: _readerDarkScheme,
-            ),
+            data: readerTheme(context),
             child: Scaffold(
               key: _scaffoldKey,
               endDrawer: _buildEndDrawer(context, state),
@@ -227,40 +220,46 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     }
     final bloc = context.read<ScoreBloc>();
     final width = MediaQuery.sizeOf(context).width;
-    return ReaderTopBar(
-      title: state.piece?.title ?? 'Score',
-      mode: state.mode,
-      currentPage: state.currentPage,
-      pageCount: state.pageCount,
-      syncStatus: widget.syncStatus,
-      cleanWorkspace: state.cleanWorkspace,
-      compact: width < _kMediumBreakpoint,
-      collaborators: _collaboratorAvatars(state),
-      collaboratorNames: _collaboratorNames(state),
-      ownInkColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
-      onBack: () => Navigator.of(context).maybePop(),
-      onPreviousPage: state.isFirstPage
-          ? null
-          : () => bloc.add(PageChanged(state.currentPage - 1)),
-      onNextPage: state.isLastPage
-          ? null
-          : () => bloc.add(PageChanged(state.currentPage + 1)),
-      onOpenLayers: _onOpenLayers(context, state, bloc, width),
-      onShare: widget.onShareRequested,
-      onImport: widget.onImportRequested,
-      onPracticePage: () => bloc
-        ..add(const RegionSelectStarted(RegionIntent.practice))
-        ..add(
-          RegionSelectCompleted(
-            Region(
-              pageIndex: state.currentPage,
-              left: 0,
-              top: 0,
-              width: 1,
-              height: 1,
+    // Rebuilt on record-cubit changes so the live "REC m:ss" pill can tick.
+    return BlocBuilder<RecordAudioCubit, RecordAudioState>(
+      builder: (context, recordState) => ReaderTopBar(
+        title: state.piece?.title ?? 'Score',
+        mode: state.mode,
+        currentPage: state.currentPage,
+        pageCount: state.pageCount,
+        syncStatus: widget.syncStatus,
+        cleanWorkspace: state.cleanWorkspace,
+        compact: width < _kMediumBreakpoint,
+        collaborators: _collaboratorAvatars(state),
+        collaboratorNames: _collaboratorNames(state),
+        ownInkColor: inkColorForId(state.ownLayer?.colorId ?? 'p0'),
+        recordingElapsed: recordState.status == RecordAudioStatus.recording
+            ? recordState.elapsed
+            : null,
+        onBack: () => Navigator.of(context).maybePop(),
+        onPreviousPage: state.isFirstPage
+            ? null
+            : () => bloc.add(PageChanged(state.currentPage - 1)),
+        onNextPage: state.isLastPage
+            ? null
+            : () => bloc.add(PageChanged(state.currentPage + 1)),
+        onOpenLayers: _onOpenLayers(context, state, bloc, width),
+        onShare: widget.onShareRequested,
+        onImport: widget.onImportRequested,
+        onPracticePage: () => bloc
+          ..add(const RegionSelectStarted(RegionIntent.practice))
+          ..add(
+            RegionSelectCompleted(
+              Region(
+                pageIndex: state.currentPage,
+                left: 0,
+                top: 0,
+                width: 1,
+                height: 1,
+              ),
             ),
           ),
-        ),
+      ),
     );
   }
 
@@ -358,42 +357,25 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       audioAssetStore: widget.audioAssetStore,
       syncStatus: widget.syncStatus,
       onShareRequested: widget.onShareRequested,
+      recordingPathBuilder: widget.recordingPathBuilder,
+      onSaveRecording: (region, path, elapsed) =>
+          unawaited(_saveAudioNote(region, path, elapsed)),
     );
   }
 
+  /// Region-intent changes drive navigation for practice only; the record
+  /// flow renders declaratively as an in-canvas card (see `_ReaderCanvas`)
+  /// so the selected passage stays spotlit behind it.
   void _onRegionSelectionChanged(BuildContext context, ScoreState state) {
     final region = state.activeRegion;
     final intent = state.regionIntent;
     if (region == null || intent == null) return;
     switch (intent) {
       case RegionIntent.recordAudio:
-        unawaited(_showRecordSheet(context, region, state));
+        break;
       case RegionIntent.practice:
         _openPracticeView(context, region, state);
     }
-  }
-
-  Future<void> _showRecordSheet(
-    BuildContext context,
-    Region region,
-    ScoreState state,
-  ) async {
-    final scoreBloc = context.read<ScoreBloc>();
-    await AppBottomSheet.show<void>(
-      context,
-      title: 'Record audio note',
-      isDismissible: false,
-      builder: (sheetContext) => BlocProvider<RecordAudioCubit>.value(
-        value: _recordCubit,
-        child: _RecordAudioSheetBody(
-          outputPathBuilder: widget.recordingPathBuilder,
-          onSaved: (path, elapsed) {
-            unawaited(_saveAudioNote(scoreBloc, state, region, path, elapsed));
-          },
-        ),
-      ),
-    );
-    scoreBloc.add(const RegionSelectionCleared());
   }
 
   /// Resolves the just-recorded file at [recordedPath] to a durable asset id
@@ -402,13 +384,16 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   /// needs to keep resolving after the recording's temp file is gone, and
   /// after an export/import round-trip through `review_sync`, which reads
   /// and writes assets by id).
+  ///
+  /// Then closes the flow the way the design's "saved" moment does: back to
+  /// view mode, where the new pin is visible on its passage, with a
+  /// confirmation snackbar (offering "Share now" when sharing is wired).
   Future<void> _saveAudioNote(
-    ScoreBloc scoreBloc,
-    ScoreState state,
     Region region,
     String recordedPath,
     Duration elapsed,
   ) async {
+    final scoreBloc = context.read<ScoreBloc>();
     final putResult = await widget.audioAssetStore.put(recordedPath);
     final assetId = switch (putResult) {
       Success<String>(:final value) => value,
@@ -419,14 +404,25 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     };
     final note = AudioNote(
       id: 'note_${DateTime.now().microsecondsSinceEpoch}',
-      authorId: state.currentUserId,
+      authorId: scoreBloc.state.currentUserId,
       audioAssetId: assetId,
       pageIndex: region.pageIndex,
       durationMs: elapsed.inMilliseconds,
       region: region,
       createdAt: DateTime.now(),
     );
-    scoreBloc.add(AudioNoteSaved(note, recordedPath));
+    scoreBloc
+      ..add(AudioNoteSaved(note, recordedPath))
+      ..add(const ModeChanged(ScoreMode.view));
+    if (!mounted) return;
+    final onShare = widget.onShareRequested;
+    AppSnackbar.show(
+      context,
+      message: 'Audio note added · Page ${region.pageIndex + 1}',
+      variant: AppSnackbarVariant.success,
+      actionLabel: onShare == null ? null : 'Share now',
+      onAction: onShare == null ? null : () => unawaited(onShare()),
+    );
   }
 
   void _openPracticeView(
@@ -442,9 +438,15 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
               builder: (_) => PracticeView(
                 region: region,
                 renderService: widget.renderService,
+                pageCount: state.pageCount,
+                pieceTitle: state.piece?.title,
+                // Every layer, with visibility resolved the way the reader
+                // is currently showing it (including clean workspace), so
+                // the practice view's own toggles start from what the user
+                // was just looking at.
                 layers: [
                   for (final layer in state.layers)
-                    if (layer.visible) layer,
+                    layer.copyWith(visible: state.effectiveInkVisible(layer)),
                 ],
               ),
             ),
@@ -512,6 +514,7 @@ Widget _buildLayersPanel(
   required ScoreSyncStatus syncStatus,
   required Future<void> Function()? onShareRequested,
   VoidCallback? onClose,
+  IconData closeIcon = Icons.close,
 }) {
   final pageIndex = state.currentPage;
   return LayersPanel(
@@ -525,6 +528,7 @@ Widget _buildLayersPanel(
     onAudioToggle: () => bloc.add(const AudioPinsToggled()),
     onCleanWorkspaceToggle: () => bloc.add(const CleanWorkspaceToggled()),
     onClose: onClose,
+    closeIcon: closeIcon,
     onShare: onShareRequested == null
         ? null
         : () => unawaited(onShareRequested()),
@@ -612,6 +616,8 @@ class _ReaderCanvas extends StatefulWidget {
     required this.audioAssetStore,
     required this.syncStatus,
     required this.onShareRequested,
+    required this.recordingPathBuilder,
+    required this.onSaveRecording,
   });
 
   final ScoreState state;
@@ -619,6 +625,9 @@ class _ReaderCanvas extends StatefulWidget {
   final AudioAssetStore audioAssetStore;
   final ScoreSyncStatus syncStatus;
   final Future<void> Function()? onShareRequested;
+  final String Function() recordingPathBuilder;
+  final void Function(Region region, String path, Duration elapsed)
+  onSaveRecording;
 
   @override
   State<_ReaderCanvas> createState() => _ReaderCanvasState();
@@ -678,6 +687,7 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
                   syncStatus: widget.syncStatus,
                   onShareRequested: widget.onShareRequested,
                   onClose: () => setState(() => _layersPanelCollapsed = true),
+                  closeIcon: Icons.last_page,
                 ),
               ),
           ],
@@ -707,77 +717,113 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
     double width,
   ) {
     final pageIndex = state.currentPage;
+    final scheme = Theme.of(context).colorScheme;
+    // The record flow is declarative: while a region has been committed to
+    // the record intent, the card floats over the canvas and the passage
+    // stays spotlit behind it — no modal that hides the music.
+    final recordRegion = state.regionIntent == RegionIntent.recordAudio
+        ? state.activeRegion
+        : null;
+    final highlightRegion = recordRegion ?? _completedRegion;
     return Stack(
       children: [
-        Center(
-          child: ScorePageCanvas(
-            renderService: widget.renderService,
-            pageIndex: pageIndex,
-            overlays: [
-              for (final layer in state.layers)
-                if (state.effectiveInkVisible(layer))
-                  InkOverlay(
-                    strokes: layer.strokes,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.sm,
+          ),
+          child: Center(
+            child: ScorePageCanvas(
+              renderService: widget.renderService,
+              pageIndex: pageIndex,
+              overlays: [
+                for (final layer in state.layers)
+                  if (state.effectiveInkVisible(layer))
+                    InkOverlay(
+                      strokes: layer.strokes,
+                      pageIndex: pageIndex,
+                      color: inkColorForId(layer.colorId),
+                    ),
+                if (state.mode == ScoreMode.draw)
+                  _DrawGestureLayer(pageIndex: pageIndex),
+                if (state.mode == ScoreMode.regionSelect &&
+                    recordRegion == null)
+                  RegionSelector(
                     pageIndex: pageIndex,
-                    color: inkColorForId(layer.colorId),
-                  ),
-              if (state.mode == ScoreMode.draw)
-                _DrawGestureLayer(pageIndex: pageIndex),
-              if (state.mode == ScoreMode.regionSelect)
-                RegionSelector(
-                  pageIndex: pageIndex,
-                  onRegionPreview: (region) =>
-                      bloc.add(RegionDragUpdated(region)),
-                  onRegionCompleted: (region) {
-                    setState(() => _completedRegion = region);
-                    if (width < _kMediumBreakpoint) {
-                      unawaited(
-                        _showPassageBottomSheet(context, bloc, region),
-                      );
-                    }
-                  },
-                ),
-              if (state.effectiveAudioPinsVisible)
-                for (final note in state.notes.where(
-                  (n) => n.pageIndex == pageIndex,
-                ))
-                  FractionalRegionAlign(
-                    region: note.region,
-                    child: BlocBuilder<AudioPlaybackCubit, AudioPlaybackState>(
-                      builder: (context, playback) {
-                        return AudioPinMarker(
-                          note: note,
-                          currentUserId: state.currentUserId,
-                          isPlaying: playback.isPlaying(note.id),
-                          progress: _progressValue(playback, note.id),
-                          onTap: () => _onPinTap(context, note, playback),
-                          onDelete: () => context.read<ScoreBloc>().add(
-                            AudioNoteDeleteRequested(note.id),
-                          ),
+                    onRegionPreview: (region) =>
+                        bloc.add(RegionDragUpdated(region)),
+                    onRegionCompleted: (region) {
+                      setState(() => _completedRegion = region);
+                      if (width < _kMediumBreakpoint) {
+                        unawaited(
+                          _showPassageBottomSheet(context, bloc, region),
                         );
-                      },
+                      }
+                    },
+                  ),
+                // The just-selected (or being-recorded) passage stays
+                // spotlit: error accent while the mic is live, primary
+                // otherwise — mirroring the design's record/review states.
+                if (highlightRegion != null &&
+                    highlightRegion.pageIndex == pageIndex)
+                  BlocBuilder<RecordAudioCubit, RecordAudioState>(
+                    builder: (context, recordState) => RegionHighlightOverlay(
+                      region: highlightRegion,
+                      accentColor:
+                          recordRegion != null &&
+                              recordState.status != RecordAudioStatus.reviewing
+                          ? scheme.error
+                          : scheme.primary,
                     ),
                   ),
-            ],
+                if (state.effectiveAudioPinsVisible)
+                  for (final note in state.notes.where(
+                    (n) => n.pageIndex == pageIndex,
+                  ))
+                    FractionalRegionAlign(
+                      region: note.region,
+                      child:
+                          BlocBuilder<AudioPlaybackCubit, AudioPlaybackState>(
+                            builder: (context, playback) {
+                              return AudioPinMarker(
+                                note: note,
+                                currentUserId: state.currentUserId,
+                                accentColor: _pinAccent(state, note, scheme),
+                                isPlaying: playback.isPlaying(note.id),
+                                progress: _progressValue(playback, note.id),
+                                onTap: () => _onPinTap(context, note, playback),
+                                onDelete: () => context.read<ScoreBloc>().add(
+                                  AudioNoteDeleteRequested(note.id),
+                                ),
+                              );
+                            },
+                          ),
+                    ),
+              ],
+            ),
           ),
         ),
         if (state.mode == ScoreMode.regionSelect &&
+            recordRegion == null &&
             _completedRegion != null &&
             width >= _kMediumBreakpoint)
           Positioned.fill(
             child: _passagePopoverOverlay(bloc, _completedRegion!),
           ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: AppSpacing.lg,
-          child: Center(
-            child: ModeSegmentedControl(
-              mode: state.mode,
-              onModeSelected: (mode) => bloc.add(ModeChanged(mode)),
+        if (recordRegion == null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: AppSpacing.lg,
+            child: Center(
+              child: ModeSegmentedControl(
+                mode: state.mode,
+                onModeSelected: (mode) => bloc.add(ModeChanged(mode)),
+              ),
             ),
           ),
-        ),
         if (state.mode == ScoreMode.draw)
           Positioned(
             left: 0,
@@ -791,6 +837,26 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
                 onEraserToggled: () => bloc.add(const EraserToggled()),
                 onUndo: () => bloc.add(const UndoRequested()),
                 onDone: () => bloc.add(const ModeChanged(ScoreMode.view)),
+              ),
+            ),
+          ),
+        if (recordRegion != null)
+          Positioned(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            bottom: AppSpacing.lg + AppSpacing.xs,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 540),
+                child: RecordNoteCard(
+                  regionLabel:
+                      'Page ${recordRegion.pageIndex + 1} · '
+                      'selected passage',
+                  outputPathBuilder: widget.recordingPathBuilder,
+                  onSave: (path, elapsed) =>
+                      widget.onSaveRecording(recordRegion, path, elapsed),
+                  onDismiss: () => bloc.add(const RegionSelectionCleared()),
+                ),
               ),
             ),
           ),
@@ -822,9 +888,23 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
     );
   }
 
-  /// Anchored via `FractionalRegionAlign` at [region]'s centroid, plus a
-  /// page-area-scoped tap-catcher behind it so tapping outside dismisses
-  /// like Cancel.
+  /// A pin is tinted by who left it: yours take the theme primary, a
+  /// collaborator's takes their ink colour — so a pin, its author's strokes,
+  /// and their Layers row all read as one identity at a glance.
+  Color _pinAccent(ScoreState state, AudioNote note, ColorScheme scheme) {
+    if (note.authorId == state.currentUserId) return scheme.primary;
+    for (final layer in state.layers) {
+      if (layer.ownerId == note.authorId) {
+        return inkColorForId(layer.colorId);
+      }
+    }
+    return scheme.tertiary;
+  }
+
+  /// Anchored *beside* [region] (right of it when there's room, flipping
+  /// left, else below/above) so the menu never covers the very passage the
+  /// user just selected — plus a page-area-scoped tap-catcher behind it so
+  /// tapping outside dismisses like Cancel.
   Widget _passagePopoverOverlay(ScoreBloc bloc, Region region) {
     return Stack(
       children: [
@@ -834,17 +914,19 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
             onTap: () => _cancelRegionSelection(bloc),
           ),
         ),
-        FractionalRegionAlign(
-          region: region,
-          child: PassagePopover(
-            onPractice: () =>
-                _resolveRegionSelection(bloc, region, RegionIntent.practice),
-            onRecord: () => _resolveRegionSelection(
-              bloc,
-              region,
-              RegionIntent.recordAudio,
+        Positioned.fill(
+          child: CustomSingleChildLayout(
+            delegate: _BesideRegionLayoutDelegate(region: region),
+            child: PassagePopover(
+              onPractice: () =>
+                  _resolveRegionSelection(bloc, region, RegionIntent.practice),
+              onRecord: () => _resolveRegionSelection(
+                bloc,
+                region,
+                RegionIntent.recordAudio,
+              ),
+              onCancel: () => _cancelRegionSelection(bloc),
             ),
-            onCancel: () => _cancelRegionSelection(bloc),
           ),
         ),
       ],
@@ -1151,112 +1233,58 @@ class _LiveStrokePainter extends CustomPainter {
       oldDelegate.points != points || oldDelegate.colorId != colorId;
 }
 
-/// The contents of the "Record audio note" bottom sheet, wired to
-/// [RecordAudioCubit].
-class _RecordAudioSheetBody extends StatelessWidget {
-  const _RecordAudioSheetBody({
-    required this.outputPathBuilder,
-    required this.onSaved,
-  });
+/// Positions the passage popover beside a fractional page [region] within
+/// the canvas area: right of it when there's room, flipping left, else
+/// centered below/above — always clamped inside the canvas with a margin.
+///
+/// The region is fractional of the *page*, approximated here against the
+/// whole canvas area (the same pragmatic mapping the audio-pin/popover
+/// anchoring has always used) — close enough at reading zoom, and clamping
+/// keeps it on-screen everywhere else.
+class _BesideRegionLayoutDelegate extends SingleChildLayoutDelegate {
+  _BesideRegionLayoutDelegate({required this.region});
 
-  final String Function() outputPathBuilder;
-  final void Function(String path, Duration elapsed) onSaved;
+  final Region region;
+
+  static const double _gap = AppSpacing.md;
+  static const double _margin = AppSpacing.sm;
 
   @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<RecordAudioCubit, RecordAudioState>(
-      builder: (context, state) {
-        final cubit = context.read<RecordAudioCubit>();
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _label(state),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (state.status == RecordAudioStatus.error)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: Text(
-                  state.error ?? 'Something went wrong.',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            _buildActions(context, cubit, state),
-          ],
-        );
-      },
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen();
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final anchor = Rect.fromLTWH(
+      region.left * size.width,
+      region.top * size.height,
+      region.width * size.width,
+      region.height * size.height,
     );
-  }
+    final maxX = size.width - childSize.width - _margin;
+    final maxY = size.height - childSize.height - _margin;
 
-  String _label(RecordAudioState state) {
-    final seconds = state.elapsed.inSeconds;
-    return switch (state.status) {
-      RecordAudioStatus.idle => 'Ready to record.',
-      RecordAudioStatus.recording => 'Recording… ${seconds}s',
-      RecordAudioStatus.reviewing => 'Recorded ${seconds}s. Keep it?',
-      RecordAudioStatus.error => "Couldn't record.",
-    };
-  }
+    double clampX(double x) => x.clamp(_margin, math.max(_margin, maxX));
+    double clampY(double y) => y.clamp(_margin, math.max(_margin, maxY));
 
-  Widget _buildActions(
-    BuildContext context,
-    RecordAudioCubit cubit,
-    RecordAudioState state,
-  ) {
-    switch (state.status) {
-      case RecordAudioStatus.idle:
-      case RecordAudioStatus.error:
-        return Semantics(
-          button: true,
-          label: 'Start recording',
-          child: SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton.filled(
-              icon: const Icon(Icons.mic),
-              onPressed: () => cubit.start(outputPathBuilder()),
-            ),
-          ),
-        );
-      case RecordAudioStatus.recording:
-        return Semantics(
-          button: true,
-          label: 'Stop recording',
-          child: SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton.filled(
-              icon: const Icon(Icons.stop),
-              onPressed: cubit.stop,
-            ),
-          ),
-        );
-      case RecordAudioStatus.reviewing:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SecondaryButton(
-              label: 'Discard',
-              onPressed: () {
-                cubit.discard();
-                Navigator.of(context).pop();
-              },
-            ),
-            const SizedBox(width: AppSpacing.md),
-            PrimaryButton(
-              label: 'Save',
-              onPressed: () {
-                final path = state.path;
-                if (path != null) onSaved(path, state.elapsed);
-                cubit.save();
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
+    // Beside the selection, vertically centred on it.
+    final right = anchor.right + _gap;
+    if (right + childSize.width <= size.width - _margin) {
+      return Offset(right, clampY(anchor.center.dy - childSize.height / 2));
     }
+    final left = anchor.left - _gap - childSize.width;
+    if (left >= _margin) {
+      return Offset(left, clampY(anchor.center.dy - childSize.height / 2));
+    }
+    // No room either side (a near-full-width selection): below, else above.
+    final below = anchor.bottom + _gap;
+    final y = below + childSize.height <= size.height - _margin
+        ? below
+        : anchor.top - _gap - childSize.height;
+    return Offset(clampX(anchor.center.dx - childSize.width / 2), clampY(y));
   }
+
+  @override
+  bool shouldRelayout(covariant _BesideRegionLayoutDelegate oldDelegate) =>
+      oldDelegate.region != region;
 }

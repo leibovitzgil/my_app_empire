@@ -1,3 +1,4 @@
+import 'package:feature_score/src/ui/widgets/region_highlight_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:pieces/pieces.dart';
 
@@ -84,16 +85,15 @@ class _RegionSelectorState extends State<RegionSelector> {
           },
           onPanEnd: (_) => _finishDrag(size),
           child: CustomPaint(
-            // The dashed rect/handles read poorly in `colorScheme.primary`
-            // against the light page paper in this app's dark theme
-            // (verified: ~1.5:1 luminance contrast) — `onPrimary` is the
-            // pairing Material designed for exactly this "reads against a
-            // light surface" need, so it's used here instead while staying
-            // a themed role rather than a new hardcoded literal.
-            painter: _RegionPainter(
-              _dragRect,
-              strokeColor: scheme.onPrimary,
+            // `primary` alone reads poorly against the light page paper
+            // (~1.5:1 luminance contrast); the shared painter backs the
+            // dashed accent with a dark halo so the design's primary-accent
+            // selection stays legible on paper and veil alike.
+            painter: RegionOverlayPainter(
+              regionFor: (_) => _dragRect,
+              strokeColor: scheme.primary,
               veilColor: scheme.scrim,
+              repaintKey: _dragRect,
             ),
             size: Size.infinite,
           ),
@@ -117,78 +117,4 @@ class _RegionSelectorState extends State<RegionSelector> {
     }
     widget.onRegionCompleted(_toRegion(rect, size));
   }
-}
-
-class _RegionPainter extends CustomPainter {
-  _RegionPainter(
-    this.rect, {
-    required this.strokeColor,
-    required this.veilColor,
-  });
-
-  final Rect? rect;
-  final Color strokeColor;
-  final Color veilColor;
-
-  static const double _dashWidth = 6;
-  static const double _dashGap = 4;
-  static const double _handleSize = 10;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = this.rect;
-    if (rect == null) return;
-
-    // Dims everything outside the dragged rect via an even-odd fill, so the
-    // rect itself is left as a "hole" showing the page at full brightness.
-    final veilPath = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRect(Offset.zero & size)
-      ..addRect(rect);
-    canvas.drawPath(
-      veilPath,
-      Paint()..color = veilColor.withValues(alpha: 0.35),
-    );
-
-    final paint = Paint()
-      ..color = strokeColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    _drawDashedRect(canvas, rect, paint);
-
-    final handlePaint = Paint()..color = strokeColor;
-    for (final corner in [
-      rect.topLeft,
-      rect.topRight,
-      rect.bottomLeft,
-      rect.bottomRight,
-    ]) {
-      canvas.drawRect(
-        Rect.fromCenter(
-          center: corner,
-          width: _handleSize,
-          height: _handleSize,
-        ),
-        handlePaint,
-      );
-    }
-  }
-
-  void _drawDashedRect(Canvas canvas, Rect rect, Paint paint) {
-    final path = Path()..addRect(rect);
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = (distance + _dashWidth).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance += _dashWidth + _dashGap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RegionPainter oldDelegate) =>
-      oldDelegate.rect != rect ||
-      oldDelegate.strokeColor != strokeColor ||
-      oldDelegate.veilColor != veilColor;
 }

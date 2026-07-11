@@ -104,18 +104,22 @@ void main() {
       // The anchored popover (≥600dp) and the bottom-sheet fallback
       // (<600dp) share this exact copy, so this finder works either way.
       await tester.tap(find.text('Record an audio note'));
-      await tester.pumpAndSettle();
-      await shot('05_record_sheet');
-
-      await tester.tap(find.byIcon(Icons.mic));
+      // Bounded pumps, not pumpAndSettle: the record card auto-starts
+      // recording on mount, and its pulsing mic disc animates for as long
+      // as the recording runs — pumpAndSettle would never settle.
       await tester.pump();
-      expect(find.byIcon(Icons.stop), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 300));
+      await shot('05_record_card');
 
-      await tester.tap(find.byIcon(Icons.stop));
+      // Recording is already live (no separate mic tap); stop it, review,
+      // and keep it.
+      expect(find.text('Stop'), findsOneWidget);
+      await tester.tap(find.text('Stop'));
       await tester.pump();
-      expect(find.text('Save'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Save note'), findsOneWidget);
 
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text('Save note'));
       await tester.pumpAndSettle();
 
       expect(bloc.state.notes, hasLength(1));

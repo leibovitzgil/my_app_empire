@@ -18,20 +18,30 @@ enum ScoreSyncStatus {
   notSynced,
 }
 
-/// The reader top bar's shared status-badge shell: an outlined pill
-/// (transparent fill, `outlineVariant` border) fronted by either an [icon]
-/// or a colour [dotColor] (never both), followed by [label].
+/// The reader top bar's shared status-badge shell: a pill fronted by either
+/// an [icon] or a colour [dotColor] (never both), followed by [label].
 ///
-/// [SyncStatusBadge] and `ReaderTopBar`'s "Drawing in your layer"/"Clean
-/// workspace" badges all share this one shell so the three read as one
-/// visual family instead of drifting apart.
+/// Untinted it's the quiet variant — transparent fill, `outlineVariant`
+/// border, `onSurfaceVariant` text — for ambient statuses like the sync
+/// badge. Pass [tint] for the emphasized variant (a faint tint fill, tinted
+/// border and text) used for the states that describe what the user is
+/// doing *right now*: "Drawing in your layer" and "Clean workspace" tint
+/// primary, the recording pill tints error.
+///
+/// [SyncStatusBadge] and `ReaderTopBar`'s mode badges all share this one
+/// shell so they read as one visual family instead of drifting apart.
 class StatusPill extends StatelessWidget {
   /// Creates a [StatusPill].
-  const StatusPill({required this.label, this.icon, this.dotColor, super.key})
-    : assert(
-        icon == null || dotColor == null,
-        'StatusPill takes an icon or a dot, never both.',
-      );
+  const StatusPill({
+    required this.label,
+    this.icon,
+    this.dotColor,
+    this.tint,
+    super.key,
+  }) : assert(
+         icon == null || dotColor == null,
+         'StatusPill takes an icon or a dot, never both.',
+       );
 
   /// The pill's text.
   final String label;
@@ -43,15 +53,24 @@ class StatusPill extends StatelessWidget {
   /// exclusive with [icon].
   final Color? dotColor;
 
+  /// The emphasis colour. `null` renders the quiet outlined variant.
+  final Color? tint;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final tint = this.tint;
+    final foreground = tint ?? scheme.onSurfaceVariant;
+    final borderColor = tint == null
+        ? scheme.outlineVariant
+        : tint.withValues(alpha: 0.45);
     return Semantics(
       label: label,
       excludeSemantics: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border.all(color: scheme.outlineVariant),
+          color: tint?.withValues(alpha: 0.1),
+          border: Border.all(color: borderColor),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Padding(
@@ -62,8 +81,7 @@ class StatusPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (icon != null)
-                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+              if (icon != null) Icon(icon, size: 16, color: foreground),
               if (dotColor != null)
                 Container(
                   width: 8,
@@ -80,7 +98,7 @@ class StatusPill extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: scheme.onSurfaceVariant,
+                    color: foreground,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                   ),

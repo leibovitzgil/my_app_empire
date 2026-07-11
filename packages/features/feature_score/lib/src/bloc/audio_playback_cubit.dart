@@ -25,7 +25,7 @@ class AudioPlaybackCubit extends Cubit<AudioPlaybackState> {
   /// Starts playing the audio note [noteId] from [path]. Stops anything
   /// already playing first.
   Future<void> play(String noteId, String path) async {
-    await _teardown();
+    _teardown();
     final result = await _player.play(path);
     switch (result) {
       case Success<void>():
@@ -44,19 +44,25 @@ class AudioPlaybackCubit extends Cubit<AudioPlaybackState> {
 
   /// Stops playback, if any, and returns to `idle`.
   Future<void> stop() async {
-    await _teardown();
+    _teardown();
     await _player.stop();
     emit(const AudioPlaybackState.idle());
   }
 
-  Future<void> _teardown() async {
-    await _progressSubscription?.cancel();
+  /// Unhooks the progress subscription. `cancel()` detaches the listener
+  /// synchronously; its returned cancel-completion future is deliberately
+  /// not awaited — nothing here depends on it, and awaiting it is the same
+  /// load-bearing footgun documented in `RecordAudioCubit.start` (it can
+  /// park `stop()` behind an arbitrary event-loop turn, leaving the cubit
+  /// stuck "playing" after the user hit stop).
+  void _teardown() {
+    unawaited(_progressSubscription?.cancel());
     _progressSubscription = null;
   }
 
   @override
   Future<void> close() async {
-    await _teardown();
+    _teardown();
     return super.close();
   }
 }

@@ -98,7 +98,18 @@ void main() {
       );
 
       expect(find.text('Ms. Rivera'), findsOneWidget);
-      expect(find.text('1 strokes · pen'), findsOneWidget);
+      // Singular/plural resolved, and "· pen" only on the user's own layer.
+      expect(find.text('1 stroke · pen'), findsOneWidget);
+    });
+
+    testWidgets("a collaborator's row shows a bare stroke count", (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      // Bea's row has no "· pen" suffix; only the own layer's does.
+      expect(find.text('0 strokes'), findsOneWidget);
+      expect(find.text('0 strokes · pen'), findsOneWidget);
     });
 
     testWidgets('tapping a layer row invokes onInkToggle with its ownerId', (

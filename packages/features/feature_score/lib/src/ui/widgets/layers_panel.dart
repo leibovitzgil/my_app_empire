@@ -22,6 +22,7 @@ class LayersPanel extends StatelessWidget {
     required this.onAudioToggle,
     required this.onCleanWorkspaceToggle,
     this.onClose,
+    this.closeIcon = Icons.close,
     this.onShare,
     this.annotationsShared = false,
     super.key,
@@ -53,6 +54,11 @@ class LayersPanel extends StatelessWidget {
   /// dismiss gesture).
   final VoidCallback? onClose;
 
+  /// The close affordance's glyph — a plain X by default; the docked host
+  /// passes a collapse-to-the-right glyph instead, since closing there
+  /// tucks the panel away rather than dismissing an overlay.
+  final IconData closeIcon;
+
   /// Called when the bottom "Share" prompt is tapped. `null` (or
   /// [annotationsShared]) hides the whole prompt.
   final VoidCallback? onShare;
@@ -69,7 +75,7 @@ class LayersPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Header(onClose: onClose),
+          _Header(onClose: onClose, closeIcon: closeIcon),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -104,9 +110,10 @@ class LayersPanel extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({this.onClose});
+  const _Header({required this.closeIcon, this.onClose});
 
   final VoidCallback? onClose;
+  final IconData closeIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -139,7 +146,7 @@ class _Header extends StatelessWidget {
                 width: 48,
                 height: 48,
                 child: IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(closeIcon),
                   onPressed: onClose,
                 ),
               ),
@@ -159,6 +166,11 @@ class _LayerRow extends StatelessWidget {
 
   final ParticipantLayer layer;
   final VoidCallback onTap;
+
+  static String _strokeCount(ParticipantLayer layer) {
+    final count = layer.strokes.length;
+    return count == 1 ? '1 stroke' : '$count strokes';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +233,11 @@ class _LayerRow extends StatelessWidget {
                           ],
                         ),
                         Text(
-                          '${layer.strokes.length} strokes · pen',
+                          // "· pen" only on the layer the pen actually
+                          // writes into — yours.
+                          layer.isOwn
+                              ? '${_strokeCount(layer)} · pen'
+                              : _strokeCount(layer),
                           style: TextStyle(color: subColor, fontSize: 11.5),
                         ),
                       ],

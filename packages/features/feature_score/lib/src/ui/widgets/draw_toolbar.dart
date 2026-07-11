@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 ///
 /// In collaboration mode every participant draws in their own auto-assigned
 /// layer colour (there's no manual colour picking), so this shows that colour
-/// as a read-only "your ink" indicator alongside the eraser toggle, undo,
-/// and a "Done" action that exits back to view mode.
+/// as a read-only "your ink" indicator alongside an explicit pen/eraser tool
+/// pair (exactly one is filled-active, so the current tool never has to be
+/// decoded from a lone toggle's state), undo, and a "Done" action that exits
+/// back to view mode.
 class DrawToolbar extends StatelessWidget {
   /// Creates a [DrawToolbar].
   const DrawToolbar({
@@ -74,24 +76,25 @@ class DrawToolbar extends StatelessWidget {
               style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
             ),
             _Divider(color: scheme.outlineVariant),
-            Semantics(
-              button: true,
-              label: eraserActive
-                  ? 'Eraser, active. Double tap to switch back to the pen.'
+            _ToolButton(
+              icon: Icons.draw,
+              inactiveIcon: Icons.draw_outlined,
+              active: !eraserActive,
+              semanticLabel: eraserActive
+                  ? 'Pen. Double tap to switch back to drawing.'
+                  : 'Pen, active.',
+              // Only flips when the eraser is the current tool — the pair
+              // acts as a radio group, not two independent toggles.
+              onPressed: eraserActive ? onEraserToggled : null,
+            ),
+            _ToolButton(
+              icon: Icons.auto_fix_normal,
+              inactiveIcon: Icons.auto_fix_normal_outlined,
+              active: eraserActive,
+              semanticLabel: eraserActive
+                  ? 'Eraser, active.'
                   : 'Eraser. Double tap to activate.',
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: IconButton(
-                  isSelected: eraserActive,
-                  icon: const Icon(Icons.auto_fix_normal_outlined),
-                  selectedIcon: Icon(
-                    Icons.auto_fix_normal,
-                    color: scheme.primary,
-                  ),
-                  onPressed: onEraserToggled,
-                ),
-              ),
+              onPressed: eraserActive ? null : onEraserToggled,
             ),
             Semantics(
               button: true,
@@ -128,6 +131,57 @@ class _Divider extends StatelessWidget {
       height: 26,
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       color: color,
+    );
+  }
+}
+
+/// One of the pen/eraser pair: a rounded-square tool button whose [active]
+/// state renders as a filled primary chip (per the design) rather than
+/// `IconButton`'s disabled greying — the active tool is the emphasized one,
+/// not an unavailable one.
+class _ToolButton extends StatelessWidget {
+  const _ToolButton({
+    required this.icon,
+    required this.inactiveIcon,
+    required this.active,
+    required this.semanticLabel,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final IconData inactiveIcon;
+  final bool active;
+  final String semanticLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(14);
+    return Semantics(
+      button: true,
+      selected: active,
+      label: semanticLabel,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Material(
+          color: active ? scheme.primary : Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: radius,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Icon(
+                active ? icon : inactiveIcon,
+                size: 22,
+                color: active ? scheme.onPrimary : scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

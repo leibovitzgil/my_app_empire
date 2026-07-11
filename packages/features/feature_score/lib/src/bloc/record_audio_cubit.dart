@@ -85,6 +85,22 @@ class RecordAudioCubit extends Cubit<RecordAudioState> {
   /// Discards the reviewed recording and returns to `idle`.
   void discard() => emit(const RecordAudioState.idle());
 
+  /// Abandons whatever is in flight and returns to `idle` — stops the
+  /// recorder if it's still running (so the mic never stays hot after the
+  /// record UI unmounts mid-recording) and throws the result away.
+  Future<void> cancel() async {
+    if (state.status == RecordAudioStatus.recording) {
+      _capTimer?.cancel();
+      _capTimer = null;
+      final subscription = _elapsedSubscription;
+      if (subscription != null) unawaited(subscription.cancel());
+      _elapsedSubscription = null;
+      // The stopped file is deliberately dropped, success or failure.
+      await _recorder.stop();
+    }
+    if (!isClosed) emit(const RecordAudioState.idle());
+  }
+
   /// Confirms the reviewed recording is being kept (the caller is
   /// responsible for turning its path/duration into a saved audio note via
   /// `ScoreBloc.add(AudioNoteSaved(...))`) and returns to `idle`.

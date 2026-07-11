@@ -2,7 +2,7 @@
 // record an audio note -> toggle layers -> clean workspace -> close/reopen.
 //
 // Deliberately does *not* go through `injection.dart`/`App` (which wires
-// real, platform-backed `PdfxRenderService`/`RecordAudioRecorderService`/
+// real, platform-backed `PdfrxRenderService`/`RecordAudioRecorderService`/
 // `JustAudioPlayerService` — none of which function without a platform
 // channel, the same limitation documented in
 // `packages/services/pdf_rendering/test/pdfx_render_service_test.dart`).

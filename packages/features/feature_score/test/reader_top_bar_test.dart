@@ -12,6 +12,7 @@ Future<void> _pump(
   bool cleanWorkspace = false,
   List<AvatarStackPerson> collaborators = const [],
   List<String> collaboratorNames = const [],
+  Duration? recordingElapsed,
   bool compact = false,
   VoidCallback onBack = _noop,
   VoidCallback? onPreviousPage,
@@ -33,6 +34,7 @@ Future<void> _pump(
           cleanWorkspace: cleanWorkspace,
           collaborators: collaborators,
           collaboratorNames: collaboratorNames,
+          recordingElapsed: recordingElapsed,
           compact: compact,
           onBack: onBack,
           onPreviousPage: onPreviousPage,
@@ -132,6 +134,21 @@ void main() {
 
       expect(find.text('Drawing in your layer'), findsOneWidget);
       expect(find.text('Clean workspace'), findsNothing);
+    });
+
+    testWidgets('a live recording outranks every other status badge', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        mode: ScoreMode.regionSelect,
+        cleanWorkspace: true,
+        recordingElapsed: const Duration(seconds: 67),
+      );
+
+      expect(find.text('REC 1:07'), findsOneWidget);
+      expect(find.text('Clean workspace'), findsNothing);
+      expect(find.text('Not synced'), findsNothing);
     });
 
     testWidgets('clean workspace wins over the sync badge outside draw mode', (
