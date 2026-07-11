@@ -10,10 +10,16 @@ Grounded in the codebase as of `ee76c5d` (post PR #50/#51). File references
 were verified against source; line numbers are approximate anchors, not
 promises.
 
+Work is split into **Track A (emulator-first — start now)** and **Track B
+(name-gated)** — see "Two tracks" below — so building proceeds against the
+local emulators while the product name, and with it every irreversible
+identifier, stays undecided.
+
 ## How to use this document
 
-1. Pick the lowest-numbered unblocked task (see the index and each task's
-   **Depends on**).
+1. Pick the lowest-numbered unblocked task **from Track A** (see the
+   two-track index and each task's **Depends on**); Track B stays parked
+   until the product name is decided.
 2. Hand the agent the whole task section, plus the **Working agreements**
    below. A prompt template:
 
@@ -64,18 +70,53 @@ promises.
   (invite delivery/acceptance, purge, entitlement-gated caps) go through
   Cloud Functions; client-side checks remain for UX only.
 
+## Two tracks: emulator-first now, name-gated later
+
+The product name is undecided, and the name is what locks the truly
+irreversible identifiers: the bundle id / applicationId (permanent once
+shipped), the Firebase project ids, the invite-link domain, and the
+store / RevenueCat records. Everything else runs against the local
+Firebase Emulator Suite under the `demo-duet` project id — and the
+`demo-*` prefix is an offline guarantee: the CLI never contacts (or
+creates) a real Firebase resource for it. The in-repo name `duet` is a
+codename and can stay regardless of the final product name.
+
+- **Track A — start now.** Emulator- and fake-backed; no real project,
+  no name, no console access needed. Real hardware included:
+  `dev_device.sh` already runs a physical iPhone/iPad against the LAN
+  emulators.
+- **Track B — name-gated.** Everything that embeds the name or needs a
+  real project/store, plus the live-verification tail of Track A work.
+  The one true emulator blind spot is push: **there is no FCM emulator**,
+  so real delivery verification always sits here.
+
+When the name lands: run NAME → M0.H → M0.1 → M0.2 → M0.3 → M0.5, then
+burn down the verification backlog below in one focused integration pass
+(budget about a week — it is config and verification, not rewrites,
+because every backend sits behind a swappable contract).
+
+### Track B verification backlog (the ▸B items)
+
+Deferred live checks for tasks built in Track A, in rough order once
+Track B's M0 lands: M2.5 App Check enforcement flip · M4.5 two-device
+staging demo · M5.3/M5.4 real FCM delivery (APNs key;
+`firebase_messaging` becomes a real dependency) · M5.5 FCM tap-through
+wiring · M6.4 staging console flag flip · M7.1 forced crash appears in
+Crashlytics · M7.2 DebugView + funnel dashboards · M7.3 perf dashboards ·
+M7.4 hosted policy URLs + store privacy forms · M7.5 staging export run ·
+M7.6 real Remote Config keys + review-prompt check on staging.
+
 ## Task index
 
-Legend: ☐ not started · [HUMAN] needs non-agent access.
+Legend: ☐ not started · [HUMAN] needs non-agent access · ▸B = built in
+Track A with emulators/fakes, keeps one live-verification step in the
+Track B backlog.
+
+### Track A — emulator-first (start now)
 
 | ID | Task | Depends on |
 | --- | --- | --- |
-| M0.H | ☐ [HUMAN] Firebase projects, Blaze, regions, budgets | — |
-| M0.1 | ☐ Commit real platform folders + flavors | M0.H (bundle ids) |
-| M0.2 | ☐ `flutterfire configure` ×3 + entry-point restructure | M0.H, M0.1 |
-| M0.3 | ☐ App Check (monitoring mode) | M0.2 |
-| M0.4 | ☐ `firebase.json` deploy targets + Functions scaffold | M0.H |
-| M0.5 | ☐ CI: firebase deploys + existing workflow fixes | M0.4 |
+| M0.4 | ☐ `firebase.json` deploy targets + Functions scaffold | — |
 | M1.1 | ☐ Auth error taxonomy over `Result` | — |
 | M1.2 | ☐ Email/password sign-up | M1.1 |
 | M1.3 | ☐ Password reset + email verification | M1.2 |
@@ -90,7 +131,7 @@ Legend: ☐ not started · [HUMAN] needs non-agent access.
 | M2.2 | ☐ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
 | M2.3 | ☐ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
 | M2.4 | ☐ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
-| M2.5 | ☐ Directory lookup hardening (callable + App Check + rate limit) | M2.4, M0.3 |
+| M2.5 | ☐ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
 | M3.1 | ☐ `FirestorePieceRepository` | M2.2, M2.3 |
 | M3.2 | ☐ `FirestoreAnnotationRepository` | M3.1 |
 | M3.3 | ☐ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
@@ -103,34 +144,45 @@ Legend: ☐ not started · [HUMAN] needs non-agent access.
 | M4.2 | ☐ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☐ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☐ Soft-delete tombstones for audio notes | M3.2 |
-| M4.5 | ☐ Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
-| M5.H | ☐ [HUMAN] Invite-link domain + DNS + store team ids | — |
-| M5.1 | ☐ Real `DeepLinkService` + Universal/App Links + fallback page | M5.H, M0.2 |
+| M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☐ Invite tokens as expiring Firestore docs | M2.4 |
-| M5.3 | ☐ Push fan-out: `onInboxMessageCreated` → FCM + token pruning | M2.4, M0.4 |
-| M5.4 | ☐ Batched annotation digest push | M5.3, M3.2 |
-| M5.5 | ☐ Notification tap-through → exact piece | M5.1, M5.3 |
+| M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
+| M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
+| M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
 | M5.6 | ☐ In-app invite inbox UI (email-invite acceptance) | M2.4 |
-| M5.7 | ☐ Two-device staging validation + `duet-device` skill update | M5.1–M5.6 |
-| M6.H | ☐ [HUMAN] RevenueCat + store products + API keys | — |
-| M6.1 | ☐ Wire `RevenueCatService` (flavor-gated) | M6.H, M0.2, M1.1 |
-| M6.2 | ☐ Paywall on real offerings + restore + billing states | M6.1 |
-| M6.3 | ☐ Server-side entitlements + cap enforcement | M6.1, M2.4 |
-| M6.4 | ☐ Remote Config package contract + Duet wiring | M0.2 |
-| M7.1 | ☐ New `crash_reporting` service package + wiring | M0.2 |
-| M7.2 | ☐ Analytics: event catalogue + funnel instrumentation | M0.2 |
-| M7.3 | ☐ Performance traces on PDF open / page render | M7.1 |
-| M7.4 | ☐ Legal surfaces: policy/ToS, consent, store data maps | — |
-| M7.5 | ☐ GDPR self-service data export | M1.8 |
-| M7.6 | ☐ `review_prompter` + `app_updater` wiring | M6.4 |
+| M6.4 | ☐ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
+| M7.1 | ☐ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
+| M7.2 | ☐ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
+| M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
+| M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
+| M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
+| M7.6 | ☐ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
 | M8.1 | ☐ Real page thumbnails + thumbnail cache | — |
 | M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
 | M8.3 | ☐ Audio note size caps + compression | — |
 | M8.4 | ☐ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
 | M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
 | M9.1 | ☐ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
-| M9.2 | ☐ Tagged builds → TestFlight / Play internal | M0.2, M9.H |
+
+### Track B — name-gated (unblocks when the product name is decided)
+
+| ID | Task | Depends on |
+| --- | --- | --- |
+| NAME | ☐ [HUMAN] Decide the product name → bundle-id root | — |
+| M0.H | ☐ [HUMAN] Firebase projects, Blaze, regions, budgets | NAME |
+| M0.1 | ☐ Commit real platform folders + flavors | M0.H |
+| M0.2 | ☐ `flutterfire configure` ×3 + entry-point restructure | M0.H, M0.1 |
+| M0.3 | ☐ App Check (monitoring mode) | M0.2 |
+| M0.5 | ☐ CI: firebase deploys + existing workflow fixes | M0.H, M0.4 |
+| M5.H | ☐ [HUMAN] Invite-link domain + DNS + store team ids | NAME |
+| M5.1 | ☐ Real `DeepLinkService` + Universal/App Links + fallback page | M5.H, M0.2 |
+| M5.7 | ☐ Two-device staging validation + `duet-device` skill update | M5.1 + M5.x ▸B items |
+| M6.H | ☐ [HUMAN] RevenueCat + store products + API keys | NAME |
+| M6.1 | ☐ Wire `RevenueCatService` (flavor-gated) | M6.H, M0.2, M1.1 |
+| M6.2 | ☐ Paywall on real offerings + restore + billing states | M6.1 |
+| M6.3 | ☐ Server-side entitlements + cap enforcement | M6.1, M2.4 |
 | M9.H | ☐ [HUMAN] Signing certs, store listings, demo account | M6.H |
+| M9.2 | ☐ Tagged builds → TestFlight / Play internal | M0.2, M9.H |
 | M9.3 | ☐ Store screenshot automation | M9.2 |
 | M9.4 | ☐ App Review readiness pack | M1.9, M9.H |
 | M9.5 | ☐ Launch runbook | M9.1 |
@@ -139,7 +191,7 @@ Legend: ☐ not started · [HUMAN] needs non-agent access.
 
 | Decision | Gates | Default |
 | --- | --- | --- |
-| Bundle-id / applicationId root (real org domain) | M0.1 | `com.<org>.duet` + `.dev`/`.stg` suffixes |
+| Product name → bundle-id/applicationId root | **All of Track B** (M0.1 first) | `com.<org>.<name>` + `.dev`/`.stg` suffixes; in-repo `duet` stays a codename |
 | RevenueCat vs StoreKit2/Play Billing | M6.* | RevenueCat (service class already exists) |
 | Invite-link custom domain | M5.H, M5.1 | `link.<app-domain>` |
 | Consent mechanism (CMP vs minimal in-house) | M7.4 | Minimal in-house consent record; CMP only if ads/tracking added |
@@ -154,6 +206,8 @@ Legend: ☐ not started · [HUMAN] needs non-agent access.
 Covers every plan bullet of M0: projects/flavors/entry points (M0.H, M0.1,
 M0.2), App Check + regions + budgets (M0.3 + M0.H), CI secrets and deploy
 targets for rules/indexes/functions/storage/hosting (M0.4, M0.5).
+**Track note:** only M0.4 is Track A — it runs entirely against the
+`demo-duet` emulators; the rest of M0 is name-gated Track B.
 
 ### M0.H — [HUMAN] Create the Firebase projects & accounts
 
@@ -286,6 +340,9 @@ flow (`./dev.sh`) unaffected; gate green.
 storage rules, functions, and hosting; a `functions/` workspace exists and
 builds.
 
+**Track A entry point.** Everything here targets the emulator suite under
+`demo-duet`; no real project or product name is needed.
+
 **Context.** `apps/duet/firebase.json` today has only
 `firestore.rules` + auth/firestore emulators (9099/8080, bound to
 `0.0.0.0`, `ui` disabled). `.firebaserc` maps `default: demo-duet`. There
@@ -300,12 +357,14 @@ the repo.
    `hosting` (public dir `hosting/` with a placeholder page; M5.1 replaces
    it), and emulator entries for `functions`, `storage`, `hosting`
    (keep `0.0.0.0` binding — `dev_device.sh` depends on LAN access).
-2. `.firebaserc`: aliases `dev`/`staging`/`prod` → the three projects,
-   keeping `default: demo-duet` for the emulator flow.
+2. `.firebaserc`: keep `default: demo-duet` (the emulator flow); adding
+   the `dev`/`staging`/`prod` aliases is a one-line Track B follow-up
+   once M0.H creates the projects.
 3. Scaffold `apps/duet/functions/`: TypeScript, `firebase-functions` v2
    APIs, eslint + vitest (or jest), `npm run build|lint|test`, plus one
    trivial callable `healthcheck` proving deploy/emulation. Pin the
-   Functions **region** to the M0.H choice in a shared `region.ts`.
+   Functions **region** in a shared `region.ts` (the emulator ignores it;
+   placeholder until M0.H fixes the real region — leave a TODO).
 4. Update `apps/duet/dev.sh`: `--only auth,firestore` grows to
    `auth,firestore,functions,storage` once functions exist; build functions
    before `emulators:start` (npm install/build step with a cache check so
@@ -322,6 +381,10 @@ untouched (functions are outside melos).
 
 **Goal:** Rules/indexes/functions deploy from CI with the service account;
 the two existing workflows stop drifting.
+
+**Track B** — deploys need real projects. While deferred, land the
+PR-side functions build/test job early via M9.1 instead (and the two
+workflow fixes below can ride any Track A CI change).
 
 **Context (bugs to fix while here).**
 - `.github/workflows/deploy_apps.yaml` calls `melos run analyze` — that
@@ -817,9 +880,11 @@ lookups.
    *and* non-discoverable); per-caller rate limit (e.g. 20/min via a
    `rateLimits/{uid}` doc with windowed counters, or the
    firebase-functions rate-limiter pattern — document the choice).
-2. Require App Check on the callable (`enforceAppCheck: true`); flip App
-   Check **enforcement** on for Firestore/Functions in staging first,
-   then prod (**[HUMAN]** console toggles; M0.3 set up monitoring).
+2. Prepare App Check enforcement on the callable via an env-driven
+   `enforceAppCheck` flag, **off on the emulator** so Track A tests run.
+   **[Track B]** turn it on and flip console **enforcement** for
+   Firestore/Functions in staging first, then prod (**[HUMAN]** console
+   toggles; M0.3 set up monitoring).
 3. Client: `FirestoreUserDirectory.lookupByEmail` → callable under
    Firebase; direct-Firestore read path removed; rules for `usersByEmail
    get` can then drop to self-only (update rules + M1.7 tests; delete the
@@ -829,7 +894,8 @@ lookups.
 
 **Done when:** stranger enumeration/brute-force is bounded by the rate
 limit; both v1-risk comment blocks in `firestore.rules` are gone; plan M2
-risk-closure bullet fully done.
+risk-closure bullet done except the App Check enforcement flip, which
+completes in Track B.
 
 ---
 
@@ -1291,12 +1357,15 @@ emulator **in CI** (two physical devices on staging is the human half).
    fast). Known-fiddly: if `flutter test -d chrome` proves flaky on the
    runner, fall back to `flutter drive -d web-server` and document it in
    the workflow file.
-3. **[HUMAN]** Two-device staging session: annotate the same sheet in
-   real time; capture screen recordings for the launch material; log
-   latency observations into M8's budget doc.
+3. **[HUMAN, Track B]** Two-device staging session: annotate the same
+   sheet in real time; capture screen recordings for the launch
+   material; log latency observations into M8's budget doc. (Track A
+   already covers real hardware: `dev_device.sh` drives physical devices
+   against the LAN emulators.)
 
-**Done when:** the CI job is green and required; a deliberately broken
-sync assertion fails it; human staging demo recorded — plan-M4 exit met.
+**Done when (Track A):** the CI job is green and required; a deliberately
+broken sync assertion fails it. **(▸B):** the staging demo recording
+lands with Track B — then the plan-M4 exit is fully met.
 
 ---
 
@@ -1307,7 +1376,9 @@ page (M5.1), single-use expiring token docs (M5.2), the three Functions
 behaviors — invite push, digest push, token pruning (M5.3, M5.4;
 inbox-write authorization landed in M2.4), tap-through to the exact piece
 (M5.5), plus the invite-inbox UI the plan implies but never names (M5.6)
-and the staging exit + skill update (M5.7).
+and the staging exit + skill update (M5.7). **Track note:** M5.2/M5.6 are
+pure Track A; M5.3/M5.4/M5.5 build in Track A with mocked delivery (no
+FCM emulator exists); M5.H/M5.1/M5.7 are Track B.
 
 ### M5.H — [HUMAN] Invite-link domain
 
@@ -1398,6 +1469,11 @@ reused across two emulator accounts; rules tests deny direct token reads.
 **Goal:** Invites (and nudges) reach the invitee's lock screen — the
 first real server-side sender.
 
+**Track split:** the function, prune logic, and mocked-messaging tests
+are Track A; real delivery (APNs key upload, moving `firebase_messaging`
+to a real dependency, lock-screen verification) is the ▸B backlog item —
+there is no FCM emulator.
+
 **Context.** `deviceTokens/{uid}` docs (`{tokens: [...]}`) are written by
 `DeviceTokenSync` (registered in injection, token sources flip on
 `useFirebase`) but **nothing reads them** ("forward-provisioning", per the
@@ -1425,10 +1501,10 @@ contract docs). Local notifications flow through
 5. Functions tests with the FCM emulator-stub pattern (mock `admin
    .messaging()`); prune path unit-tested.
 
-**Done when:** invite sent from device A shows a system notification on
-backgrounded device B (staging, human-verified); dead tokens get pruned
-(assert via functions test); `deviceTokens`' "nothing reads it" doc
-comments updated.
+**Done when (Track A):** functions tests green including the prune path;
+`deviceTokens`' "nothing reads it" doc comments updated. **(▸B):** an
+invite sent from device A shows a system notification on backgrounded
+device B (staging, human-verified).
 
 ### M5.4 — Batched annotation digest push
 
@@ -1451,12 +1527,17 @@ per stroke.
 4. Author's own edits never notify the author.
 5. Tests: grouping/copy unit tests; scheduled-drain emulator test.
 
-**Done when:** burst of 5 strokes + 2 notes → exactly one digest push per
-recipient; muted user receives none; gate green.
+**Done when:** burst of 5 strokes + 2 notes → exactly one digest per
+recipient and muted users receive none (asserted in emulator/unit tests —
+Track A); real delivery rides M5.3's ▸B backlog item; gate green.
 
 ### M5.5 — Notification tap-through → the exact piece
 
 **Goal:** Tap a push → the app opens the sheet (plan M5 bullet 3).
+
+**Track split:** steps 1, 3, and 4 (route, parser, local-notification
+taps, tests) are Track A — `FakeDeepLinkService.ingest` drives them; step
+2's FCM tap wiring is the ▸B item (needs M5.1/M5.3 live).
 
 **Context (gaps).** There is **no `/piece/:id` route** — pieces open only
 via in-process `Navigator.push` from the library
@@ -1470,7 +1551,7 @@ the designed seam but is only called from tests.
    resolves the piece (`PieceRepository.getPiece`) → `DuetScorePage`;
    extend `duetDeepLinkParser` to map `/piece/<id>` URIs; unknown/denied
    ids land on `/home` with an `AppSnackbar` (G4).
-2. FCM taps: in the Firebase entry points, wire
+2. **[Track B]** FCM taps: in the Firebase entry points, wire
    `FirebaseMessaging.onMessageOpenedApp` +
    `getInitialMessage()` → extract `data.deepLink` →
    `getIt<DeepLinkService>().ingest(uri)` — the existing
@@ -1543,6 +1624,11 @@ B's gallery; headless flow test drives the same UI (G2).
 Covers plan M6: RevenueCat swap (M6.1), paywall/restore/billing states
 (M6.2), server-side entitlement enforcement (M6.3), Remote Config flags
 (M6.4). Can start any time after M1; M6.3 depends on M2.4's callables.
+**Track note:** M6.4 is Track A (contract + in-memory fake — there is no
+Remote Config emulator, so the fake is the dev path anyway); M6.H and
+M6.1–M6.3 are Track B, with the simulated service keeping paywall flows
+testable meanwhile. M6.3's function-side cap code can be built on the
+emulator earlier if caps matter before monetization goes live.
 
 ### M6.H — [HUMAN] RevenueCat + store products
 
@@ -1658,18 +1744,19 @@ Separately `app_updater` reads RC directly — two independent consumers
 2. Duet keys (defaults committed in code): `paywall_enabled`,
    `invite_links_enabled` (kill-switches), `pricing_experiment` (string
    passthrough for offering selection), plus the existing three keys.
-3. Injection: Firebase branch binds the real service (init after
-   `initializeApp`); mock branch the fake (G2). Consumers pull via the
-   contract only.
+3. Injection: mock branch binds the seeded fake now; **[Track B]** the
+   Firebase branch binds the real service (init after `initializeApp`,
+   needs M0.2) (G2). Consumers pull via the contract only.
 4. Wire one real use now (kill-switch: `invite_links_enabled == false`
    hides the link-share affordance in the invite sheet) so the plumbing
    is proven, not speculative.
 5. Tests: fake-driven bloc/widget test of the kill-switch; contract unit
    tests.
 
-**Done when:** flipping the flag in the staging console (after fetch
-interval) hides link sharing; gate green; `showcase` untouched or
-trivially updated.
+**Done when (Track A):** the fake-driven kill-switch test proves the
+plumbing and the contract refactor is complete; gate green; `showcase`
+untouched or trivially updated. **(▸B):** flipping the flag in the
+staging console (after fetch interval) hides link sharing.
 
 ---
 
@@ -1678,7 +1765,10 @@ trivially updated.
 Covers plan M7: analytics + Crashlytics + perf traces (M7.1–M7.3), legal
 compliance / consent / labels + GDPR export (M7.4, M7.5; deletion lives in
 M1.8/M1.9), review_prompter + app_updater (M7.6). Can start any time
-after M1, parallel with M3–M5.
+after M1, parallel with M3–M5. **Track note:** all six tasks are Track A
+against fakes/the emulator; wherever a done-when below names a
+staging/console/dashboard check, read it as that task's ▸B backlog item —
+the code, contracts, and tests land now.
 
 ### M7.1 — New `crash_reporting` service package + wiring
 
@@ -1998,12 +2088,16 @@ table.
 
 Covers plan M9: CI/CD gate + store lanes (M9.1, M9.2), screenshot
 automation (M9.3), store readiness incl. review notes + demo account
-(M9.H, M9.4), launch runbook + staged rollout (M9.5).
+(M9.H, M9.4), launch runbook + staged rollout (M9.5). **Track note:**
+M9.1 is Track A (all its inputs are emulator-based); the rest is Track B.
 
 ### M9.1 — CI: the full PR gate
 
 **Goal:** One required PR gate: melos gate + rules tests + emulator E2E
 (plan M9 bullet 1) — mostly assembling prior tasks.
+
+**Track A.** Every input is emulator-based. While M0.5 stays deferred,
+include its PR-side functions build/test job here.
 
 **Steps**
 1. `ci.yaml`: ensure jobs = analyze-and-test (existing), goldens
@@ -2135,3 +2229,9 @@ practice tools (metronome, tuner) · web reader.
   forward into M2.4 so M3's E2E isn't blocked.
 - The plan's sequencing holds at task level: M0 → M1 → M2 → M3 → {M4, M5}
   → M8 → M9, with M6/M7 parallel after M1 (M6.3 additionally needs M2.4).
+- Re-cut (same day): tasks regrouped into **Track A (emulator-first)** and
+  **Track B (name-gated)** to defer all real-Firebase setup until the
+  product name is decided. Task IDs and bodies are unchanged apart from
+  track annotations; Track A's entry point is M0.4 (was M0.H). The
+  `demo-*` emulator project-id convention guarantees Track A can never
+  touch a real Firebase resource.
