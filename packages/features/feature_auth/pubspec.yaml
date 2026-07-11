@@ -11,6 +11,8 @@ dependencies:
   bloc: ^9.2.1
   core_ui:
     path: ../../core/core_ui
+  core_utils:
+    path: ../../core/core_utils
   equatable: ^2.0.5
   firebase_auth: ^6.5.4
   firebase_core: ^4.11.0

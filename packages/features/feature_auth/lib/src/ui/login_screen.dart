@@ -1,5 +1,6 @@
 import 'package:core_ui/core_ui.dart';
 import 'package:feature_auth/src/bloc/auth_bloc.dart';
+import 'package:feature_auth/src/ui/auth_failure_messages.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -33,7 +34,9 @@ class LoginScreen extends StatelessWidget {
         return SignInView(
           logo: logo,
           title: title,
-          errorText: state.status == AuthStatus.failure ? state.error : null,
+          errorText: state.status == AuthStatus.failure
+              ? state.error?.message
+              : null,
           onEmailSignIn: (email, password) =>
               bloc.add(AuthLoginRequested(email, password)),
           socialButtons: [

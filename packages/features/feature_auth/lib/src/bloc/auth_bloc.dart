@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:core_utils/core_utils.dart';
 import 'package:equatable/equatable.dart';
+import 'package:feature_auth/src/domain/auth_failure.dart';
 import 'package:feature_auth/src/domain/auth_repository.dart';
 
 part 'auth_event.dart';
@@ -43,7 +45,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         return emit(const AuthState.unauthenticated());
       case AuthStatus.failure:
-        return emit(const AuthState.failure('Unknown error'));
+        return emit(const AuthState.failure(AuthFailure.unknown()));
     }
   }
 
@@ -51,6 +53,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // Fire-and-forget: a failed sign-out has no surface on the login screen,
+    // and flipping status to failure while still authenticated would fight
+    // the routers' auth redirects. Settings owns sign-out UX (M1.5) and
+    // surfaces failures there.
     await _authRepository.logout();
   }
 
@@ -58,32 +64,39 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
-    try {
-      await _authRepository.login(event.email, event.password);
-    } on Object catch (e) {
-      emit(AuthState.failure(e.toString()));
-    }
+    _emitOnFailure(
+      await _authRepository.login(event.email, event.password),
+      emit,
+    );
   }
 
   Future<void> _onAuthGoogleSignInRequested(
     AuthGoogleSignInRequested event,
     Emitter<AuthState> emit,
   ) async {
-    try {
-      await _authRepository.signInWithGoogle();
-    } on Object catch (e) {
-      emit(AuthState.failure(e.toString()));
-    }
+    _emitOnFailure(await _authRepository.signInWithGoogle(), emit);
   }
 
   Future<void> _onAuthAppleSignInRequested(
     AuthAppleSignInRequested event,
     Emitter<AuthState> emit,
   ) async {
-    try {
-      await _authRepository.signInWithApple();
-    } on Object catch (e) {
-      emit(AuthState.failure(e.toString()));
+    _emitOnFailure(await _authRepository.signInWithApple(), emit);
+  }
+
+  /// Folds a failed [result] into [AuthState.failure]; success emits nothing
+  /// (the [AuthRepository.user] stream flips the state to authenticated).
+  ///
+  /// A user-initiated cancel also lands here as `AuthFailure.cancelled()` —
+  /// consumers keying off `status == failure` must treat that kind as benign
+  /// (LoginScreen maps it to no message at all).
+  void _emitOnFailure(Result<void> result, Emitter<AuthState> emit) {
+    if (result case ResultFailure<void>(:final error)) {
+      emit(
+        AuthState.failure(
+          error is AuthFailure ? error : AuthFailure.unknown(error),
+        ),
+      );
     }
   }
 
