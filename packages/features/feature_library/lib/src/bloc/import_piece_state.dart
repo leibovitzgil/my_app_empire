@@ -25,6 +25,7 @@ final class ImportPieceState extends Equatable {
     this.sourcePath,
     this.title = '',
     this.isSubmitting = false,
+    this.progress,
     this.piece,
     this.error,
     this.submitError,
@@ -54,10 +55,17 @@ final class ImportPieceState extends Equatable {
   /// The (editable) title shown in the naming step.
   final String title;
 
-  /// Whether [PieceRepository.importPiece] is in flight.
+  /// Whether the import (create + upload) is in flight.
   final bool isSubmitting;
 
-  /// The created piece, once [status] is [ImportStatus.success].
+  /// Base-PDF upload progress (0..1) while [isSubmitting], or `null` before
+  /// the upload step starts / after it settles.
+  final double? progress;
+
+  /// The created piece. Set once [PieceRepository.importPiece] succeeds — kept
+  /// even if the subsequent upload fails, so a retry re-uploads rather than
+  /// creating a duplicate piece; navigated on once [status] is
+  /// [ImportStatus.success].
   final Piece? piece;
 
   /// Why the picked file was rejected, once [status] is
@@ -78,6 +86,8 @@ final class ImportPieceState extends Equatable {
     String? sourcePath,
     String? title,
     bool? isSubmitting,
+    double? progress,
+    bool clearProgress = false,
     Piece? piece,
     String? error,
     String? submitError,
@@ -88,6 +98,7 @@ final class ImportPieceState extends Equatable {
       sourcePath: sourcePath ?? this.sourcePath,
       title: title ?? this.title,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      progress: clearProgress ? null : (progress ?? this.progress),
       piece: piece ?? this.piece,
       error: error ?? this.error,
       submitError: clearSubmitError ? null : (submitError ?? this.submitError),
@@ -100,6 +111,7 @@ final class ImportPieceState extends Equatable {
     sourcePath,
     title,
     isSubmitting,
+    progress,
     piece,
     error,
     submitError,

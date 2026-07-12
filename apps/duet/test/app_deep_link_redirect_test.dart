@@ -112,6 +112,7 @@ void main() {
         pieceRepository: getIt<PieceRepository>(),
       ),
     );
+    getIt.registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new);
 
     // The routed destinations resolve these at build time: the score page's
     // recording-path seam, and the settings page's repository + permission

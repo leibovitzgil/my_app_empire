@@ -17,11 +17,13 @@ import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
+import 'package:duet/data/firebase_piece_binary_store.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_pairing/feature_pairing.dart';
 import 'package:feature_settings/feature_settings.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
@@ -263,6 +265,22 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       pieceRepository: getIt<PieceRepository>(),
     ),
   );
+
+  // Base-PDF upload on import (M3.3). The default composition keeps binaries
+  // on-device (the local repositories own them), so there's nothing to push —
+  // NoopPieceBinaryStore (G2: no Firebase object headless). Under Firebase the
+  // import flow uploads `pieces/{id}/base.pdf` with progress; M3.6 flips the
+  // piece repository onto Firestore to match.
+  if (useFirebase) {
+    getIt.registerLazySingleton<PieceBinaryStore>(
+      () => FirebasePieceBinaryStore(
+        storage: FirebaseStorage.instance,
+        firestore: FirebaseFirestore.instance,
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new);
+  }
 
   getIt.registerLazySingleton<ReviewSyncService>(
     () => FileShareReviewSyncService(

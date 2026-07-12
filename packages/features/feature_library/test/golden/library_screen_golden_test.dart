@@ -127,6 +127,7 @@ Future<void> _pump(
         child: LibraryHomeScreen(
           pieceRepository: _MockPieceRepository(),
           renderService: _MockPdfRenderService(),
+          binaryStore: const NoopPieceBinaryStore(),
           currentUserId: 'me',
           appName: 'Duet',
           currentUserName: 'Gil',

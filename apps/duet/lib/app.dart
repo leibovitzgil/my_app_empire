@@ -246,6 +246,7 @@ class HomeScreen extends StatelessWidget {
           child: LibraryPage(
             pieceRepository: getIt<PieceRepository>(),
             renderService: getIt<PdfRenderService>(),
+            binaryStore: getIt<PieceBinaryStore>(),
             currentUserId: currentUserId,
             // Full-screen destinations go through the router (score,
             // collaborators); transient UI (the invite sheet) stays an

@@ -48,6 +48,7 @@ class LibraryPage extends StatelessWidget {
   const LibraryPage({
     required this.pieceRepository,
     required this.renderService,
+    required this.binaryStore,
     required this.currentUserId,
     required this.onOpenScore,
     required this.appName,
@@ -65,6 +66,9 @@ class LibraryPage extends StatelessWidget {
 
   /// Used by the import flow to validate a picked PDF opens cleanly.
   final PdfRenderService renderService;
+
+  /// Uploads a created piece's base PDF with progress (see the import flow).
+  final PieceBinaryStore binaryStore;
 
   /// The signed-in user's id.
   final String currentUserId;
@@ -126,6 +130,7 @@ class LibraryPage extends StatelessWidget {
       child: LibraryHomeScreen(
         pieceRepository: pieceRepository,
         renderService: renderService,
+        binaryStore: binaryStore,
         currentUserId: currentUserId,
         onOpenScore: onOpenScore,
         onInvitePiece: onInvitePiece,
@@ -148,6 +153,7 @@ class LibraryHomeScreen extends StatefulWidget {
   const LibraryHomeScreen({
     required this.pieceRepository,
     required this.renderService,
+    required this.binaryStore,
     required this.currentUserId,
     required this.onOpenScore,
     required this.appName,
@@ -166,6 +172,9 @@ class LibraryHomeScreen extends StatefulWidget {
 
   /// Used by the import flow to validate a picked PDF opens cleanly.
   final PdfRenderService renderService;
+
+  /// See [LibraryPage.binaryStore].
+  final PieceBinaryStore binaryStore;
 
   /// The signed-in user's id.
   final String currentUserId;
@@ -388,6 +397,7 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
         builder: (_) => ImportPiecePage(
           pieceRepository: widget.pieceRepository,
           renderService: widget.renderService,
+          binaryStore: widget.binaryStore,
           filePicker: widget.filePicker,
           ownerName: widget.currentUserName,
         ),

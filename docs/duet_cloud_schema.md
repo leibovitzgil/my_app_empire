@@ -40,7 +40,9 @@ and who may touch each document, so later tasks don't re-decide any of it.
 
 The piece metadata document. Mirrors the `Piece` entity
 (`packages/core/pieces/lib/src/domain/piece.dart`) and its local JSON shape
-(`piece_mappers.dart`), with three deliberate cloud-only changes noted inline.
+(`piece_mappers.dart`), with the deliberate cloud-only changes noted inline
+(`participantIds` materialized, `basePdfPath` dropped, Timestamp dates, and the
+`basePdfUploaded` upload flag).
 
 ```jsonc
 {
@@ -52,6 +54,7 @@ The piece metadata document. Mirrors the `Piece` entity
     { "uid": "uid_def", "name": "Ravi", "email": "ravi@example.com" }
   ],
   "basePdfChecksum": "9f86d081…",     // sha256 hex of the base PDF bytes
+  "basePdfUploaded": true,            // cloud-only — base.pdf is durably in Storage
   "createdAt": <Timestamp>,
   "updatedAt": <Timestamp>
 }
@@ -65,6 +68,7 @@ The piece metadata document. Mirrors the `Piece` entity
 | `participantIds` | `string[]` | **Materialized** = `[ownerId, ...collaborator uids]`. Today this is a *derived getter* (`Piece.participantIds`); in Firestore it's a stored field so a client can run `where('participantIds', arrayContains: myUid)`. Kept in sync **only** by the collaborator-mutation Function (never client-written directly). |
 | `collaborators` | `array<{uid, name?, email?}>` | Embedded, insertion-ordered (earliest-invited first). Exactly the `Collaborator` shape from `piece_mappers.dart`. |
 | `basePdfChecksum` | `string` | sha256 hex of the original PDF bytes (`PdfRenderService.checksum` → `sha256.convert(bytes)`). **Pins "same base PDF" so region-anchored annotations can't silently misalign onto a different copy** — annotations are fractional page coordinates, meaningful only against one exact document; `review_sync` already hard-fails on a mismatch (`file_share_review_sync_service`), and the cloud model verifies the local copy against the Storage object's `checksum` metadata before applying remote annotations. Also the [Storage-object dedupe](#cloud-storage-layout) key (suppresses re-uploading an identical PDF for the same piece). |
+| `basePdfUploaded` | `bool?` | **New (cloud-only), M3.3.** Set `true` by `FirebasePieceBinaryStore` once `pieces/{id}/base.pdf` is durably in Storage. Import ordering is *create piece doc → upload → stamp `basePdfUploaded`*, so an app killed mid-upload leaves `false`/absent — a resume/repair signal (M8.4 audits it). Owner-written (a non-membership field, so the M2.2 update rule permits it); `null`/absent = not yet uploaded. |
 | `createdAt` | `Timestamp` | First import. |
 | `updatedAt` | `Timestamp` | Last metadata change. Drives library recency ordering and the unread heuristic. |
 

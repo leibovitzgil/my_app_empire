@@ -78,6 +78,7 @@ void main() {
           home: LibraryPage(
             pieceRepository: repository,
             renderService: renderService,
+            binaryStore: const NoopPieceBinaryStore(),
             currentUserId: currentUserId,
             appName: 'Duet',
             onOpenScore: onOpenScore ?? (_) {},

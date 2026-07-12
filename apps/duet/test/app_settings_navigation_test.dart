@@ -139,6 +139,7 @@ void main() {
       ..registerSingleton<CurrentUser>(CurrentUser(Stream.value('user-1')))
       ..registerSingleton<CurrentUserName>(CurrentUserName(Stream.value(null)))
       ..registerSingleton<PieceRepository>(_EmptyPieceRepository())
+      ..registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new)
       ..registerSingleton<PdfRenderService>(_UnusedPdfRenderService())
       ..registerLazySingleton<MonetizationService>(
         SimulatedMonetizationService.new,
