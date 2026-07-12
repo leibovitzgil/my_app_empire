@@ -20,14 +20,11 @@ rules_version = '2';
 //     (G6). `inviteTokens` (M5.2) and `entitlements` (M6.3) are deliberately
 //     left denied-by-default until their milestones add rules + writers.
 //
-// v1 accepted risks (FIX-4): a `usersByEmail` read is an exact-key GET,
-// gated on the target document's own `discoverable` flag — a
-// non-discoverable entry is unreadable by anyone but its own owner,
-// identical (from a caller's perspective) to no entry existing at all —
-// and `list`/`query` is never allowed, so a client can never enumerate the
-// directory, only resolve one email it already knows. That mitigation is
-// NOT rate-limited by these rules (nor by the emulator); rate-limiting is
-// closed by M2.5 (App Check + a lookup callable). Out of scope for v1.
+// Discovery is server-only (M2.5): a client may read only its *own*
+// `usersByEmail` entry — resolving someone else's email now goes through the
+// rate-limited `lookupEmail` Cloud Function (Admin SDK), which honors
+// `discoverable` and bounds enumeration/brute-force per caller. `list`/`query`
+// is never allowed. This closed the v1 un-rate-limited-lookup vector.
 //
 // `userInbox` writes are server-only (M2.4): a client can read and mark its
 // own messages read, but can no longer `create` one — the `sendInvite` Cloud
@@ -36,10 +33,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /usersByEmail/{emailKey} {
+      // Self-read only — cross-user discovery is the `lookupEmail` callable's
+      // job (see the header note). Never a list/query.
       allow get: if request.auth != null &&
-        (resource.data.discoverable == true ||
-          resource.data.uid == request.auth.uid);
-      // Never a list/query — see the risk note above.
+        resource.data.uid == request.auth.uid;
       allow list: if false;
       allow create: if request.auth != null &&
         request.auth.uid == request.resource.data.uid;

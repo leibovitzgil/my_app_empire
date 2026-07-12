@@ -137,7 +137,7 @@ in the Track B backlog.
 | M2.2 | ☑ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
 | M2.3 | ☑ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
 | M2.4 | ☑ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
-| M2.5 | ☐ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
+| M2.5 | ☑ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
 | M3.1 | ☐ `FirestorePieceRepository` | M2.2, M2.3 |
 | M3.2 | ☐ `FirestoreAnnotationRepository` | M3.1 |
 | M3.3 | ☐ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
@@ -1104,6 +1104,30 @@ lookups.
 limit; both v1-risk comment blocks in `firestore.rules` are gone; plan M2
 risk-closure bullet done except the App Check enforcement flip, which
 completes in Track B.
+
+**Landed (Track A).** `functions/src/lookupEmail.ts` — a rate-limited
+callable with the same semantics as `FirestoreUserDirectory.lookupByEmail`
+(exact-key get honoring `discoverable`; `null` for absent *and*
+non-discoverable alike). Per-caller limit: 20/min via a `rateLimits/{uid}`
+fixed-window counter mutated in a transaction (server-only collection —
+deny-by-default). Rules: `usersByEmail get` dropped to **self-only**, so a
+client can no longer read (or brute-force) another user's entry — both
+"accepted risk" comment blocks are gone (only past-tense "closed"
+notes remain). Client swap (G3): `CallableUserDirectory`
+(`apps/duet/lib/data/`) routes `lookupByEmail` through the callable and
+keeps `upsertSelf` a direct self-doc write; `injection.dart` wraps the
+Firestore directory under `useFirebase` (headless in-memory path
+unchanged, G2). The `usersByEmail` rules tests are updated (stranger get —
+discoverable or not — now denied); rules 44/44, functions 21/21 (incl. the
+rate-limit trip, per-uid isolation, and window reset), duet 50/50.
+*Manual proof (PR):* the deployed callable resolves a discoverable account,
+returns `null` for a hidden one, and a client's direct cross-user
+`usersByEmail` get is **403**.
+
+**App Check enforcement flag** is wired env-driven (`ENFORCE_APP_CHECK`,
+**off** on the emulator). Turning it on + flipping console enforcement for
+Firestore/Functions (staging → prod) is the **▸B / [HUMAN]** remainder
+(needs M0.3 monitoring) — the one live step the `▸B` marker denotes.
 
 ---
 

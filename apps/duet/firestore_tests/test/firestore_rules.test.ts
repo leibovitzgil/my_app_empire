@@ -71,22 +71,23 @@ const samEntry = {
 };
 
 describe('usersByEmail', () => {
-  it('a signed-in stranger can get a discoverable entry', async () => {
+  it('a signed-in stranger cannot get any entry — discovery is the '
+      + 'rate-limited lookupEmail callable\'s job now (M2.5)', async () => {
+    // Even a discoverable entry: cross-user reads are gone from the client.
     await seed('usersByEmail/sam@example.com', samEntry);
-    await assertSucceeds(
-      getDoc(doc(mallory(), 'usersByEmail/sam@example.com')),
+    await assertFails(getDoc(doc(mallory(), 'usersByEmail/sam@example.com')));
+    // And of course a non-discoverable one.
+    await seed('usersByEmail/hidden@example.com', {
+      ...samEntry,
+      email: 'hidden@example.com',
+      discoverable: false,
+    });
+    await assertFails(
+      getDoc(doc(mallory(), 'usersByEmail/hidden@example.com')),
     );
   });
 
-  it('a non-discoverable entry is unreadable by strangers', async () => {
-    await seed('usersByEmail/sam@example.com', {
-      ...samEntry,
-      discoverable: false,
-    });
-    await assertFails(getDoc(doc(mallory(), 'usersByEmail/sam@example.com')));
-  });
-
-  it('the owner can get their own non-discoverable entry', async () => {
+  it('the owner can still get their own entry (discoverable or not)', async () => {
     await seed('usersByEmail/sam@example.com', {
       ...samEntry,
       discoverable: false,
@@ -94,7 +95,7 @@ describe('usersByEmail', () => {
     await assertSucceeds(getDoc(doc(sam(), 'usersByEmail/sam@example.com')));
   });
 
-  it('unauthenticated get is denied even for discoverable entries', async () => {
+  it('unauthenticated get is denied', async () => {
     await seed('usersByEmail/sam@example.com', samEntry);
     await assertFails(getDoc(doc(anon(), 'usersByEmail/sam@example.com')));
   });
