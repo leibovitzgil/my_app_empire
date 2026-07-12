@@ -9,6 +9,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/callable_account_purge.dart';
+import 'package:duet/data/callable_collaborator_invite_service.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
@@ -281,14 +282,25 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   // The primary (email-based) collaborator invite path; `InviteService`
   // above remains the secondary/fallback (tokenized deep-link) path — both
   // converge on `PieceRepository.addCollaborator`.
-  getIt.registerLazySingleton<CollaboratorInviteService>(
-    () => DefaultCollaboratorInviteService(
+  //
+  // Under Firebase the send (inbox write) and accept (consume) go through the
+  // M2.4 callables — clients can no longer create `userInbox` docs — while the
+  // preview/stream and the on-device piece mutation stay local
+  // (`CallableCollaboratorInviteService` wraps the default). The headless gate
+  // keeps the pure in-memory path (G2).
+  getIt.registerLazySingleton<CollaboratorInviteService>(() {
+    final local = DefaultCollaboratorInviteService(
       userDirectory: getIt<UserDirectory>(),
       pieceRepository: getIt<PieceRepository>(),
       monetizationService: getIt<MonetizationService>(),
       messageGateway: getIt<UserMessageGateway>(),
-    ),
-  );
+    );
+    if (!useFirebase) return local;
+    return CallableCollaboratorInviteService(
+      local: local,
+      functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+    );
+  });
 
   getIt.registerLazySingleton<DeepLinkService>(FakeDeepLinkService.new);
   // generated:register — `create_feature/create_package --wire duet` adds

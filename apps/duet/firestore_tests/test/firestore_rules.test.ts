@@ -203,20 +203,16 @@ describe('userInbox', () => {
     );
   });
 
-  it('any signed-in sender may create a message addressed to the path '
-      + 'owner (v1 behavior — M2.4 moves sends behind a Function and flips '
-      + 'this test)', async () => {
-    await assertSucceeds(
+  it('no client may create an inbox message — writes are server-only '
+      + '(M2.4 moved sends behind the sendInvite Function)', async () => {
+    // A stranger sending spam: denied.
+    await assertFails(
       setDoc(doc(mallory(), 'userInbox/uid-sam/messages/m1'), message),
     );
-  });
-
-  it('a message whose toUid does not match the inbox path is denied', async () => {
+    // Even the recipient writing to their own inbox: denied (only the Admin
+    // SDK, bypassing rules, may create).
     await assertFails(
-      setDoc(doc(mallory(), 'userInbox/uid-sam/messages/m1'), {
-        ...message,
-        toUid: 'uid-mallory',
-      }),
+      setDoc(doc(sam(), 'userInbox/uid-sam/messages/m1'), message),
     );
   });
 

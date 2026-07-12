@@ -29,12 +29,10 @@ rules_version = '2';
 // NOT rate-limited by these rules (nor by the emulator); rate-limiting is
 // closed by M2.5 (App Check + a lookup callable). Out of scope for v1.
 //
-// v1 accepted risk (`userInbox`): a signed-in client may `create` a message
-// in any recipient's inbox as long as `toUid` matches the path — inherent to
-// the v1 client-writes-inbox design. It is a notification-spam vector, but
-// not a data-exposure or takeover one: accepting a spam "invite" only adds
-// the accepter to the *sender's* own piece, harmless to the victim. Closed by
-// M2.4, which moves the send behind a Firestore-triggered Cloud Function.
+// `userInbox` writes are server-only (M2.4): a client can read and mark its
+// own messages read, but can no longer `create` one — the `sendInvite` Cloud
+// Function (Admin SDK) is the sole writer, and only to a resolved, discoverable
+// recipient. This closed the v1 inbox-spam vector.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /usersByEmail/{emailKey} {
@@ -63,13 +61,12 @@ service cloud.firestore {
     }
 
     // Each user's own inbox: only its owner may read a message or mark it
-    // read; a message is only ever created by/for the sender it's addressed
-    // to (`toUid` must match the path), never by the recipient themselves;
-    // nothing ever deletes an inbox message outright (see `markRead`).
+    // read. Clients may NOT create a message — that's the `sendInvite` Cloud
+    // Function's job (Admin SDK, M2.4), which is what closed the inbox-spam
+    // vector. Nothing ever deletes an inbox message outright (see `markRead`).
     match /userInbox/{uid}/messages/{messageId} {
       allow read, update: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null &&
-        request.resource.data.toUid == uid;
+      allow create: if false;
       allow delete: if false;
     }
 

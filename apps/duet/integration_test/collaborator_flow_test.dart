@@ -22,8 +22,10 @@
 // round trip, not cross-device sheet sync (that's `services/review_sync`'s
 // job, unrelated to this feature).
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/app.dart';
+import 'package:duet/data/callable_account_purge.dart' show duetFunctionsRegion;
 import 'package:duet/data/current_user.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
@@ -59,6 +61,11 @@ void main() {
         9099,
       );
       FirebaseFirestore.instance.useFirestoreEmulator('127.0.0.1', 8080);
+      // The invite send/accept now go through Cloud Functions (M2.4), so the
+      // Functions emulator must be up too (dev.sh boots it).
+      FirebaseFunctions.instanceFor(
+        region: duetFunctionsRegion,
+      ).useFunctionsEmulator('127.0.0.1', 5001);
       await configureDependencies(useFirebase: true);
       await tester.pumpWidget(const App());
       await tester.pumpAndSettle();
@@ -98,8 +105,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 2. The owner imports a sheet and sends a real email invite —
-      // written to the live Firestore emulator, not an in-memory fake.
+      // 2. The owner imports a sheet and sends an email invite — the
+      // `sendInvite` Cloud Function (M2.4) resolves the invitee and writes
+      // their inbox with the Admin SDK; the client can no longer write it
+      // directly (rules `userInbox create: if false`). The callable returns
+      // the resolved recipient.
       final piece = (await getIt<PieceRepository>().importPiece(
         title: 'Clair de Lune',
         sourcePath: 'clair_de_lune.pdf',
@@ -113,20 +123,16 @@ void main() {
         ownerName: 'Owner E2E',
       );
       expect(sendResult.isSuccess, isTrue);
-      expect((sendResult as Success<LookupOutcome>).value, isA<Resolved>());
+      final resolved = (sendResult as Success<LookupOutcome>).value;
+      expect(resolved, isA<Resolved>());
+      expect((resolved as Resolved).recipient.uid, collaboratorId);
 
-      // 3. The invite is really sitting in the collaborator's Firestore inbox.
-      final inboxSnapshot = await FirebaseFirestore.instance
-          .collection('userInbox')
-          .doc(collaboratorId)
-          .collection('messages')
-          .where('read', isEqualTo: false)
-          .get();
-      expect(inboxSnapshot.docs, isNotEmpty);
-
-      // 4. Switch this device's signed-in identity to the collaborator and
-      // accept — the on-device `PieceRepository` already has the sheet
-      // (see this file's top-of-file note), so `addCollaborator` succeeds.
+      // 3. Switch this device's signed-in identity to the collaborator. The
+      // invite is really in their Firestore inbox — proven by reading it as
+      // themselves via the service (a recipient read the rules still allow),
+      // not the owner (whom the recipient-only rule would deny).
+      // The on-device `PieceRepository` already has the sheet (see this
+      // file's top-of-file note), so `addCollaborator` succeeds.
       await getIt<AuthRepository>().logout();
       await firebase_auth.FirebaseAuth.instance.signInWithEmailAndPassword(
         email: collaboratorEmail,
