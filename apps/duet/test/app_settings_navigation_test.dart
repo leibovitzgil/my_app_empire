@@ -140,6 +140,13 @@ void main() {
       ..registerSingleton<CurrentUserName>(CurrentUserName(Stream.value(null)))
       ..registerSingleton<PieceRepository>(_EmptyPieceRepository())
       ..registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new)
+      ..registerLazySingleton<PdfBinaryCache>(
+        () => DefaultPdfBinaryCache(
+          binaryStore: getIt<PieceBinaryStore>(),
+          pdfRenderService: getIt<PdfRenderService>(),
+          storage: getIt<LocalStorageService>(),
+        ),
+      )
       ..registerSingleton<PdfRenderService>(_UnusedPdfRenderService())
       ..registerLazySingleton<MonetizationService>(
         SimulatedMonetizationService.new,

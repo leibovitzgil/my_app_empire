@@ -27,9 +27,11 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
     required PieceRepository pieceRepository,
     required AnnotationRepository annotationRepository,
     required String currentUserId,
+    PdfBinaryCache? pdfBinaryCache,
     DateTime Function()? clock,
   }) : _pieceRepository = pieceRepository,
        _annotationRepository = annotationRepository,
+       _pdfBinaryCache = pdfBinaryCache,
        _now = clock ?? DateTime.now,
        super(ScoreState.initial(currentUserId: currentUserId)) {
     on<ScoreOpened>(_onOpened);
@@ -54,6 +56,11 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
 
   final PieceRepository _pieceRepository;
   final AnnotationRepository _annotationRepository;
+
+  /// Resolves the piece's base PDF to a readable local path at open time
+  /// (cache/download — M3.4). `null` in the local composition, where the
+  /// piece's `basePdfPath` is already an on-device file.
+  final PdfBinaryCache? _pdfBinaryCache;
   final DateTime Function() _now;
   StreamSubscription<PieceAnnotations>? _annotationsSubscription;
   int _strokeSeq = 0;
@@ -73,25 +80,49 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
     final result = await _pieceRepository.getPiece(event.pieceId);
     switch (result) {
       case Success<Piece>(:final value):
-        final role = value.ownerId == state.currentUserId
-            ? PieceRole.owner
-            : PieceRole.collaborator;
-        emit(
-          state.copyWith(
-            status: ScoreStatus.ready,
-            piece: value,
-            currentRole: role,
-            currentPage: 0,
-          ),
-        );
-        _annotationsSubscription = _annotationRepository
-            .watch(value.id)
-            .listen(
-              (annotations) => add(ScoreAnnotationsUpdated(annotations)),
+        // Resolve the base PDF to a readable local path (cache/download —
+        // M3.4) before going `ready`; the existing loading state covers the
+        // wait, and a download failure surfaces as the failure state (G4).
+        final resolved = await _resolveBasePdf(value);
+        switch (resolved) {
+          case Success<Piece>(value: final piece):
+            final role = piece.ownerId == state.currentUserId
+                ? PieceRole.owner
+                : PieceRole.collaborator;
+            emit(
+              state.copyWith(
+                status: ScoreStatus.ready,
+                piece: piece,
+                currentRole: role,
+                currentPage: 0,
+              ),
             );
+            _annotationsSubscription = _annotationRepository
+                .watch(piece.id)
+                .listen(
+                  (annotations) => add(ScoreAnnotationsUpdated(annotations)),
+                );
+          case ResultFailure<Piece>(:final error):
+            emit(state.copyWith(status: ScoreStatus.failure, error: '$error'));
+        }
       case ResultFailure<Piece>(:final error):
         emit(state.copyWith(status: ScoreStatus.failure, error: '$error'));
     }
+  }
+
+  /// Returns [piece] with its `basePdfPath` resolved to a readable local file
+  /// via [_pdfBinaryCache]. With no cache (local composition) the piece is
+  /// returned unchanged — its `basePdfPath` is already on-device.
+  Future<Result<Piece>> _resolveBasePdf(Piece piece) async {
+    final cache = _pdfBinaryCache;
+    if (cache == null) return Success(piece);
+    final path = await cache.pathFor(piece);
+    return switch (path) {
+      Success<String>(value: final resolved) => Success(
+        piece.copyWith(basePdfPath: resolved),
+      ),
+      ResultFailure<String>(:final error) => ResultFailure(error),
+    };
   }
 
   void _onAnnotationsUpdated(

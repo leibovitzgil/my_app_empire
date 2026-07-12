@@ -75,6 +75,21 @@ The piece metadata document. Mirrors the `Piece` entity
 - **Not stored in Firestore:** `Piece.basePdfPath` is an on-device path — the
   cloud equivalent is the Storage object `pieces/{id}/base.pdf`, resolved by
   convention from the piece id, not persisted as a field.
+  - **Read-time resolution (M3.4).** `basePdfPath` is filled at read time by
+    `PdfBinaryCache.pathFor(piece)`: a **cache hit**
+    (`{documents}/pieces_cache/{basePdfChecksum}.pdf`) or an **on-device copy**
+    (the local composition's staged file) returns immediately; otherwise the
+    object is downloaded, **sha256-verified against `basePdfChecksum`** (one
+    retry on mismatch), and cached — so a piece opened once online reopens
+    offline. **Decision:** no new `Piece.basePdfSource` field — `basePdfPath`
+    is simply overridden with the resolved path via `copyWith` (minimal entity
+    churn; the local impl is unaffected). **Decision (deferred):** unifying the
+    local repository's `pieces/{id}.pdf` staging into the checksum-keyed cache
+    layout is left to the M3.6 migration (which already rewrites local storage),
+    to avoid a data-location change in a pre-flip task; today the local file is
+    returned in place (no second copy). Download-progress UI is deferred with
+    it — the local composition resolves instantly, so no visible download
+    exists until M3.6 wires the cloud repos.
 - **`collaborators` + `participantIds` are Function-maintained.** A client
   never edits them directly: adding/removing a collaborator must atomically
   update both, enforce the per-piece cap (`CollaboratorLimits`, which depends

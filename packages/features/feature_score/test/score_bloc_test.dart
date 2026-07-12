@@ -11,6 +11,8 @@ class MockPieceRepository extends Mock implements PieceRepository {}
 
 class MockAnnotationRepository extends Mock implements AnnotationRepository {}
 
+class MockPdfBinaryCache extends Mock implements PdfBinaryCache {}
+
 void main() {
   group('ScoreBloc', () {
     const ownerId = 'owner1';
@@ -33,6 +35,7 @@ void main() {
     late StreamController<PieceAnnotations> annotationsController;
 
     setUpAll(() {
+      registerFallbackValue(piece);
       registerFallbackValue(
         const InkStroke(
           id: 'fallback',
@@ -137,6 +140,64 @@ void main() {
           'status',
           ScoreStatus.failure,
         ),
+      ],
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'resolves the base PDF path via the cache before going ready (M3.4)',
+      build: () {
+        final cache = MockPdfBinaryCache();
+        when(
+          () => cache.pathFor(any()),
+        ).thenAnswer((_) async => const Success('/cache/resolved.pdf'));
+        return ScoreBloc(
+          pieceRepository: pieceRepository,
+          annotationRepository: annotationRepository,
+          currentUserId: ownerId,
+          pdfBinaryCache: cache,
+        );
+      },
+      act: (bloc) => bloc.add(const ScoreOpened(pieceId)),
+      expect: () => [
+        isA<ScoreState>().having(
+          (s) => s.status,
+          'status',
+          ScoreStatus.loading,
+        ),
+        isA<ScoreState>()
+            .having((s) => s.status, 'status', ScoreStatus.ready)
+            .having(
+              (s) => s.piece?.basePdfPath,
+              'resolved basePdfPath',
+              '/cache/resolved.pdf',
+            ),
+      ],
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'surfaces a failure when the base PDF cannot be resolved (offline)',
+      build: () {
+        final cache = MockPdfBinaryCache();
+        when(
+          () => cache.pathFor(any()),
+        ).thenAnswer((_) async => ResultFailure<String>(StateError('offline')));
+        return ScoreBloc(
+          pieceRepository: pieceRepository,
+          annotationRepository: annotationRepository,
+          currentUserId: ownerId,
+          pdfBinaryCache: cache,
+        );
+      },
+      act: (bloc) => bloc.add(const ScoreOpened(pieceId)),
+      expect: () => [
+        isA<ScoreState>().having(
+          (s) => s.status,
+          'status',
+          ScoreStatus.loading,
+        ),
+        isA<ScoreState>()
+            .having((s) => s.status, 'status', ScoreStatus.failure)
+            .having((s) => s.error, 'error', contains('offline')),
       ],
     );
 

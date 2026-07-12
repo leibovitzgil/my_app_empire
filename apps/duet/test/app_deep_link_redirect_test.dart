@@ -113,6 +113,13 @@ void main() {
       ),
     );
     getIt.registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new);
+    getIt.registerLazySingleton<PdfBinaryCache>(
+      () => DefaultPdfBinaryCache(
+        binaryStore: getIt<PieceBinaryStore>(),
+        pdfRenderService: getIt<PdfRenderService>(),
+        storage: getIt<LocalStorageService>(),
+      ),
+    );
 
     // The routed destinations resolve these at build time: the score page's
     // recording-path seam, and the settings page's repository + permission

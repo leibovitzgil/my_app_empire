@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:core_utils/core_utils.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:pieces/pieces.dart';
 
@@ -83,6 +84,18 @@ class FirebasePieceBinaryStore implements PieceBinaryStore {
       }
     }
   }
+
+  @override
+  Future<Result<void>> downloadBasePdf({
+    required String pieceId,
+    required String destPath,
+  }) => Result.guard<void>(() async {
+    final file = File(destPath)..parent.createSync(recursive: true);
+    // `writeToFile` streams the Storage object to disk; awaiting the task
+    // throws on a terminal error (mapped to a Result failure by `guard`).
+    // `PdfBinaryCache` verifies the written bytes against the checksum.
+    await _basePdfRef(pieceId).writeToFile(file);
+  });
 
   /// Whether an object already exists at [ref] with a matching `checksum`.
   Future<bool> _alreadyStored(Reference ref, String checksum) async {

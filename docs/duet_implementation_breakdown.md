@@ -141,7 +141,7 @@ in the Track B backlog.
 | M3.1 | ☑ `FirestorePieceRepository` | M2.2, M2.3 |
 | M3.2 | ☑ `FirestoreAnnotationRepository` | M3.1 |
 | M3.3 | ☑ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
-| M3.4 | ☐ Binary download/cache manager (offline reading) | M3.3 |
+| M3.4 | ☑ Binary download/cache manager (offline reading) | M3.3 |
 | M3.5 | ☐ `CloudAudioAssetStore` + offline upload queue | M3.2 |
 | M3.6 | ☐ DI flip + one-time local→cloud migration | M3.1–M3.5 |
 | M3.7 | ☐ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
@@ -1381,6 +1381,37 @@ must resolve via cache-or-download.
 
 **Done when:** airplane-mode test: piece opened once online opens again
 offline on the emulator/device; gate green.
+
+**Landed.** New `PdfBinaryCache` contract + `DefaultPdfBinaryCache` impl in
+`core/pieces` (`pathFor(piece)` → **cache hit** (`{documents}/pieces_cache/
+{checksum}.pdf`) → **on-device copy** (`basePdfPath`) → **download + sha256-
+verify + retry-once**, with a least-recently-opened total-size cap). Downloads
+delegate to a **widened** `PieceBinaryStore.downloadBasePdf({pieceId, destPath})`
+(M3.3's contract grew the read direction): `NoopPieceBinaryStore` fails it (the
+local composition never downloads), `FirebasePieceBinaryStore` does it via
+Storage `writeToFile`. `ScoreBloc` gained an **optional** `PdfBinaryCache?` —
+`_onOpened` resolves the base PDF to a readable local path and emits
+`piece.copyWith(basePdfPath: resolved)` before going `ready` (the existing
+loading/failure states cover the wait + a download failure, G4). `Piece.copyWith`
+grew a `basePdfPath` param for this. Registered `PdfBinaryCache` in DI (one
+backend-agnostic `DefaultPdfBinaryCache` over the branch-selected
+`PieceBinaryStore`); `DuetScorePage` passes it to `ScoreBloc`. **Deviations
+(recorded in M2.1 doc):** (1) resolve happens in `ScoreBloc` (optional cache;
+`null` = today's on-device behaviour → **zero** churn to existing feature_score
+tests and every `ScoreViewerScreen` construction site stays untouched) rather
+than `DuetScorePage` reaching into the reader — reuses the state machine and
+keeps the cache a pieces-domain seam. (2) No new `Piece.basePdfSource` field —
+`basePdfPath` is overridden via `copyWith`. (3) Local `pieces/{id}.pdf` →
+checksum-keyed-cache unification **deferred to the M3.6 migration** (avoids a
+data-location change pre-flip; the local file is returned in place, no second
+store). (4) Download-progress UI deferred with it (local resolves instantly; no
+visible download until M3.6). (5) `FirebasePieceBinaryStore.downloadBasePdf` is
+emulator-verified, not unit-tested (no Storage fake — as with M3.3). Tests:
+`default_pdf_binary_cache_test.dart` (7: hit short-circuits, adopt-local,
+download+verify+cache, offline re-open, mismatch→retry→fail, download failure,
+LRU eviction) + 2 `ScoreBloc` resolve tests + a Noop download-failure test. Full
+gate green (incl. golden); the offline-reopen guarantee is proven by the
+cache-hit test, the emulator airplane-mode run lands with M3.6.
 
 ### M3.5 — `CloudAudioAssetStore` + offline upload queue
 
