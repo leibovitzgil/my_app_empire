@@ -291,6 +291,21 @@ independent objects. Rationale: cross-piece sharing would couple unrelated
 pieces' lifecycles (delete/ACL) to a shared blob, for savings that don't
 matter at this scale.
 
+**Audio upload path (recorded once, here).** Because each object is scoped to a
+piece (`pieces/{pieceId}/audio/{assetId}`), the `AudioAssetStore` contract is
+per-operation piece-aware: `put`/`pathFor`/`delete` each take a `pieceId`. The
+cloud implementation (`CloudAudioAssetStore`, M3.5) does not upload
+synchronously — a recording is first copied into an on-device `audio_notes/`
+cache (so it plays back instantly and survives the recorder's temp file), then
+an upload is **enqueued** in a durable local queue (`AudioUploadQueue`, persisted
+via `LocalStorageService`) and a best-effort drain is kicked. A note recorded
+**offline** stays queued and uploads on the next drain (reconnect / app-start),
+bounded by `maxAttempts`, so it is never lost. `pathFor` returns the cached copy
+when present and otherwise downloads the object (a collaborator resolving a note
+they didn't record). Storage transfer sits behind an `AudioObjectStore` seam so
+the queue/cache orchestration is fake-testable; the Firebase transfer itself is
+emulator-verified.
+
 ---
 
 ## Region, offline, indexes

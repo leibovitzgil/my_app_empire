@@ -454,11 +454,20 @@ class _HarnessPlayerService implements AudioPlayerService {
 
 class _HarnessAudioAssetStore implements AudioAssetStore {
   @override
-  Future<Result<String>> put(String sourcePath) async => Success(sourcePath);
+  Future<Result<String>> put(
+    String sourcePath, {
+    required String pieceId,
+  }) async => Success(sourcePath);
 
   @override
-  Future<Result<String>> pathFor(String assetId) async => Success(assetId);
+  Future<Result<String>> pathFor(
+    String assetId, {
+    required String pieceId,
+  }) async => Success(assetId);
 
   @override
-  Future<Result<void>> delete(String assetId) async => const Success(null);
+  Future<Result<void>> delete(
+    String assetId, {
+    required String pieceId,
+  }) async => const Success(null);
 }

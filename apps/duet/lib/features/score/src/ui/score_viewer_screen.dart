@@ -394,7 +394,10 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     Duration elapsed,
   ) async {
     final scoreBloc = context.read<ScoreBloc>();
-    final putResult = await widget.audioAssetStore.put(recordedPath);
+    final putResult = await widget.audioAssetStore.put(
+      recordedPath,
+      pieceId: scoreBloc.state.pieceId ?? '',
+    );
     final assetId = switch (putResult) {
       Success<String>(:final value) => value,
       // Falls back to the raw path so the note isn't silently dropped; it
@@ -1040,6 +1043,7 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
   ) async {
     final pathResult = await widget.audioAssetStore.pathFor(
       note.audioAssetId,
+      pieceId: context.read<ScoreBloc>().state.pieceId ?? '',
     );
     final path = switch (pathResult) {
       Success<String>(:final value) => value,

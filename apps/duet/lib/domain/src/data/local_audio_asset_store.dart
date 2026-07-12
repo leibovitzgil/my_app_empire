@@ -42,8 +42,11 @@ class LocalAudioAssetStore implements AudioAssetStore {
     return null;
   }
 
+  // `pieceId` is ignored: the on-device layout is a single flat `audio_notes/`
+  // directory keyed by asset id (the cloud store uses it to path objects).
+
   @override
-  Future<Result<String>> put(String sourcePath) =>
+  Future<Result<String>> put(String sourcePath, {required String pieceId}) =>
       Result.guard<String>(() async {
         final dir = await _assetsDir();
         final id = _nextId();
@@ -53,7 +56,7 @@ class LocalAudioAssetStore implements AudioAssetStore {
       });
 
   @override
-  Future<Result<String>> pathFor(String assetId) =>
+  Future<Result<String>> pathFor(String assetId, {required String pieceId}) =>
       Result.guard<String>(() async {
         final dir = await _assetsDir();
         final file = await _find(dir, assetId);
@@ -64,9 +67,10 @@ class LocalAudioAssetStore implements AudioAssetStore {
       });
 
   @override
-  Future<Result<void>> delete(String assetId) => Result.guard<void>(() async {
-    final dir = await _assetsDir();
-    final file = await _find(dir, assetId);
-    if (file != null) await file.delete();
-  });
+  Future<Result<void>> delete(String assetId, {required String pieceId}) =>
+      Result.guard<void>(() async {
+        final dir = await _assetsDir();
+        final file = await _find(dir, assetId);
+        if (file != null) await file.delete();
+      });
 }

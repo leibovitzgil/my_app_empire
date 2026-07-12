@@ -191,14 +191,20 @@ class _FakeAudioAssetStore implements AudioAssetStore {
   int _seq = 0;
 
   @override
-  Future<Result<String>> put(String sourcePath) async {
+  Future<Result<String>> put(
+    String sourcePath, {
+    required String pieceId,
+  }) async {
     final id = '$_label-${_seq++}';
     _files[id] = await File(sourcePath).readAsBytes();
     return Success(id);
   }
 
   @override
-  Future<Result<String>> pathFor(String assetId) async {
+  Future<Result<String>> pathFor(
+    String assetId, {
+    required String pieceId,
+  }) async {
     final bytes = _files[assetId];
     if (bytes == null) {
       return ResultFailure<String>(StateError('Unknown asset: $assetId'));
@@ -209,7 +215,7 @@ class _FakeAudioAssetStore implements AudioAssetStore {
   }
 
   @override
-  Future<Result<void>> delete(String assetId) async {
+  Future<Result<void>> delete(String assetId, {required String pieceId}) async {
     _files.remove(assetId);
     return const Success(null);
   }
@@ -281,7 +287,10 @@ void main() {
 
       senderAudioFile = File('${senderAudioDir.path}/recording.m4a')
         ..writeAsBytesSync([1, 2, 3, 4, 5]);
-      final putResult = await senderAudioStore.put(senderAudioFile.path);
+      final putResult = await senderAudioStore.put(
+        senderAudioFile.path,
+        pieceId: 'p1',
+      );
       senderAssetId = (putResult as Success<String>).value;
 
       senderAnnotations.seed(
@@ -431,6 +440,7 @@ void main() {
         expect(importedNote.audioAssetId, isNot(senderAssetId));
         final importedPath = await receiverAudioStore.pathFor(
           importedNote.audioAssetId,
+          pieceId: 'p1',
         );
         expect(
           File((importedPath as Success<String>).value).readAsBytesSync(),

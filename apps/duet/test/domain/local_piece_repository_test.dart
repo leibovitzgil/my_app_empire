@@ -237,7 +237,10 @@ void main() {
         );
         final audioFile = File('${tempDir.path}/note.m4a')
           ..writeAsStringSync('fake audio');
-        final assetResult = await audioAssetStore.put(audioFile.path);
+        final assetResult = await audioAssetStore.put(
+          audioFile.path,
+          pieceId: piece.id,
+        );
         final assetId = (assetResult as Success<String>).value;
         await annotationRepository.addAudioNote(
           piece.id,
@@ -271,7 +274,7 @@ void main() {
         expect(remainingAnnotations.layers, isEmpty);
         expect(remainingAnnotations.audioNotes, isEmpty);
         expect(
-          await audioAssetStore.pathFor(assetId),
+          await audioAssetStore.pathFor(assetId, pieceId: piece.id),
           isA<ResultFailure<String>>(),
         );
       },
