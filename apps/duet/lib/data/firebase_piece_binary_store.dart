@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/domain/domain.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:pieces/pieces.dart';
 
 /// A [PieceBinaryStore] backed by Cloud Storage (`pieces/{id}/base.pdf`, per
 /// `docs/duet_cloud_schema.md`) — the cloud counterpart to

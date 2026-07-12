@@ -5,13 +5,13 @@ import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/recording_path_builder.dart';
+import 'package:duet/domain/domain.dart';
+import 'package:duet/features/score/score.dart';
 import 'package:duet/injection.dart';
-import 'package:feature_score/feature_score.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
-import 'package:pieces/pieces.dart';
 
 /// Hosts `feature_score`'s Score Viewer for [pieceId]: builds the
 /// [ScoreBloc] from the shared repositories, and wires the two bits of

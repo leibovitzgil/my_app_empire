@@ -1,7 +1,7 @@
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
+import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/routing/app_deep_link_parser.dart';
-import 'package:feature_pairing/feature_pairing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

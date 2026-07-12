@@ -7,6 +7,7 @@ environment:
   sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
+  archive: ^4.0.7
   audio:
     path: ../../packages/services/audio
   bloc: ^9.2.1
@@ -21,14 +22,8 @@ dependencies:
   equatable: ^2.0.5
   feature_auth:
     path: ../../packages/features/feature_auth
-  feature_library:
-    path: ../../packages/features/feature_library
-  feature_pairing:
-    path: ../../packages/features/feature_pairing
   feature_paywall:
     path: ../../packages/features/feature_paywall
-  feature_score:
-    path: ../../packages/features/feature_score
   feature_settings:
     path: ../../packages/features/feature_settings
   file_picker: ^12.0.0-beta.7
@@ -52,14 +47,13 @@ dependencies:
   path_provider: ^2.1.6
   pdf_rendering:
     path: ../../packages/services/pdf_rendering
-  pieces:
-    path: ../../packages/core/pieces
-  review_sync:
-    path: ../../packages/services/review_sync
+  share_plus: ^13.2.0
   user_directory:
     path: ../../packages/core/user_directory
 
 dev_dependencies:
+  bloc_test: ^10.0.0
+  fake_async: ^1.3.1
   fake_cloud_firestore: ^4.0.0
   firebase_messaging: ^16.4.1
   flutter_test:

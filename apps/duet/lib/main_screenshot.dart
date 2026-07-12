@@ -14,11 +14,11 @@ import 'dart:ui' as ui;
 import 'package:audio/audio.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
-import 'package:feature_score/feature_score.dart';
+import 'package:duet/domain/domain.dart';
+import 'package:duet/features/score/score.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
-import 'package:pieces/pieces.dart';
 
 const String _ownerId = 'gil';
 

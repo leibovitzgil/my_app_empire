@@ -16,6 +16,7 @@ import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/domain/domain.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
@@ -28,7 +29,6 @@ import 'package:go_router/go_router.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
-import 'package:pieces/pieces.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
 

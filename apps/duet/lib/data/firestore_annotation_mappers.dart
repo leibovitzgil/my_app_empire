@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:pieces/pieces.dart';
+import 'package:duet/domain/domain.dart';
 
 /// Serialization between the annotation domain types and their Firestore
 /// document shapes (per `docs/duet_cloud_schema.md`), the cloud counterpart to
