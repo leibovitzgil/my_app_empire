@@ -135,7 +135,7 @@ in the Track B backlog.
 | M1.10 | ☑ Auth lifecycle emulator E2E | M1.2–M1.9 |
 | M2.1 | ☑ Cloud schema design doc (pieces) | — |
 | M2.2 | ☑ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
-| M2.3 | ☐ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
+| M2.3 | ☑ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
 | M2.4 | ☐ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
 | M2.5 | ☐ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
 | M3.1 | ☐ `FirestorePieceRepository` | M2.2, M2.3 |
@@ -961,6 +961,33 @@ schema, green in CI.
 
 **Done when:** suite green in CI; a deliberate rule regression fails it;
 plan M2 exit satisfied.
+
+**Landed.** Two sibling files in `apps/duet/firestore_tests/test/`:
+`pieces_rules.test.ts` (21 tests — the full CRUD × role matrix for
+`pieces`/`layers`/`notes`/`reads` with owner/collaborator/stranger/anon
+fixtures: participant gating, the sole-participant create invariant,
+collaborator-set + `ownerId` immutability to clients, participant-scoped
+vs. unscoped query, author-only layer/note writes, the `deletedAt`-only
+note tombstone, no-hard-delete, self-only read watermarks) and
+`storage_rules.test.ts` (5 tests — participant read of `base.pdf`,
+owner-only base write, participant audio write, the 5 MB cap rejection,
+deny-by-default; membership resolved via the cross-service
+`firestore.get`, so it seeds the gating piece doc and boots both
+emulators). `npm test` now runs `--only firestore,storage`; CI inherits
+it (no job change beyond a name/comment refresh). Full suite **46/46**
+(20 M1 + 21 pieces + 5 storage). *Break-proof (for the PR):* weakening
+`pieces` read from participant-only to any-signed-in failed exactly the
+stranger-denied read + unscoped-query tests (`2 failed | 44 passed`).
+
+*One harness fix worth noting:* adding sibling files surfaced a
+cross-file race — vitest runs files in parallel workers, and all three
+share one emulator + `clearFirestore`/`clearStorage` in `beforeEach`, so
+one file's clear wiped another's fixtures mid-test (it failed three M1.7
+tests that had always passed alone). Fixed with a `vitest.config.ts`
+setting `fileParallelism: false`.
+
+**M2 exit satisfied:** the pieces rules suite is green and required in CI,
+ahead of any client code that writes these collections (G6).
 
 ### M2.4 — Invite lifecycle server-side (send / accept / leave callables)
 
