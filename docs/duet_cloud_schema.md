@@ -171,6 +171,22 @@ token. Mirrors `_StoredInvite`
 (`feature_pairing/lib/src/data/deep_link_invite_service.dart`), promoting two
 fields to server-managed (M5.2).
 
+**Why top-level, not `pieces/{id}/inviteTokens/{token}`.** Redemption arrives
+from a deep link (`/invite/accept/:token`) carrying **only the token** — its
+whole job is to resolve token → `pieceId`. A nested path would require knowing
+the `pieceId` to read the doc, i.e. the very thing being looked up, forcing a
+collection-group *query* by token value (needs a CG index and a query-allowing
+rule — harder to secure than a point `get`, and against the "never allow
+`list`") — versus a clean `get(inviteTokens/{token})` keyed by the opaque
+token. The pull toward nesting (ownership, cascade-delete, "list a piece's
+invites") is covered at top-level by fields + queries: ownership is the
+`pieceId`/`ownerId` fields; piece/account deletion removes
+`inviteTokens where pieceId == …` in the purge Function (the same by-field
+delete it already does for `usersByEmail`-by-uid), backstopped by the
+`expiresAt` TTL; an owner's "outstanding invites" view is
+`where ownerId == me`. Same rationale as `usersByEmail` — keyed by the value
+the caller holds.
+
 ```jsonc
 {
   "pieceId": "piece_1",
