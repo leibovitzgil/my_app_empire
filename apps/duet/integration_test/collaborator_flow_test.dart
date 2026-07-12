@@ -27,14 +27,14 @@ import 'package:core_utils/core_utils.dart';
 import 'package:duet/app.dart';
 import 'package:duet/data/callable_account_purge.dart' show duetFunctionsRegion;
 import 'package:duet/data/current_user.dart';
+import 'package:duet/domain/domain.dart';
+import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
-import 'package:feature_pairing/feature_pairing.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:pieces/pieces.dart';
 import 'package:user_directory/user_directory.dart';
 
 void main() {

@@ -14,24 +14,41 @@ assembled from shared packages rather than built from scratch.
 apps/
   app_template/         # Minimal app template (auth + DI + go_router). Clone for new apps.
   showcase/             # Reference app composing auth + onboarding + paywall via get_it.
-packages/
+  duet/                 # Sheet-music app. Its OWN domain lives inside it, feature-first:
+    lib/
+      domain/           #   app domain kernel (entities, contracts, Firebase-free impls)
+      features/         #   score/ library/ pairing/ — vertical slices, blind to each other
+      review_sync/      #   app-specific service
+      data/             #   Firebase-backed impls of the domain contracts
+      ui/ routing/ injection.dart app.dart
+    test/architecture_test.dart   # FAILS the build on any cross-feature import
+packages/               # REUSABLE, app-agnostic building blocks ONLY — never app domain
   core/                 # Cross-cutting building blocks
-    core_ui/ core_utils/ app_updater/ legal_compliance/
-    local_storage/ monetization/ review_prompter/
-  services/             # Integration wrappers (Firebase, network, etc.)
-    analytics/ networking/ notifications/ remote_config/
-  features/             # Vertical feature slices
-    feature_auth/ feature_onboarding/ feature_paywall/
+    core_ui/ core_utils/ local_storage/ monetization/ user_directory/ ...
+  services/             # Integration wrappers (audio, pdf, network, push, ...)
+    audio/ pdf_rendering/ notifications/ deep_linking/ networking/ ...
+  features/             # GENERIC features reused across apps
+    feature_auth/ feature_onboarding/ feature_paywall/ feature_settings/
 ```
 
-- **`core/`** holds reusable building blocks. `core_utils` includes a shared
-  `Result<T>` type (`Success` / `ResultFailure`) for error handling without
-  throwing across boundaries. **`services/`** wraps external integrations
-  (`networking` returns `Result` and maps Dio errors to `NetworkException`).
-  **`features/`** own a vertical slice (domain + data + bloc + ui).
-- **`apps/*`** wire packages together via DI. See `apps/showcase/lib/injection.dart`
-  for the canonical get_it wiring pattern (register a concrete implementation
-  against the contract features depend on).
+- **`packages/` is the reusable toolkit that makes a *new* app fast** — auth,
+  billing (`monetization`), notifications, deep linking, the UI kit, PDF/audio
+  services. It holds **nothing app-specific**. `core_utils` includes the shared
+  `Result<T>` type (`Success` / `ResultFailure`).
+- **App-specific domain code is NOT a package.** An app's own domain lives
+  *inside the app*, organized feature-first (see `apps/duet/lib/`): a `domain/`
+  kernel (entities + contracts + Firebase-free impls), `features/*` vertical
+  slices, and Firebase-backed impls in `data/`. This keeps `packages/` a clean,
+  app-agnostic library — the whole point of the monorepo.
+- **Boundaries are enforced, not reviewed.** Because in-app features share one
+  package, a lint-style guard replaces the old package boundary:
+  `apps/duet/test/architecture_test.dart` fails the build on any cross-feature
+  import and on the domain layer importing upward. Features stay blind to each
+  other and talk via the domain's reactive repositories, UI callback seams, or
+  DI contracts (never by importing a sibling feature).
+- **`apps/*`** wire everything together via DI. See `apps/showcase/lib/injection.dart`
+  and `apps/duet/lib/injection.dart` for the canonical get_it pattern (register a
+  concrete implementation against the contract that features depend on).
 
 ## Commands
 

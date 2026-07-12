@@ -1,7 +1,7 @@
 // cloud_functions exports its own (unrelated) `Result`; ours is core_utils'.
 import 'package:cloud_functions/cloud_functions.dart' hide Result;
 import 'package:core_utils/core_utils.dart';
-import 'package:feature_pairing/feature_pairing.dart';
+import 'package:duet/features/pairing/pairing.dart';
 
 /// A [CollaboratorInviteService] that routes the two operations which must be
 /// server-authoritative — sending an invite (writing the recipient's inbox)

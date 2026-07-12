@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:duet/data/firestore_annotation_mappers.dart';
+import 'package:duet/domain/domain.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pieces/pieces.dart';
 
 void main() {
   group('firestore annotation mappers', () {

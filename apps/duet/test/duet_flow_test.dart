@@ -5,11 +5,11 @@
 // `ScoreViewerScreen` (the widget-mounting variant lives in
 // `integration_test/app_flow_test.dart`, device-only).
 import 'package:core_utils/core_utils.dart';
-import 'package:feature_pairing/feature_pairing.dart';
-import 'package:feature_score/feature_score.dart';
+import 'package:duet/domain/domain.dart';
+import 'package:duet/features/pairing/pairing.dart';
+import 'package:duet/features/score/score.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
-import 'package:pieces/pieces.dart';
 import 'package:user_directory/user_directory.dart';
 
 import 'duet_flow_harness.dart';

@@ -20,8 +20,10 @@ import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/firebase_piece_binary_store.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
+import 'package:duet/domain/domain.dart';
+import 'package:duet/features/pairing/pairing.dart';
+import 'package:duet/review_sync/review_sync.dart';
 import 'package:feature_auth/feature_auth.dart';
-import 'package:feature_pairing/feature_pairing.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get_it/get_it.dart';
@@ -29,8 +31,6 @@ import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
-import 'package:pieces/pieces.dart';
-import 'package:review_sync/review_sync.dart';
 import 'package:user_directory/user_directory.dart';
 
 /// The app's service locator.

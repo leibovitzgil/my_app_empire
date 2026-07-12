@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/firestore_annotation_mappers.dart';
-import 'package:pieces/pieces.dart';
+import 'package:duet/domain/domain.dart';
 
 /// An [AnnotationRepository] backed by Cloud Firestore — the cloud counterpart
 /// to `LocalAnnotationRepository`. Ink lives in one document *per author*

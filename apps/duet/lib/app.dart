@@ -6,19 +6,19 @@ import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/domain/domain.dart';
+import 'package:duet/features/library/library.dart';
+import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/score_page.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
-import 'package:feature_library/feature_library.dart';
-import 'package:feature_pairing/feature_pairing.dart';
 import 'package:feature_paywall/feature_paywall.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:monetization/monetization.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
-import 'package:pieces/pieces.dart';
 
 class App extends StatelessWidget {
   const App({super.key});

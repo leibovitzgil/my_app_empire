@@ -1,6 +1,6 @@
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
-import 'package:feature_pairing/feature_pairing.dart';
+import 'package:duet/features/pairing/pairing.dart';
 
 /// Matches deep links to Duet's routes ([`/`], [`/home`]) and to
 /// `feature_pairing`'s invite-link format

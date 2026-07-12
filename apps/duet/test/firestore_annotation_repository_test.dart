@@ -6,9 +6,9 @@
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/firestore_annotation_repository.dart';
 import 'package:duet/data/firestore_piece_mappers.dart';
+import 'package:duet/domain/domain.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pieces/pieces.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
