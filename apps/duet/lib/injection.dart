@@ -10,6 +10,7 @@ import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
+import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
@@ -109,10 +110,20 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   // shared instance, mirroring `apps/tandem`'s precedent) under
   // `useFirebase: true`.
   if (useFirebase) {
+    // Discovery goes through the rate-limited `lookupEmail` callable (M2.5) —
+    // the rules now allow a client to read only its own `usersByEmail` entry.
+    // The direct-Firestore directory still backs `upsertSelf` (a self-doc
+    // write the rules allow); `CallableUserDirectory` wraps it and overrides
+    // the lookup.
     final firestoreUserDirectory = FirestoreUserDirectory(
       firestore: FirebaseFirestore.instance,
     );
-    getIt.registerSingleton<UserDirectory>(firestoreUserDirectory);
+    getIt.registerSingleton<UserDirectory>(
+      CallableUserDirectory(
+        local: firestoreUserDirectory,
+        functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+      ),
+    );
 
     final firestoreUserMessaging = FirestoreUserMessaging(
       firestore: FirebaseFirestore.instance,

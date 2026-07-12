@@ -9,4 +9,5 @@ export { acceptInvite } from './acceptInvite';
 export { deleteAccount } from './deleteAccount';
 export { healthcheck } from './healthcheck';
 export { leavePiece } from './leavePiece';
+export { lookupEmail } from './lookupEmail';
 export { sendInvite } from './sendInvite';
