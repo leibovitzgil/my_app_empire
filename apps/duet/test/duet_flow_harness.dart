@@ -513,6 +513,7 @@ Future<DuetImportFlowResult> runDuetImportFlow(
       home: LibraryPage(
         pieceRepository: pieceRepository,
         renderService: renderService,
+        binaryStore: const NoopPieceBinaryStore(),
         currentUserId: ownerId,
         appName: 'Duet',
         onOpenScore: (piece) => importedPiece = piece,

@@ -15,6 +15,7 @@ class ImportPiecePage extends StatelessWidget {
   const ImportPiecePage({
     required this.pieceRepository,
     required this.renderService,
+    required this.binaryStore,
     this.filePicker,
     this.ownerName,
     super.key,
@@ -25,6 +26,10 @@ class ImportPiecePage extends StatelessWidget {
 
   /// Validates a picked file opens as a real PDF before naming/submitting.
   final PdfRenderService renderService;
+
+  /// Uploads the created piece's base PDF with progress (a no-op in the
+  /// local/mock composition — see [NoopPieceBinaryStore]).
+  final PieceBinaryStore binaryStore;
 
   /// See [ImportPieceBloc.new]'s `filePicker` parameter.
   final PdfFilePicker? filePicker;
@@ -38,6 +43,7 @@ class ImportPiecePage extends StatelessWidget {
       create: (_) => ImportPieceBloc(
         pieceRepository: pieceRepository,
         renderService: renderService,
+        binaryStore: binaryStore,
         filePicker: filePicker,
         ownerName: ownerName,
       ),
@@ -121,6 +127,40 @@ class _ChooseFileBody extends StatelessWidget {
   }
 }
 
+/// The submit-time upload affordance: a determinate progress bar (indeterminate
+/// until the first byte-count arrives) plus a cancel action.
+class _UploadingControls extends StatelessWidget {
+  const _UploadingControls({required this.progress});
+
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = progress == null ? null : (progress! * 100).round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          percent == null ? 'Uploading…' : 'Uploading… $percent%',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.xs),
+          child: LinearProgressIndicator(value: progress),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextButton(
+          onPressed: () =>
+              context.read<ImportPieceBloc>().add(const ImportCancelled()),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
 class _NamingBody extends StatefulWidget {
   const _NamingBody({required this.initialTitle});
 
@@ -146,7 +186,8 @@ class _NamingBodyState extends State<_NamingBody> {
     return BlocBuilder<ImportPieceBloc, ImportPieceState>(
       buildWhen: (previous, current) =>
           previous.canSubmit != current.canSubmit ||
-          previous.isSubmitting != current.isSubmitting,
+          previous.isSubmitting != current.isSubmitting ||
+          previous.progress != current.progress,
       builder: (context, state) {
         return Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -158,20 +199,23 @@ class _NamingBodyState extends State<_NamingBody> {
                 controller: _controller,
                 label: 'Title',
                 textInputAction: TextInputAction.done,
+                enabled: !state.isSubmitting,
                 onChanged: (value) => context.read<ImportPieceBloc>().add(
                   ImportTitleChanged(value),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              PrimaryButton(
-                label: 'Add sheet',
-                isLoading: state.isSubmitting,
-                onPressed: state.canSubmit
-                    ? () => context.read<ImportPieceBloc>().add(
-                        const ImportSubmitted(),
-                      )
-                    : null,
-              ),
+              if (state.isSubmitting)
+                _UploadingControls(progress: state.progress)
+              else
+                PrimaryButton(
+                  label: 'Add sheet',
+                  onPressed: state.canSubmit
+                      ? () => context.read<ImportPieceBloc>().add(
+                          const ImportSubmitted(),
+                        )
+                      : null,
+                ),
             ],
           ),
         );

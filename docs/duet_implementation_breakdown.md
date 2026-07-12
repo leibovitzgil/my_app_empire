@@ -140,7 +140,7 @@ in the Track B backlog.
 | M2.5 | ☑ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
 | M3.1 | ☑ `FirestorePieceRepository` | M2.2, M2.3 |
 | M3.2 | ☑ `FirestoreAnnotationRepository` | M3.1 |
-| M3.3 | ☐ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
+| M3.3 | ☑ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
 | M3.4 | ☐ Binary download/cache manager (offline reading) | M3.3 |
 | M3.5 | ☐ `CloudAudioAssetStore` + offline upload queue | M3.2 |
 | M3.6 | ☐ DI flip + one-time local→cloud migration | M3.1–M3.5 |
@@ -1317,6 +1317,36 @@ has only `isSubmitting` — no progress.
 **Done when:** import on the emulator (storage emulator, M0.4) shows real
 progress and lands the object; duplicate import skips the upload
 (asserted in a test); gate green.
+
+**Landed.** New seam `PieceBinaryStore` + `UploadProgress` in `core/pieces`
+(`piece_binary_store.dart`) with a `NoopPieceBinaryStore` (emits one
+`UploadProgress.skipped()` — the local/mock path keeps binaries on-device, so
+there's nothing to push; bound by default → G2 stays intact). Firebase impl
+`FirebasePieceBinaryStore` in `apps/duet/lib/data/` (per the M3.1 placement
+decision): `getMetadata().customMetadata['checksum']` match ⇒ skip;
+`putFile` with `{checksum}` metadata, mapping `snapshotEvents` → `UploadProgress`;
+on completion stamps `basePdfUploaded: true` on the piece doc (owner update,
+allowed by the M2.2 rules) — a resume/repair signal (schema field added to M2.1
+doc, import ordering *create → upload → stamp*). Added `firebase_storage
+^13.0.0` to duet. `ImportPieceState` grew `progress: double?`; `ImportPieceBloc`
+gained the store dep + an upload step after `importPiece` (driven via a managed
+subscription, not `await for`, so `ImportCancelled` can abort it — bloc's
+default concurrent transformer lets the cancel event run while submit awaits);
+a failed/cancelled upload keeps the created piece in an internal field so a
+retry re-uploads instead of duplicating (G4: the picked file/title survive).
+`ImportPieceScreen` renders a determinate `LinearProgressIndicator` + a Cancel
+button while submitting. Threaded `binaryStore` through
+`LibraryPage`→`LibraryHomeScreen`→`ImportPiecePage` and every construction site
+(`app.dart`, `duet_flow_harness`, the two hand-rolled-DI app tests, the library
+widget + golden tests). **Deviations:** (1) the real `FirebasePieceBinaryStore`
+is **not** unit-tested — the codebase has no Storage fake (Firestore uses
+`fake_cloud_firestore`; Storage is emulator-tested, M2.3), so its dedupe/progress
+is emulator-verified and the *contract-level* dedupe (`skipped` ⇒ complete) is
+asserted via a fake store in the bloc test. (2) Interactive mid-upload **cancel
+is implemented** (not deferred). Tests: `noop_piece_binary_store_test.dart` (4)
++ 11 `ImportPieceBloc` tests (progress sequence, dedupe-skip, create-failure,
+upload-failure, retry-without-re-create, cancel). Full gate green (incl. golden);
+not wired to the cloud repos yet — M3.6 flips `useFirebase`.
 
 ### M3.4 — Binary download/cache manager (offline reading)
 

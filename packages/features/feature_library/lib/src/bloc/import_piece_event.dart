@@ -26,3 +26,9 @@ final class ImportTitleChanged extends ImportPieceEvent {
 final class ImportSubmitted extends ImportPieceEvent {
   const ImportSubmitted();
 }
+
+/// The user cancelled an in-flight base-PDF upload, aborting it and returning
+/// to the naming form (the created piece is kept for a later retry).
+final class ImportCancelled extends ImportPieceEvent {
+  const ImportCancelled();
+}
