@@ -64,7 +64,7 @@ The piece metadata document. Mirrors the `Piece` entity
 | `ownerName` | `string?` | Owner's display name if known at import; UI falls back to an initials-from-id placeholder. |
 | `participantIds` | `string[]` | **Materialized** = `[ownerId, ...collaborator uids]`. Today this is a *derived getter* (`Piece.participantIds`); in Firestore it's a stored field so a client can run `where('participantIds', arrayContains: myUid)`. Kept in sync **only** by the collaborator-mutation Function (never client-written directly). |
 | `collaborators` | `array<{uid, name?, email?}>` | Embedded, insertion-ordered (earliest-invited first). Exactly the `Collaborator` shape from `piece_mappers.dart`. |
-| `basePdfChecksum` | `string` | sha256 hex of the original PDF bytes (`PdfRenderService.checksum` → `sha256.convert(bytes)`). Keys the local render cache and the Storage-object dedupe (see [Storage](#cloud-storage-layout)). |
+| `basePdfChecksum` | `string` | sha256 hex of the original PDF bytes (`PdfRenderService.checksum` → `sha256.convert(bytes)`). **Pins "same base PDF" so region-anchored annotations can't silently misalign onto a different copy** — annotations are fractional page coordinates, meaningful only against one exact document; `review_sync` already hard-fails on a mismatch (`file_share_review_sync_service`), and the cloud model verifies the local copy against the Storage object's `checksum` metadata before applying remote annotations. Also the [Storage-object dedupe](#cloud-storage-layout) key (suppresses re-uploading an identical PDF for the same piece). |
 | `createdAt` | `Timestamp` | First import. |
 | `updatedAt` | `Timestamp` | Last metadata change. Drives library recency ordering and the unread heuristic. |
 
