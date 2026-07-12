@@ -30,6 +30,12 @@ class _FakeBinaryStore implements PieceBinaryStore {
     uploadedPieceIds.add(pieceId);
     return _onUpload();
   }
+
+  @override
+  Future<Result<void>> downloadBasePdf({
+    required String pieceId,
+    required String destPath,
+  }) => throw UnimplementedError();
 }
 
 void main() {

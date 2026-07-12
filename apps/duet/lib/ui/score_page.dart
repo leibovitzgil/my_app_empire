@@ -34,6 +34,9 @@ class _DuetScorePageState extends State<DuetScorePage> {
     pieceRepository: getIt<PieceRepository>(),
     annotationRepository: getIt<AnnotationRepository>(),
     currentUserId: getIt<CurrentUser>().call(),
+    // Resolves the base PDF to a readable local path (cache/download) before
+    // the reader opens it — offline reads hit the cache (M3.4).
+    pdfBinaryCache: getIt<PdfBinaryCache>(),
   )..add(ScoreOpened(widget.pieceId));
 
   // Session-local only: this MVP's sync is manual (explicit share/import),

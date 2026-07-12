@@ -282,6 +282,19 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt.registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new);
   }
 
+  // Resolves a piece's base PDF to a readable local path at read time
+  // (M3.4) — cache hit, on-device copy, or download-and-verify via the bound
+  // `PieceBinaryStore`. Backend-agnostic: the local composition returns the
+  // staged on-device path directly, so this stays green headless; the Firebase
+  // store gives it real download/offline-cache behaviour under `useFirebase`.
+  getIt.registerLazySingleton<PdfBinaryCache>(
+    () => DefaultPdfBinaryCache(
+      binaryStore: getIt<PieceBinaryStore>(),
+      pdfRenderService: getIt<PdfRenderService>(),
+      storage: getIt<LocalStorageService>(),
+    ),
+  );
+
   getIt.registerLazySingleton<ReviewSyncService>(
     () => FileShareReviewSyncService(
       pieceRepository: getIt<PieceRepository>(),

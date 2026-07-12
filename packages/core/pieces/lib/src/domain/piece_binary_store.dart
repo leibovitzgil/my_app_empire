@@ -1,3 +1,4 @@
+import 'package:core_utils/core_utils.dart';
 import 'package:equatable/equatable.dart';
 
 /// Progress of a base-PDF upload (M3.3).
@@ -46,9 +47,9 @@ class UploadProgress extends Equatable {
 /// progress. The read/download side (offline cache) is M3.4's `PdfBinaryCache`.
 ///
 /// Kept a separate seam from `PieceRepository` (rather than folded into
-/// `importPiece`) precisely so progress is *streamable* — the import bloc
-/// renders a determinate bar from [uploadBasePdf]'s events.
-// ignore: one_member_abstracts
+/// `importPiece`) precisely so upload progress is *streamable* — the import
+/// bloc renders a determinate bar from [uploadBasePdf]'s events. The download
+/// side feeds `PdfBinaryCache` (M3.4).
 abstract class PieceBinaryStore {
   /// Ensures the bytes at [localPath] (content-identified by [checksum]) are
   /// stored as [pieceId]'s base PDF, emitting [UploadProgress] as it goes and
@@ -63,5 +64,14 @@ abstract class PieceBinaryStore {
     required String pieceId,
     required String localPath,
     required String checksum,
+  });
+
+  /// Downloads [pieceId]'s base PDF to [destPath], overwriting it, completing
+  /// once written. Fails (rather than throwing) when there is no remote object
+  /// or the transfer errors. The caller (`PdfBinaryCache`) verifies the written
+  /// bytes against the expected checksum — this method does not.
+  Future<Result<void>> downloadBasePdf({
+    required String pieceId,
+    required String destPath,
   });
 }

@@ -1,3 +1,4 @@
+import 'package:core_utils/core_utils.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pieces/pieces.dart';
 
@@ -29,13 +30,22 @@ void main() {
   });
 
   group('NoopPieceBinaryStore', () {
-    test('emits a single skipped event and completes', () async {
+    test('emits a single skipped upload event and completes', () async {
       const store = NoopPieceBinaryStore();
       final events = await store
           .uploadBasePdf(pieceId: 'p1', localPath: '/tmp/p1.pdf', checksum: 'c')
           .toList();
 
       expect(events, const [UploadProgress.skipped()]);
+    });
+
+    test('download fails — the local composition never downloads', () async {
+      const store = NoopPieceBinaryStore();
+      final result = await store.downloadBasePdf(
+        pieceId: 'p1',
+        destPath: '/tmp/p1.pdf',
+      );
+      expect(result, isA<ResultFailure<void>>());
     });
   });
 }

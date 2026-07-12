@@ -73,10 +73,13 @@ class Piece extends Equatable {
   bool isParticipant(String userId) =>
       userId == ownerId || isCollaborator(userId);
 
-  /// Returns a copy with the given fields replaced.
+  /// Returns a copy with the given fields replaced. [basePdfPath] is
+  /// overridable so the reader path can be resolved to a cache/download
+  /// location at read time (M3.4) without re-fetching the whole entity.
   Piece copyWith({
     String? title,
     String? ownerName,
+    String? basePdfPath,
     List<Collaborator>? collaborators,
     DateTime? updatedAt,
   }) {
@@ -84,7 +87,7 @@ class Piece extends Equatable {
       id: id,
       title: title ?? this.title,
       basePdfChecksum: basePdfChecksum,
-      basePdfPath: basePdfPath,
+      basePdfPath: basePdfPath ?? this.basePdfPath,
       ownerId: ownerId,
       ownerName: ownerName ?? this.ownerName,
       collaborators: collaborators ?? this.collaborators,

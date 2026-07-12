@@ -1,3 +1,4 @@
+export 'src/data/default_pdf_binary_cache.dart';
 export 'src/data/local_annotation_repository.dart';
 export 'src/data/local_audio_asset_store.dart';
 export 'src/data/local_piece_repository.dart';
@@ -9,6 +10,7 @@ export 'src/domain/collaborator.dart';
 export 'src/domain/ink_layer.dart';
 export 'src/domain/ink_stroke.dart';
 export 'src/domain/ownership.dart';
+export 'src/domain/pdf_binary_cache.dart';
 export 'src/domain/piece.dart';
 export 'src/domain/piece_binary_store.dart';
 export 'src/domain/piece_repository.dart';
