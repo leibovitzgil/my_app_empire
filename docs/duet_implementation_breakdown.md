@@ -139,7 +139,7 @@ in the Track B backlog.
 | M2.4 | ☑ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
 | M2.5 | ☑ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
 | M3.1 | ☑ `FirestorePieceRepository` | M2.2, M2.3 |
-| M3.2 | ☐ `FirestoreAnnotationRepository` | M3.1 |
+| M3.2 | ☑ `FirestoreAnnotationRepository` | M3.1 |
 | M3.3 | ☐ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
 | M3.4 | ☐ Binary download/cache manager (offline reading) | M3.3 |
 | M3.5 | ☐ `CloudAudioAssetStore` + offline upload queue | M3.2 |
@@ -1248,6 +1248,42 @@ construction.
 
 **Done when:** suite green; `ScoreBloc` tests still pass against the
 contract; not yet in DI.
+
+**Landed.** `apps/duet/lib/data/firestore_annotation_repository.dart` +
+`firestore_annotation_mappers.dart` (placed in `apps/duet/lib/data/` beside
+`FirestorePieceRepository`, per the M3.1 placement decision — the Firebase impls
+are Duet-specific and `core/pieces` stays infra-free). `watch` is a hand-rolled
+combine-latest over the layers collection, notes collection, and piece document:
+each caches its latest snapshot and the first `PieceAnnotations` is withheld
+until all three have loaded (so `.first` reflects true state, not an empty
+race), then re-emits on any change. Each layer's `PieceRole` is derived from the
+piece's `ownerId` (owner vs. collaborator); tombstoned notes (`deletedAt != null`)
+are filtered out here (M4.4 flips the tombstone). Mutations: `addStroke` is a
+transaction on the caller's own `layers/{uid}` doc (append + bump `rev` +
+`updatedAt`; first stroke reads the piece doc in-transaction to resolve the role,
+porting `LocalAnnotationRepository._roleFor`); `eraseStroke` locates the stroke
+across layers to reproduce the local guards exactly (unknown → `StateError`,
+another author's → `OwnershipViolation`) then rewrites the caller's own doc;
+`addAudioNote`/`deleteAudioNote` write own note docs (**plain delete** for now —
+M4.4 converts it to a `deletedAt` tombstone update). Client-side
+`OwnershipViolation` guards are kept **verbatim** as defense in depth (rules are
+the backstop; a rules `permission-denied` maps to `OwnershipViolation`). `watch`
+uses a broadcast controller whose `onListen`/`onCancel` start and cancel the
+Firestore subscriptions (cancel-on-last-listener), matching
+`LocalAnnotationRepository`'s controller discipline. **Deviation (recorded in
+`docs/duet_cloud_schema.md`, Function-only mutations #7):** the privileged
+cross-author ops (`clearPiece`, `removeAuthorSlice`, foreign-author
+`replaceAuthorSlice`) run against Firestore here for the fake-backed tests and
+the own-author case, but in production are the M3.8 purge Function's job;
+`review_sync` importing another author's slice therefore falls back to
+local-only annotations. `replaceAuthorSlice` does **not** depend on
+`PieceRepository` (unlike the local impl) — the role comes straight from the
+piece doc via `_firestore`, one fewer DI edge. Tests:
+`firestore_annotation_mappers_test.dart` (7) +
+`firestore_annotation_repository_test.dart` (18, mirroring
+`local_annotation_repository_test.dart` on `fake_cloud_firestore` plus a two-uid
+convergence test — writer A's stroke surfaces in B's `watch`). Full gate green;
+not wired into DI (M3.6 flips `useFirebase`).
 
 ### M3.3 — PDF upload on import: checksum dedupe + progress UI
 

@@ -345,6 +345,19 @@ Client mutations the rules can't safely express, named here so each has a home
    server (M6.3) — never a client.
 6. **Account purge** (already shipped: `deleteAccount` callable, M1.8) — deletes
    everything a uid owns server-side.
+7. **Cross-author annotation cascades.** The `AnnotationRepository` privileged
+   ops (`clearPiece`, `removeAuthorSlice`, and `replaceAuthorSlice` for a
+   *different* author) write or delete layer/note documents the caller doesn't
+   own — which the layer/note rules never grant a client (own-layer writes only;
+   notes are never client-deleted). M3.2's `FirestoreAnnotationRepository`
+   implements them against Firestore for the fake-backed unit tests and the
+   own-author case, but in production they are the **M3.8 purge Function's** job.
+   Consequence recorded for M3.2: `review_sync` importing another author's
+   bundle slice is unsupported cloud-side (the importer can't write the
+   reviewer's layer), so it **falls back to local-only annotations** for that
+   slice; a client applying its *own* returned bundle slice
+   (`replaceAuthorSlice` with `authorId == auth.uid`) is the supported cloud
+   path.
 
 ---
 
