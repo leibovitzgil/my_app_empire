@@ -136,7 +136,7 @@ in the Track B backlog.
 | M2.1 | ☑ Cloud schema design doc (pieces) | — |
 | M2.2 | ☑ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
 | M2.3 | ☑ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
-| M2.4 | ☐ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
+| M2.4 | ☑ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
 | M2.5 | ☐ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
 | M3.1 | ☐ `FirestorePieceRepository` | M2.2, M2.3 |
 | M3.2 | ☐ `FirestoreAnnotationRepository` | M3.1 |
@@ -1041,6 +1041,40 @@ per-piece) is checked in five client call sites and nowhere on a server.
 emulator E2E passes through the callables; v1 risk #1 comment removed;
 plan M2 "inbox create moves behind a Function" + M5's "M2 inbox-write
 authorization" both satisfied.
+
+**Landed.** Three v2 callables in `functions/src/`: `sendInvite`
+(auth-gated; resolves the invitee via `usersByEmail` admin read respecting
+`discoverable`, exactly like the client directory; owner name from the
+caller's token; writes the recipient inbox with the Admin SDK; returns the
+resolved recipient), `acceptInvite` (verifies the message is addressed to
+the caller, is an `invite`, and is unread, then marks it consumed), and
+`leavePiece` (doc-guarded — a no-op pre-M3, the participant-array removal
++ layer delete ready for M3). Cap constant mirrored in
+`collaboratorLimits.ts` with a cross-ref; owner-ownership and the real cap
+count carry `// M3.6` markers (both need the piece doc M3 lands).
+
+Rules: `userInbox` `create: if false` (recipient read/update stays); the
+v1 inbox-spam risk block is gone. `firestore_rules.test.ts`'s
+client-create test is flipped to assert **denial** (both a stranger and
+the recipient) — 45/45. Client swap (G3): `CallableCollaboratorInviteService`
+(`apps/duet/lib/data/`) decorates the default service — preview, inbox
+stream, and the pre-M3 on-device accept mutation stay local; send + accept
+route through the callables; `injection.dart` picks per `useFirebase`, the
+headless in-memory path unchanged (G2, injection guardrail green).
+
+Functions tests (`invite_lifecycle.test.ts`, emulator-backed, 8):
+unauthenticated + missing-arg rejections, discoverable-invitee resolve +
+inbox write, non-discoverable/absent → `no-account` (no write), accept
+marks read, wrong-caller/`not-found` + already-consumed rejections, and
+the pre-M3 `leavePiece` no-op. The collaborator E2E is rewritten through
+the callable path (Functions emulator wired; the owner-side raw inbox read
+— which the recipient-only rule now denies — replaced by the `sendInvite`
+resolved outcome + the collaborator's own `watchInvites`). A vitest
+`fileParallelism: false` config was added to the functions workspace (the
+new file's `beforeEach` clear raced the `deleteAccount` suite, same as
+M2.3). *Manual proof (PR):* driving the deployed callables over HTTP —
+`sendInvite` → inbox written → a client's direct inbox write **403** →
+`acceptInvite` → message consumed.
 
 ### M2.5 — Directory lookup hardening (App Check + rate limiting)
 
