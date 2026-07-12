@@ -1,10 +1,65 @@
 rules_version = '2';
 
-// Deny-all placeholder: no client code touches Cloud Storage yet.
-// M2.2 (docs/duet_implementation_breakdown.md) replaces this with the
-// participant-scoped rules for /pieces/{pieceId}/** per the M2.1 schema.
+// Duet's Cloud Storage rules (M2.2), per docs/duet_cloud_schema.md.
+//
+// Objects are per-piece: `pieces/{pieceId}/base.pdf` (the score) and
+// `pieces/{pieceId}/audio/{assetId}` (audio-note recordings). Access mirrors
+// the Firestore piece ACL via a **cross-service read**: the piece's
+// `participantIds`/`ownerId` are the single source of truth, so membership is
+// resolved with `firestore.get(...)` rather than duplicated here.
+//
+// Ordering assumption: a client creates the `pieces/{id}` Firestore document
+// (establishing `participantIds`) *before* uploading its `base.pdf` — so the
+// membership lookup below already resolves at upload time. No client writes
+// these yet (piece storage is on-device); the rules land ahead of the M3/M4
+// sync code (G6), proven by the M2.3 suite.
 service firebase.storage {
   match /b/{bucket}/o {
+    match /pieces/{pieceId}/{allPaths=**} {
+      function piece() {
+        return firestore.get(
+          /databases/(default)/documents/pieces/$(pieceId)
+        ).data;
+      }
+      function isSignedIn() { return request.auth != null; }
+      function isParticipant() {
+        return isSignedIn() && request.auth.uid in piece().participantIds;
+      }
+      function isOwner() {
+        return isSignedIn() && request.auth.uid == piece().ownerId;
+      }
+
+      // Any participant may read every object under a piece they belong to.
+      allow read: if isParticipant();
+    }
+
+    // The base score: only the owner may write it (the piece has exactly one
+    // canonical PDF), capped at 50 MB (align M8.3).
+    match /pieces/{pieceId}/base.pdf {
+      function piece() {
+        return firestore.get(
+          /databases/(default)/documents/pieces/$(pieceId)
+        ).data;
+      }
+      allow write: if request.auth != null &&
+        request.auth.uid == piece().ownerId &&
+        request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // Audio-note recordings: any participant may add one (they author their
+    // own notes), capped at 5 MB (align M8.3).
+    match /pieces/{pieceId}/audio/{assetId} {
+      function piece() {
+        return firestore.get(
+          /databases/(default)/documents/pieces/$(pieceId)
+        ).data;
+      }
+      allow write: if request.auth != null &&
+        request.auth.uid in piece().participantIds &&
+        request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Deny-by-default: anything outside a piece's object tree.
     match /{allPaths=**} {
       allow read, write: if false;
     }

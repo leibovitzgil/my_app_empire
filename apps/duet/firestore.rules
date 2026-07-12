@@ -1,16 +1,24 @@
 rules_version = '2';
 
-// Duet's Firestore schema for the collaborator-sharing seams this feature
-// added: an email-discovery directory (`usersByEmail`), device-token
-// bookkeeping (`deviceTokens`), and the generic per-user message inbox
-// (`userInbox`) `feature_pairing`'s invites ride over — see
-// `core/user_directory`/`services/notifications` for the client contracts
-// these collections back. Piece/annotation storage itself stays on-device
-// (`LocalPieceRepository`/`LocalAnnotationRepository`, via `local_storage`)
-// for this build — no `pieces` collection exists in Firestore yet, so it's
-// sketched below only as documentation for a future Firestore-backed
-// `PieceRepository`, mirroring how `apps/tandem`'s rules file documents its
-// own production block ahead of actually deploying it.
+// Duet's Firestore security rules. Two groups of collections:
+//
+//  1. Identity/discovery (live since M1): `usersByEmail` (email directory),
+//     `deviceTokens` (push-token registry), `userInbox` (the generic message
+//     inbox invites ride over). Backed by client contracts in
+//     `core/user_directory` / `services/notifications`.
+//
+//  2. Pieces + annotations (M2.2): `pieces` and its `layers`/`notes`/`reads`
+//     subcollections. These rules are the enforced translation of
+//     `docs/duet_cloud_schema.md` and mirror the ownership guards the local
+//     repositories enforce client-side today
+//     (`LocalPieceRepository.deletePiece` = owner-only;
+//     `LocalAnnotationRepository` = author-only stroke/note mutation). They
+//     supersede the old commented `teacherId`/`collaboratorIds` sketch.
+//     **No client writes these yet** — piece/annotation storage is still
+//     on-device (`local_storage`); the rules land first and are proven by
+//     the M2.3 test suite *before* the M3/M4 sync code that will write them
+//     (G6). `inviteTokens` (M5.2) and `entitlements` (M6.3) are deliberately
+//     left denied-by-default until their milestones add rules + writers.
 //
 // v1 accepted risks (FIX-4): a `usersByEmail` read is an exact-key GET,
 // gated on the target document's own `discoverable` flag — a
@@ -18,17 +26,15 @@ rules_version = '2';
 // identical (from a caller's perspective) to no entry existing at all —
 // and `list`/`query` is never allowed, so a client can never enumerate the
 // directory, only resolve one email it already knows. That mitigation is
-// NOT rate-limited by these rules (nor by the emulator); rate-limiting the
-// lookup endpoint itself is a pre-prod gate, out of scope for v1.
+// NOT rate-limited by these rules (nor by the emulator); rate-limiting is
+// closed by M2.5 (App Check + a lookup callable). Out of scope for v1.
 //
 // v1 accepted risk (`userInbox`): a signed-in client may `create` a message
-// in any recipient's inbox as long as `toUid` matches the path — this is
-// inherent to the v1 client-writes-inbox design (production moves the write
-// behind a Firestore-triggered Cloud Function, gating who may send). It is a
-// notification-spam vector, but is not a data-exposure or takeover one:
-// accepting a spam "invite" only adds the accepter to the *sender's* own
-// piece, which is harmless to the victim. Sender-side authorization is a
-// pre-prod gate, out of scope for v1.
+// in any recipient's inbox as long as `toUid` matches the path — inherent to
+// the v1 client-writes-inbox design. It is a notification-spam vector, but
+// not a data-exposure or takeover one: accepting a spam "invite" only adds
+// the accepter to the *sender's* own piece, harmless to the victim. Closed by
+// M2.4, which moves the send behind a Firestore-triggered Cloud Function.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /usersByEmail/{emailKey} {
@@ -67,22 +73,98 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // --- Forward-looking only: no `pieces` collection exists in this
-    // build (piece/annotation storage is on-device via `local_storage`).
-    // Sketched so a future Firestore-backed `PieceRepository` lands with
-    // the right scoping from day one: only the owning teacher or a current
-    // collaborator may read/write a piece.
-    // match /pieces/{pieceId} {
-    //   function isParticipant() {
-    //     return request.auth != null && (
-    //       resource.data.teacherId == request.auth.uid ||
-    //       request.auth.uid in resource.data.collaboratorIds
-    //     );
-    //   }
-    //   allow read, write: if isParticipant();
-    // }
+    // --- Pieces + annotations (M2.2), per docs/duet_cloud_schema.md. --------
+    match /pieces/{pieceId} {
+      // A participant = the owner or a collaborator; `participantIds` is the
+      // materialized [ownerId, ...collaborator uids] the schema defines.
+      function isSignedIn() { return request.auth != null; }
+      function isParticipant() {
+        return isSignedIn() &&
+          request.auth.uid in resource.data.participantIds;
+      }
+      function isOwner() {
+        return isSignedIn() && request.auth.uid == resource.data.ownerId;
+      }
 
-    // Deny-by-default: any path not explicitly matched above.
+      // Read (get + list) is participant-only. A query must therefore be
+      // scoped to the caller's own pieces — e.g.
+      // `where('participantIds', arrayContains: myUid)` — or it resolves
+      // documents the caller can't read and fails, which is the intent.
+      allow read: if isParticipant();
+
+      // Create: the caller is the owner, is the *sole* participant, and
+      // brings no collaborators — collaborator membership is only ever added
+      // by the invite-accept Function (M2.4), never at create time.
+      allow create: if isSignedIn() &&
+        request.auth.uid == request.resource.data.ownerId &&
+        request.resource.data.participantIds == [request.auth.uid] &&
+        request.resource.data.collaborators.size() == 0;
+
+      // Update: the owner may edit metadata only. The membership fields
+      // (`participantIds`, `collaborators`) and `ownerId` are immutable to
+      // clients — collaborator add/remove is a Cloud Function (M2.4), which
+      // uses the Admin SDK and bypasses these rules. This is what makes the
+      // per-piece cap (CollaboratorLimits, which depends on monetization
+      // state rules can't read) unforgeable from a client.
+      allow update: if isOwner() &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.participantIds == resource.data.participantIds &&
+        request.resource.data.collaborators == resource.data.collaborators;
+
+      // Delete: owner-only (mirrors LocalPieceRepository's OwnershipViolation
+      // on a non-owner deletePiece). Subcollection cleanup cascades via the
+      // purge Function, not client deletes.
+      allow delete: if isOwner();
+
+      // Resolving the parent piece for a subcollection rule costs one extra
+      // document read per request — the price of membership-gating children
+      // by the parent's `participantIds`.
+      function parentPiece() {
+        return get(/databases/$(database)/documents/pieces/$(pieceId)).data;
+      }
+      function isPieceParticipant() {
+        return isSignedIn() && request.auth.uid in parentPiece().participantIds;
+      }
+
+      // One layer document per author (id == the author's uid). Conflict-free
+      // by construction: a participant may write only *their own* layer.
+      match /layers/{uid} {
+        allow read: if isPieceParticipant();
+        allow create, update: if isSignedIn() &&
+          request.auth.uid == uid &&
+          isPieceParticipant();
+        // The author may delete their own layer; the owner may delete any
+        // layer, so removing a collaborator can cascade their ink away.
+        allow delete: if isSignedIn() &&
+          (request.auth.uid == uid ||
+            request.auth.uid == parentPiece().ownerId);
+      }
+
+      // One document per audio note. Only the author may create it, and the
+      // only permitted update is flipping the `deletedAt` tombstone (M4.4) —
+      // notes are never hard-deleted, so a delete converges across offline
+      // peers instead of resurrecting.
+      match /notes/{noteId} {
+        allow read: if isPieceParticipant();
+        allow create: if isPieceParticipant() &&
+          request.resource.data.authorId == request.auth.uid;
+        allow update: if isSignedIn() &&
+          resource.data.authorId == request.auth.uid &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly(['deletedAt']);
+        allow delete: if false;
+      }
+
+      // Each participant's own unread watermark (id == their uid).
+      match /reads/{uid} {
+        allow read, write: if isSignedIn() &&
+          request.auth.uid == uid &&
+          isPieceParticipant();
+      }
+    }
+
+    // Deny-by-default: any path not explicitly matched above (this is what
+    // keeps `inviteTokens`/`entitlements` closed until M5.2/M6.3).
     match /{document=**} {
       allow read, write: if false;
     }
