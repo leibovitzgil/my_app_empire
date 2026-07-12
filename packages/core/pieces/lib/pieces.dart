@@ -1,3 +1,5 @@
+export 'src/data/firestore_piece_mappers.dart';
+export 'src/data/firestore_piece_repository.dart';
 export 'src/data/local_annotation_repository.dart';
 export 'src/data/local_audio_asset_store.dart';
 export 'src/data/local_piece_repository.dart';
