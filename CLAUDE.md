@@ -50,6 +50,50 @@ packages/               # REUSABLE, app-agnostic building blocks ONLY — never 
   and `apps/duet/lib/injection.dart` for the canonical get_it pattern (register a
   concrete implementation against the contract that features depend on).
 
+## Where new code goes (`packages/` vs. the app) — READ BEFORE CREATING CODE
+
+`packages/` is the **app-agnostic toolkit** and nothing else. Before adding a
+package, moving code into `packages/`, or scaffolding a feature, apply this
+litmus test:
+
+> **Would a *different* app, with a different domain, plausibly reuse this
+> as-is?**
+> - **Yes** → reusable building block → `packages/` (`core/`, `services/`, or a
+>   generic `features/*`).
+> - **No** — it names or models one app's domain → it lives **inside that app**
+>   (`apps/<app>/lib/{domain,features,review_sync,data,…}`, feature-first).
+
+**The number of current consumers is NOT the test.** `pdf_rendering`, `audio`,
+and `user_directory` are used by Duet alone today yet stay in `packages/`,
+because they're generic capabilities any app could use. Conversely, "several of
+Duet's features share it" does **not** make code reusable — that just means it's
+Duet's *domain kernel*, which belongs in `apps/duet/lib/domain/`, not
+`packages/`. "Shared across one app's features" and "reusable across apps" are
+different axes; only the second earns a spot in `packages/`.
+
+**It does NOT belong in `packages/` if it:**
+- names or models a product's domain (a `Piece`, `Score`, `Annotation`,
+  `GroceryItem`);
+- is a whole product feature (a sheet-music reader, a grocery list);
+- is a backend-specific implementation of an app's contract (Firebase repos →
+  `apps/<app>/lib/data/`, behind the domain contract).
+
+**It DOES belong in `packages/` if it's:**
+- `core/` — cross-cutting primitives (UI kit, `Result`, storage, theming,
+  monetization, user directory);
+- `services/` — wrappers over external capabilities (audio, PDF, network, push,
+  deep links, analytics, remote config);
+- `features/` — a **generic** feature any app would want (auth, onboarding,
+  paywall, settings).
+
+**The mistake this prevents (real, M3.x):** `pieces` / `feature_score` /
+`feature_library` / `feature_pairing` / `review_sync` were placed under
+`packages/` because Duet's features shared them — but they model *sheet music*,
+so no other app reuses them. They now live in `apps/duet/lib/`. Do not
+re-introduce app domain into `packages/`; the graph already blocks the reverse
+(a `packages/*` package can't depend on an app), but nothing stops a new
+domain-shaped package from being created there — that judgment is on you.
+
 ## Commands
 
 Run from the repo root. All use Melos.
