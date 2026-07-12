@@ -1188,8 +1188,11 @@ Firebase-free.
 DI (M3.6 flips).
 
 **Landed.** `FirestorePieceRepository` + `firestore_piece_mappers.dart` in
-`packages/core/pieces` (adds `cloud_firestore`, precedent: `user_directory`;
-entities/mappers stay Firebase-free otherwise). `watchPieces` =
+**`apps/duet/lib/data/`** — kept out of `core/pieces` so the domain package
+stays Firebase-free (the task offered `core/pieces` per the `user_directory`
+precedent, but pieces is Duet-specific and this keeps `cloud_firestore` at
+the app layer where backend choice is composed; M3.2's annotation repo
+follows the same placement). `watchPieces` =
 `participantIds array-contains` + `updatedAt desc` `snapshots()`; mutations
 are transactions bumping `updatedAt` and re-materializing `participantIds`
 from the entity. **Metadata only:** the base PDF stays device-local

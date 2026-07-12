@@ -3,15 +3,12 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/data/firestore_piece_mappers.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
-import 'package:pieces/src/data/firestore_piece_mappers.dart';
-import 'package:pieces/src/domain/collaborator.dart';
-import 'package:pieces/src/domain/ownership.dart';
-import 'package:pieces/src/domain/piece.dart';
-import 'package:pieces/src/domain/piece_repository.dart';
+import 'package:pieces/pieces.dart';
 
 /// A [PieceRepository] backed by Cloud Firestore (`/pieces`, per
 /// `docs/duet_cloud_schema.md`) — the cloud counterpart to

@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:pieces/src/domain/collaborator.dart';
-import 'package:pieces/src/domain/piece.dart';
+import 'package:pieces/pieces.dart';
 
 /// Serialization between [Piece] and its Firestore document shape (per
 /// `docs/duet_cloud_schema.md`), the cloud counterpart to `piece_mappers.dart`.

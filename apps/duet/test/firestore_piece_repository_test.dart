@@ -5,6 +5,8 @@
 import 'dart:io';
 
 import 'package:core_utils/core_utils.dart';
+import 'package:duet/data/firestore_piece_mappers.dart';
+import 'package:duet/data/firestore_piece_repository.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_storage/local_storage.dart';
