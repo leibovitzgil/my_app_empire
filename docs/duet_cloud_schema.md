@@ -193,6 +193,19 @@ fields to server-managed (M5.2).
 | `consumed` | `bool` | Redeemed flag. |
 | `consumedBy` | `string?` | **New.** The uid that redeemed it. Set **only** by the acceptance Function (redemption adds the collaborator + enforces the cap atomically — see [below](#function-only-mutations)). |
 
+> **A token is an invitation, not a view grant.** Holding the link lets a
+> signed-in user *read this token document* — `pieceId` + `ownerName`, enough
+> to render the accept screen ("Sam invited you to Clair de Lune") — and
+> **nothing else**. It grants **no** read on the piece: `pieces/{id}` and every
+> subcollection (`layers`, `notes`, `reads`) are gated on participant
+> membership (`P`), and a link-holder is **not** a participant until they
+> *accept* and the redemption Function adds them to `participantIds` (subject
+> to the cap). So a stranger with only the link can never see notes,
+> annotations, or even the piece metadata beyond the owner's name — they see
+> an invitation, and access begins at redemption. (This is deliberate
+> capability-URL design: the token doc is readable by whoever holds the
+> unguessable token, but it is inert — it carries no content.)
+
 ### `/entitlements/{uid}`
 
 One document per user, id = uid — the server-authoritative monetization state
@@ -290,7 +303,7 @@ get(pieces/{id}).data.participantIds`); `self` = the doc id equals
 | `pieces/{id}/layers/{uid}` | `self` **and** `P` (author writes own layer) | `P` | `self` **and** `P` | `self` (piece deletion cascades via Function) |
 | `pieces/{id}/notes/{noteId}` | `P`, `authorId == auth.uid` | `P` | author only (e.g. set `deletedAt`) | **never** (tombstone via `deletedAt`) |
 | `pieces/{id}/reads/{uid}` | `self` **and** `P` | `self` | `self` **and** `P` | `self` |
-| `inviteTokens/{token}` | owner of `pieceId` (`auth.uid == ownerId`) | `auth != null` (holder resolves the token to preview the invite) | **Function only** (redemption sets `consumed`/`consumedBy`) | owner |
+| `inviteTokens/{token}` | owner of `pieceId` (`auth.uid == ownerId`) | `auth != null` — **the token doc only** (invite preview: `pieceId` + `ownerName`); grants **no** read on the piece, whose content stays `P`-gated | **Function only** (redemption sets `consumed`/`consumedBy`) | owner |
 | `entitlements/{uid}` | **Function only** | `self` | **Function only** | **Function only** |
 | `usersByEmail/{email}` *(M1, live)* | self (`auth.uid == resource.uid`) | `get` if `discoverable` or self; **no `list`** | self (owner of existing doc + new doc) | self |
 | `deviceTokens/{uid}` *(M1, live)* | `self` | `self` | `self` | `self` |
