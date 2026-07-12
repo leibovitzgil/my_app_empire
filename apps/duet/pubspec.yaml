@@ -59,6 +59,7 @@ dependencies:
     path: ../../packages/core/user_directory
 
 dev_dependencies:
+  fake_cloud_firestore: ^4.0.0
   firebase_messaging: ^16.4.1
   flutter_test:
     sdk: flutter

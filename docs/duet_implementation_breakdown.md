@@ -138,7 +138,7 @@ in the Track B backlog.
 | M2.3 | ☑ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
 | M2.4 | ☑ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
 | M2.5 | ☑ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
-| M3.1 | ☐ `FirestorePieceRepository` | M2.2, M2.3 |
+| M3.1 | ☑ `FirestorePieceRepository` | M2.2, M2.3 |
 | M3.2 | ☐ `FirestoreAnnotationRepository` | M3.1 |
 | M3.3 | ☐ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
 | M3.4 | ☐ Binary download/cache manager (offline reading) | M3.3 |
@@ -1186,6 +1186,31 @@ Firebase-free.
 
 **Done when:** suite green; no bloc/UI changes needed; not yet wired into
 DI (M3.6 flips).
+
+**Landed.** `FirestorePieceRepository` + `firestore_piece_mappers.dart` in
+**`apps/duet/lib/data/`** — kept out of `core/pieces` so the domain package
+stays Firebase-free (the task offered `core/pieces` per the `user_directory`
+precedent, but pieces is Duet-specific and this keeps `cloud_firestore` at
+the app layer where backend choice is composed; M3.2's annotation repo
+follows the same placement). `watchPieces` =
+`participantIds array-contains` + `updatedAt desc` `snapshots()`; mutations
+are transactions bumping `updatedAt` and re-materializing `participantIds`
+from the entity. **Metadata only:** the base PDF stays device-local
+(upload is M3.3/M3.4) — import/register stage it under `pieces/` and record
+the path in a `pieces.cloudBasePaths` side-map; reads hydrate `basePdfPath`
+from it (empty for a piece synced from another device — M3.4). Ownership
+guards mirror the local repo (owner-only delete/removeCollaborator, owner
+can't leave), and a rules `permission-denied` maps to `OwnershipViolation`
+so blocs behave identically (G3, no bloc/UI change). Production accept/leave
+still route through the M2.4 callables (the rules make `participantIds`
+immutable to clients); `addCollaborator`/`pairCollaborator`/`leavePiece`
+here serve the migration/import paths (M3.6) and tests. Cascade of a
+deleted piece's subcollections is the `// M3.8` follow-up. Tests: a
+`fake_cloud_firestore` suite (23) mirroring `local_piece_repository_test`
+(participant scoping, `updatedAt`-desc sort, ownership violations,
+idempotent add, duplicate-id register) + a mappers suite (5); fake enforces
+no rules — that coverage is M2.3. **Not wired into DI** — M3.6 flips
+`useFirebase` onto it.
 
 ### M3.2 — `FirestoreAnnotationRepository`
 
