@@ -134,7 +134,7 @@ in the Track B backlog.
 | M1.9 | ☑ Account deletion: client flow in Settings | M1.8, M1.5 |
 | M1.10 | ☑ Auth lifecycle emulator E2E | M1.2–M1.9 |
 | M2.1 | ☑ Cloud schema design doc (pieces) | — |
-| M2.2 | ☐ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
+| M2.2 | ☑ `firestore.rules` + `storage.rules` + indexes for pieces | M2.1 |
 | M2.3 | ☐ Rules tests for pieces/layers/notes/reads + Storage | M2.2, M1.7 |
 | M2.4 | ☐ Invite lifecycle server-side (send/accept/leave callables) | M2.2, M0.4 |
 | M2.5 | ☐ ▸B Directory lookup hardening (callable + rate limit) | M2.4 (enforce flip: M0.3) |
@@ -918,6 +918,29 @@ another participant", "not the note author").
 lockstep or immediately after) proves the matrix; **no client code writes
 these collections yet** (M2 exit: rules-tests green *before* client code —
 G6).
+
+**Landed.** `firestore.rules` pieces block + `storage.rules` +
+`firestore.indexes.json`, translating `docs/duet_cloud_schema.md`'s ACL
+matrix 1:1. `pieces`: participant read, owner-only create asserting the
+sole-participant/no-collaborator invariant, owner metadata update with
+`ownerId`/`participantIds`/`collaborators` **immutable to clients** (the
+Function bypasses via Admin SDK — M2.4), owner delete. `layers/{uid}`:
+participant read, author-only write, author-or-owner delete (removal
+cascade). `notes/{noteId}`: participant read, author create, author
+`deletedAt`-only tombstone update (`diff().affectedKeys().hasOnly`),
+no hard delete. `reads/{uid}`: self-only, participant-gated.
+`storage.rules`: cross-service `firestore.get(...).participantIds` gating,
+`base.pdf` owner-write ≤ 50 MB, `audio/{assetId}` participant-write
+≤ 5 MB. Index: `pieces(participantIds array-contains, updatedAt desc)`;
+notes/`deletedAt` indexes deferred until M4.4's query lands (no
+speculative index). `inviteTokens`/`entitlements` stay denied-by-default
+until M5.2/M6.3. Verified against the emulator: rules **compile**, M1.7
+suite **20/20** (no regression to `usersByEmail`/`deviceTokens`/
+`userInbox`), and a throwaway pieces smoke probe (6/6) exercised the
+subtle `get()`-based gating, the create invariant, collaborator-set
+immutability, author-only note create, and the tombstone-only update.
+The committed matrix is M2.3. The two v1-risk comment blocks now name
+their closure tasks (M2.4 inbox, M2.5 directory).
 
 ### M2.3 — Rules tests: pieces/layers/notes/reads + Storage
 
