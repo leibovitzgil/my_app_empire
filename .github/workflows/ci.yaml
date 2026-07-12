@@ -48,9 +48,10 @@ jobs:
           if-no-files-found: ignore
 
   rules-tests:
-    name: Firestore rules tests
-    # Guards apps/duet/firestore.rules (task M1.7). Node-only — no Flutter
-    # setup — and cheap enough to run on every PR rather than path-filter.
+    name: Firestore + Storage rules tests
+    # Guards apps/duet/firestore.rules + storage.rules (M1.7 identity + M2.3
+    # pieces/Storage). `npm test` boots the Firestore + Storage emulators.
+    # Node-only — no Flutter setup — and cheap enough to run on every PR.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

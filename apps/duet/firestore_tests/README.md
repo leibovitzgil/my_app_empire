@@ -28,18 +28,27 @@ suite via the node-only `rules-tests` job in `.github/workflows/ci.yaml`.
 
 ## What's covered
 
-The current rules matrix, one `describe` per collection: `usersByEmail`
-(exact-key get gated on `discoverable`, list always denied, owner-only
-writes — including the invite-hijack regression), `deviceTokens` (self
-only), `userInbox` (recipient read/update, path-matching create — the
-documented v1 spam-vector behavior M2.4 replaces — delete never), and the
-deny-by-default catch-all.
+Everything matching `test/**/*.test.ts` runs; one `describe` per collection.
 
-## Extending it (M2.3)
+- **`firestore_rules.test.ts`** (M1 identity): `usersByEmail` (exact-key get
+  gated on `discoverable`, list always denied, owner-only writes — including
+  the invite-hijack regression), `deviceTokens` (self only), `userInbox`
+  (recipient read/update, path-matching create — the documented v1 spam-vector
+  M2.4 replaces — delete never), deny-by-default catch-all.
+- **`pieces_rules.test.ts`** (M2.3): the full create/read/update/delete × role
+  matrix (owner / collaborator / stranger / anon) for `pieces` and its
+  `layers`/`notes`/`reads` subcollections — participant gating, the
+  sole-participant create invariant, collaborator-set immutability to clients,
+  author-only layer/note writes, the `deletedAt`-only note tombstone, and
+  self-only read watermarks.
+- **`storage_rules.test.ts`** (M2.3): `pieces/{id}/base.pdf` +
+  `audio/{assetId}` — participant read, owner-only base write, participant
+  audio write, the 5 MB size cap, deny-by-default. Membership is a
+  cross-service `firestore.get`, so these seed the gating piece doc in
+  Firestore; both emulators must be up (`npm test` boots `firestore,storage`).
 
-When the pieces schema lands, add fixtures for owner/collaborator/stranger
-and one `describe` per new collection (`pieces`, `layers`, `notes`,
-`reads`), either in `test/firestore_rules.test.ts` or as sibling files —
-everything matching `test/**/*.test.ts` runs. Storage-rules coverage joins
-via `initializeTestEnvironment`'s `storage` option once `storage.rules`
-grows real content.
+## Extending it
+
+Add fixtures + a `describe` in the matching file, or a new sibling
+`test/*.test.ts`. New collections (`inviteTokens` M5.2, `entitlements` M6.3)
+get their own file when their rules land.
