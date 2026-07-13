@@ -23,6 +23,7 @@ import 'package:duet/data/firebase_audio_object_store.dart';
 import 'package:duet/data/firebase_piece_binary_store.dart';
 import 'package:duet/data/firestore_annotation_repository.dart';
 import 'package:duet/data/firestore_piece_repository.dart';
+import 'package:duet/data/firestore_piece_sync_monitor.dart';
 import 'package:duet/data/local_piece_migrator.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
@@ -309,6 +310,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
         pieceRepository: getIt<PieceRepository>(),
       ),
     );
+  }
+
+  // Live reader sync signal (M4.1): the top-bar badge and Layers-panel prompt
+  // reflect real persistence state instead of a session-local flag. The
+  // default composition is always-synced (the on-device store has no remote to
+  // fall behind — and it keeps the headless gate Firebase-free, G2); under
+  // Firebase the monitor folds the piece's layers/notes snapshot metadata
+  // (pending writes + server reachability) and the M3.5 audio upload-queue
+  // depth into a `PieceSyncState`.
+  if (useFirebase) {
+    getIt.registerLazySingleton<PieceSyncMonitor>(
+      () => FirestorePieceSyncMonitor(
+        firestore: FirebaseFirestore.instance,
+        uploadQueue: getIt<AudioUploadQueue>(),
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<PieceSyncMonitor>(LocalPieceSyncMonitor.new);
   }
 
   // Base-PDF upload on import (M3.3). The default composition keeps binaries

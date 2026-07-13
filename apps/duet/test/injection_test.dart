@@ -9,6 +9,7 @@ import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
@@ -95,6 +96,15 @@ void main() {
         await configureDependencies();
 
         expect(getIt<AccountPurge>(), isA<MockAccountPurge>());
+      },
+    );
+
+    test(
+      'binds an always-synced LocalPieceSyncMonitor — never Firebase',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<PieceSyncMonitor>(), isA<LocalPieceSyncMonitor>());
       },
     );
   });

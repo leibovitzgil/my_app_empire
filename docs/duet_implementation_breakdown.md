@@ -146,7 +146,7 @@ in the Track B backlog.
 | M3.6 | ☑ DI flip + one-time local→cloud migration | M3.1–M3.5 |
 | M3.7 | ☑ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
 | M3.8 | ☑ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
-| M4.1 | ☐ Real `ScoreSyncStatus` from repository state | M3.2 |
+| M4.1 | ☑ Real `ScoreSyncStatus` from repository state | M3.2 |
 | M4.2 | ☐ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☐ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☐ Soft-delete tombstones for audio notes | M3.2 |
@@ -1749,6 +1749,36 @@ plain constructor param (`ScoreViewerScreen.syncStatus`, default
 **Done when:** on the emulator, going offline flips the badge, an offline
 stroke shows "Syncing…" on reconnect until flushed, then "Synced"; gate +
 goldens green.
+
+**Landed.** **Domain seam.** New `PieceSyncMonitor` contract +
+`PieceSyncState {synced, syncing, offline}` in the domain kernel
+(`domain/src/domain/piece_sync_monitor.dart`), with the Firebase-free
+`LocalPieceSyncMonitor` (always `synced` — the on-device store has no remote
+to fall behind) beside the other local impls. **Firebase impl.**
+`FirestorePieceSyncMonitor` (`data/`) folds three live signals into a
+de-duplicated state stream: the piece's `layers` + `notes` snapshot metadata
+(`includeMetadataChanges: true` → `isFromCache`/`hasPendingWrites`) and the
+M3.5 audio upload-queue depth. **Precedence** (`pieceSyncStateFrom`): any
+un-acked local write ⇒ `syncing`; else a cache-only read ⇒ `offline`; else
+`synced`. Pending outranks offline so the airplane-mode demo (no pending
+writes) reads offline while an online edit reads syncing→synced without
+flashing offline. Offline is derived from Firestore's own `isFromCache` — no
+new `connectivity_*` dependency. **App glue.** `DuetScorePage` now drives the
+badge from `PieceSyncMonitor.watch(pieceId)` via a `StreamBuilder`
+(`PieceSyncState`→`ScoreSyncStatus`; `offline`→`notSynced`, the
+`cloud_off_outlined` pill — copy intent "Offline — changes saved on this
+iPad"); the session-local `_syncStatus` `setState` plumbing in
+`_share`/`_import` is gone. **G3 preserved:** `ScoreViewerScreen.syncStatus`
+stays a plain presentational param; the `score` feature never sees the
+monitor. **DI:** registered in both branches (Firestore under `useFirebase`,
+local otherwise), so the headless gate stays Firebase-free (G2). **Tests:**
+`pieceSyncStateFrom` matrix + `combinePieceSyncSignals` fake-stream
+transitions (incl. the offline→syncing→synced reader narrative), the local
+monitor, an `injection_test` binding assertion, and a `reader_top_bar`
+transition test; the three reader-bar goldens verified **unchanged** (the
+badge widget is untouched). The hand-rolled DI in
+`app_deep_link_redirect_test` gained the local monitor registration. Full
+workspace gate green.
 
 ### M4.2 — Demote bundle affordances; "nudge collaborator"
 

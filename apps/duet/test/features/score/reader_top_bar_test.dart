@@ -170,6 +170,25 @@ void main() {
       expect(find.text('Syncing…'), findsOneWidget);
     });
 
+    testWidgets('the sync badge re-renders as the status transitions', (
+      tester,
+    ) async {
+      // The badge is a pure function of syncStatus, which the app-glue layer
+      // now drives from a live `PieceSyncMonitor` (M4.1) — so a changing sync
+      // state must flip the pill without any other input changing. Starts on
+      // the `_pump` default (notSynced), then drives through the live states.
+      await _pump(tester);
+      expect(find.text('Not synced'), findsOneWidget);
+
+      await _pump(tester, syncStatus: ScoreSyncStatus.syncing);
+      expect(find.text('Not synced'), findsNothing);
+      expect(find.text('Syncing…'), findsOneWidget);
+
+      await _pump(tester, syncStatus: ScoreSyncStatus.synced);
+      expect(find.text('Syncing…'), findsNothing);
+      expect(find.text('Synced'), findsOneWidget);
+    });
+
     testWidgets('the Layers button only shows when onOpenLayers is set', (
       tester,
     ) async {
