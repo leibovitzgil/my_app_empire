@@ -143,7 +143,7 @@ in the Track B backlog.
 | M3.3 | ☑ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
 | M3.4 | ☑ Binary download/cache manager (offline reading) | M3.3 |
 | M3.5 | ☑ `CloudAudioAssetStore` + offline upload queue | M3.2 |
-| M3.6 | ☐ DI flip + one-time local→cloud migration | M3.1–M3.5 |
+| M3.6 | ☑ DI flip + one-time local→cloud migration | M3.1–M3.5 |
 | M3.7 | ☐ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
 | M3.8 | ☐ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
 | M4.1 | ☐ Real `ScoreSyncStatus` from repository state | M3.2 |
@@ -1521,6 +1521,52 @@ true` while the default mock branch keeps the local trio (G2).
 emulator build, accept migration, both accounts' gallery shows the cloud
 piece; **plan-M3 exit** "two emulator accounts see the same piece, ink,
 and audio pins live" demonstrably close (E2E lands in M3.8).
+
+**Landed.** **DI flip.** `configureDependencies` now branches the piece
+storage trio on `useFirebase`: the Firebase branch binds
+`FirestorePieceRepository`, `FirestoreAnnotationRepository`, and (audio)
+`CloudAudioAssetStore` over an `AudioUploadQueue` singleton +
+`FirebaseAudioObjectStore`; the default/mock branch keeps the local trio
+unchanged (G2 — the Firestore/cloud objects are never constructed headless).
+The Firestore pair has no constructor cycle (neither reads the other) so they
+register directly; `PdfBinaryCache`/`PieceBinaryStore` already branched (M3.3/
+M3.4). `injection_test.dart` (mock branch) is untouched.
+**Migrator.** `LocalPieceMigrator` (`data/local_piece_migrator.dart`) reads
+through the local repositories and writes through the cloud ones, so it's
+fully fake-testable. Per piece: re-create the Firestore doc **preserving the
+piece id** with `ownerId` = the signed-in uid (the local pieces were the mock
+identity's), upload the base PDF (M3.3 `uploadBasePdf`, checksum-deduped),
+then re-attribute the **owner's own** ink layer + audio notes to the new uid
+and write them as one owner slice (`replaceAuthorSlice`) — each audio object
+re-uploaded via `AudioAssetStore.put` (fresh `assetId`, re-keyed on the note).
+Local collaborators (mock uids) and other authors' layers are dropped
+(owner-only). **Resumable:** a per-uid migrated-id set
+(`migration.pieces.migrated.<uid>`) skips done pieces and retries failures;
+a retry converges (piece-doc create reuses an existing doc, PDF upload
+dedupes, the slice write is a full replace). Local data is kept as a cache,
+never deleted. **Trigger.** `MigrationPrompt` (`ui/migration_prompt.dart`, a
+render-nothing widget in `HomeScreen`) fires a post-frame check on first cloud
+sign-in: guarded by the per-uid `migration.pieces.done.<uid>` flag and a
+`getIt.isRegistered<LocalPieceMigrator>()` gate (so it's a pure no-op in the
+mock composition), it offers a `confirmDialog` ("Upload N sheets…") and runs
+the migration on accept, reporting the result in a SnackBar.
+**sendInvite owner check.** The callable now reads `pieces/{id}` and rejects a
+non-owner (`permission-denied`) / missing piece (`not-found`) before writing
+an inbox doc — the M2.4 placeholder that trusted the caller is gone.
+**Deviations (recorded in M2.1 doc's migration section):** (1) migration
+re-attributes only the **owner's** slice (layer where `ownerId ==
+piece.ownerId`) — a piece the local user only collaborated on migrates its
+owner's slice; refined multi-author handling isn't needed for the single-user
+local case. (2) The per-piece collaborator **cap** stays deferred — enforcing
+it needs the owner's pro tier, unknowable server-side until M6.3
+(`collaboratorLimits.ts`). (3) `acceptInvite`'s server-side transactional
+participant-add is **not** in this task (plan step 4 scoped M3.6 to
+`sendInvite`); the cross-account invite→see flow completes with M3.8's E2E.
+(4) The migrator/prompt are **Firebase-only glue** — the emulator round-trip
+lands with M3.8; here `local_piece_migrator_test.dart` (6: re-own+upload+slice,
+owner-only drop, no-annotations piece, skip-on-rerun, resumable retry,
+pendingCount) fake-tests the orchestration and the functions suite gains the
+two owner-check cases. Full gate green.
 
 ### M3.7 — Per-user last-opened watermark + real unread signal
 

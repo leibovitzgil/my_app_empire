@@ -136,6 +136,15 @@ class LocalPieceRepository implements PieceRepository {
     yield* _controller.stream;
   }
 
+  /// Every locally-stored piece, regardless of the current participant.
+  ///
+  /// [watchPieces] scopes to the signed-in user, but the one-time cloud
+  /// migration (M3.6) runs as the *real* cloud uid while the stored pieces are
+  /// owned by the prior mock identity — it needs them all. This is a concrete
+  /// accessor (not on the [PieceRepository] contract), used only by the
+  /// migrator.
+  List<Piece> get storedPieces => List<Piece>.unmodifiable(_pieces);
+
   @override
   Future<Result<Piece>> getPiece(String pieceId) async {
     final piece = _findOrNull(pieceId);

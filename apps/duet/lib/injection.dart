@@ -8,16 +8,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/account_purge.dart';
+import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
+import 'package:duet/data/cloud_audio_asset_store.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
+import 'package:duet/data/firebase_audio_object_store.dart';
 import 'package:duet/data/firebase_piece_binary_store.dart';
+import 'package:duet/data/firestore_annotation_repository.dart';
+import 'package:duet/data/firestore_piece_repository.dart';
+import 'package:duet/data/local_piece_migrator.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
@@ -230,7 +236,26 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     RecordAudioRecorderService.new,
   );
   getIt.registerLazySingleton<AudioPlayerService>(JustAudioPlayerService.new);
-  getIt.registerLazySingleton<AudioAssetStore>(LocalAudioAssetStore.new);
+  // Audio-note asset storage. The default composition keeps notes on-device
+  // (`LocalAudioAssetStore`, a flat `audio_notes/` dir); under Firebase they
+  // live in Storage (`pieces/{id}/audio/{assetId}`) behind an offline upload
+  // queue (M3.5). The queue is a singleton so M4.1's sync badge can later read
+  // its pending count from the same instance the store drains.
+  if (useFirebase) {
+    getIt.registerSingleton<AudioUploadQueue>(
+      AudioUploadQueue(storage: getIt<LocalStorageService>()),
+    );
+    getIt.registerLazySingleton<AudioAssetStore>(
+      () => CloudAudioAssetStore(
+        objectStore: FirebaseAudioObjectStore(
+          storage: FirebaseStorage.instance,
+        ),
+        uploadQueue: getIt<AudioUploadQueue>(),
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<AudioAssetStore>(LocalAudioAssetStore.new);
+  }
   // Lazy-async, like every other service that eventually touches the
   // filesystem: resolving the recordings temp directory only when the Score
   // Viewer is first opened (see `DuetScorePage`) means a filesystem hiccup
@@ -239,38 +264,58 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     createRecordingPathBuilder,
   );
 
-  // `PieceRepository`/`AnnotationRepository` have a constructor cycle:
-  // `LocalPieceRepository` needs an `AnnotationRepository` (to purge a
-  // deleted piece's annotations) and `LocalAnnotationRepository` needs a
-  // `PieceRepository` (to resolve a new author's owner/collaborator role).
-  // Piece side takes a *lazy provider* rather than a direct instance,
-  // breaking the cycle: whichever of the two get_it resolves first fully
-  // constructs (caching itself as the singleton) before the other's factory
-  // below ever calls back into it. These stay local-only (no Firestore
-  // impl) regardless of [useFirebase] — this feature only moved the
-  // identity/messaging seams to Firebase, not piece storage itself.
-  getIt.registerLazySingleton<PieceRepository>(
-    () => LocalPieceRepository(
-      storage: getIt<LocalStorageService>(),
-      currentUserId: getIt<CurrentUser>().call,
-      pdfRenderService: getIt<PdfRenderService>(),
-      annotationRepository: getIt.call<AnnotationRepository>,
-      audioAssetStore: getIt<AudioAssetStore>(),
-    ),
-  );
-  getIt.registerLazySingleton<AnnotationRepository>(
-    () => LocalAnnotationRepository(
-      storage: getIt<LocalStorageService>(),
-      currentUserId: getIt<CurrentUser>().call,
-      pieceRepository: getIt<PieceRepository>(),
-    ),
-  );
+  // `PieceRepository`/`AnnotationRepository`: the default composition keeps
+  // pieces on-device (the local repositories, which own their binaries); under
+  // Firebase (M3.6) they move to Cloud Firestore — real-time reads scoped to
+  // the caller's pieces, one ink layer document per author.
+  //
+  // The local pair has a constructor cycle: `LocalPieceRepository` needs an
+  // `AnnotationRepository` (to purge a deleted piece's annotations) and
+  // `LocalAnnotationRepository` needs a `PieceRepository` (to resolve a new
+  // author's owner/collaborator role). The piece side takes a *lazy provider*
+  // rather than a direct instance, breaking the cycle: whichever get_it
+  // resolves first fully constructs (caching itself as the singleton) before
+  // the other's factory calls back into it. The Firestore pair has no such
+  // cycle (neither repository reads the other), so they register directly.
+  if (useFirebase) {
+    getIt.registerLazySingleton<PieceRepository>(
+      () => FirestorePieceRepository(
+        firestore: FirebaseFirestore.instance,
+        currentUserId: getIt<CurrentUser>().call,
+        pdfRenderService: getIt<PdfRenderService>(),
+        storage: getIt<LocalStorageService>(),
+      ),
+    );
+    getIt.registerLazySingleton<AnnotationRepository>(
+      () => FirestoreAnnotationRepository(
+        firestore: FirebaseFirestore.instance,
+        currentUserId: getIt<CurrentUser>().call,
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<PieceRepository>(
+      () => LocalPieceRepository(
+        storage: getIt<LocalStorageService>(),
+        currentUserId: getIt<CurrentUser>().call,
+        pdfRenderService: getIt<PdfRenderService>(),
+        annotationRepository: getIt.call<AnnotationRepository>,
+        audioAssetStore: getIt<AudioAssetStore>(),
+      ),
+    );
+    getIt.registerLazySingleton<AnnotationRepository>(
+      () => LocalAnnotationRepository(
+        storage: getIt<LocalStorageService>(),
+        currentUserId: getIt<CurrentUser>().call,
+        pieceRepository: getIt<PieceRepository>(),
+      ),
+    );
+  }
 
   // Base-PDF upload on import (M3.3). The default composition keeps binaries
   // on-device (the local repositories own them), so there's nothing to push —
   // NoopPieceBinaryStore (G2: no Firebase object headless). Under Firebase the
-  // import flow uploads `pieces/{id}/base.pdf` with progress; M3.6 flips the
-  // piece repository onto Firestore to match.
+  // import flow uploads `pieces/{id}/base.pdf` with progress, matching the
+  // Firestore piece repository the branch above now binds.
   if (useFirebase) {
     getIt.registerLazySingleton<PieceBinaryStore>(
       () => FirebasePieceBinaryStore(
@@ -294,6 +339,44 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       storage: getIt<LocalStorageService>(),
     ),
   );
+
+  // One-time local→cloud migration (M3.6). Only the Firebase composition
+  // registers it: `MigrationPrompt` offers it on first cloud sign-in, and its
+  // absence is how the default/mock path stays a no-op (G2). The migration
+  // *source* is the on-device trio the app wrote to before this sign-in,
+  // constructed directly here (get_it now resolves the cloud implementations)
+  // over the same local storage — the piece/annotation cycle broken with a
+  // lazy provider exactly as the default branch does above. The *sink* is the
+  // bound cloud repositories.
+  if (useFirebase) {
+    getIt.registerLazySingleton<LocalPieceMigrator>(() {
+      final localAudio = LocalAudioAssetStore();
+      late final LocalAnnotationRepository localAnnotations;
+      final localPieces = LocalPieceRepository(
+        storage: getIt<LocalStorageService>(),
+        currentUserId: getIt<CurrentUser>().call,
+        pdfRenderService: getIt<PdfRenderService>(),
+        annotationRepository: () => localAnnotations,
+        audioAssetStore: localAudio,
+      );
+      localAnnotations = LocalAnnotationRepository(
+        storage: getIt<LocalStorageService>(),
+        currentUserId: getIt<CurrentUser>().call,
+        pieceRepository: localPieces,
+      );
+      return LocalPieceMigrator(
+        readLocalPieces: () async => localPieces.storedPieces,
+        localAnnotations: localAnnotations,
+        localAudio: localAudio,
+        cloudPieces: getIt<PieceRepository>(),
+        cloudAnnotations: getIt<AnnotationRepository>(),
+        cloudAudio: getIt<AudioAssetStore>(),
+        binaryStore: getIt<PieceBinaryStore>(),
+        storage: getIt<LocalStorageService>(),
+        currentUserId: getIt<CurrentUser>().call,
+      );
+    });
+  }
 
   getIt.registerLazySingleton<ReviewSyncService>(
     () => FileShareReviewSyncService(

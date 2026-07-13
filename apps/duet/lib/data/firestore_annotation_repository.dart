@@ -32,7 +32,8 @@ import 'package:duet/domain/domain.dart';
 /// falls back to local-only annotations when importing another author's bundle
 /// slice (see the annotation notes in `docs/duet_cloud_schema.md`).
 ///
-/// Not wired into DI yet — M3.6 flips `useFirebase` onto this.
+/// Bound under `useFirebase: true` (M3.6); the default composition keeps the
+/// local repository.
 class FirestoreAnnotationRepository implements AnnotationRepository {
   /// Creates a [FirestoreAnnotationRepository].
   FirestoreAnnotationRepository({
