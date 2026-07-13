@@ -431,14 +431,20 @@ class FakeAudioAssetStore implements AudioAssetStore {
   var _seq = 0;
 
   @override
-  Future<Result<String>> put(String sourcePath) async {
+  Future<Result<String>> put(
+    String sourcePath, {
+    required String pieceId,
+  }) async {
     final id = 'asset_${_seq++}';
     _ids.add(id);
     return Success(id);
   }
 
   @override
-  Future<Result<String>> pathFor(String assetId) async {
+  Future<Result<String>> pathFor(
+    String assetId, {
+    required String pieceId,
+  }) async {
     if (!_ids.contains(assetId)) {
       return ResultFailure<String>(StateError('Unknown asset: $assetId'));
     }
@@ -446,7 +452,7 @@ class FakeAudioAssetStore implements AudioAssetStore {
   }
 
   @override
-  Future<Result<void>> delete(String assetId) async {
+  Future<Result<void>> delete(String assetId, {required String pieceId}) async {
     _ids.remove(assetId);
     return const Success(null);
   }

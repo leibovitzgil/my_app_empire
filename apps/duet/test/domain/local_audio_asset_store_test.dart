@@ -24,7 +24,7 @@ void main() {
     test(
       'put copies the file into managed storage and returns an id',
       () async {
-        final result = await store.put(sourceFile.path);
+        final result = await store.put(sourceFile.path, pieceId: 'p1');
 
         expect(result, isA<Success<String>>());
         final assetId = (result as Success<String>).value;
@@ -33,10 +33,10 @@ void main() {
     );
 
     test("pathFor resolves a stored asset's on-disk path", () async {
-      final putResult = await store.put(sourceFile.path);
+      final putResult = await store.put(sourceFile.path, pieceId: 'p1');
       final assetId = (putResult as Success<String>).value;
 
-      final pathResult = await store.pathFor(assetId);
+      final pathResult = await store.pathFor(assetId, pieceId: 'p1');
 
       expect(pathResult, isA<Success<String>>());
       final path = (pathResult as Success<String>).value;
@@ -46,26 +46,30 @@ void main() {
     });
 
     test('pathFor fails for an unknown asset id', () async {
-      final result = await store.pathFor('does-not-exist');
+      final result = await store.pathFor('does-not-exist', pieceId: 'p1');
       expect(result, isA<ResultFailure<String>>());
     });
 
     test('delete removes the stored file', () async {
-      final putResult = await store.put(sourceFile.path);
+      final putResult = await store.put(sourceFile.path, pieceId: 'p1');
       final assetId = (putResult as Success<String>).value;
       final pathBefore =
-          ((await store.pathFor(assetId)) as Success<String>).value;
+          ((await store.pathFor(assetId, pieceId: 'p1')) as Success<String>)
+              .value;
       expect(File(pathBefore).existsSync(), isTrue);
 
-      final deleteResult = await store.delete(assetId);
+      final deleteResult = await store.delete(assetId, pieceId: 'p1');
       expect(deleteResult, isA<Success<void>>());
 
       expect(File(pathBefore).existsSync(), isFalse);
-      expect(await store.pathFor(assetId), isA<ResultFailure<String>>());
+      expect(
+        await store.pathFor(assetId, pieceId: 'p1'),
+        isA<ResultFailure<String>>(),
+      );
     });
 
     test('delete is a no-op for an unknown asset id', () async {
-      final result = await store.delete('does-not-exist');
+      final result = await store.delete('does-not-exist', pieceId: 'p1');
       expect(result, isA<Success<void>>());
     });
 
@@ -74,15 +78,19 @@ void main() {
         ..writeAsBytesSync([5, 6, 7]);
 
       final firstId =
-          ((await store.put(sourceFile.path)) as Success<String>).value;
+          ((await store.put(sourceFile.path, pieceId: 'p1')) as Success<String>)
+              .value;
       final secondId =
-          ((await store.put(second.path)) as Success<String>).value;
+          ((await store.put(second.path, pieceId: 'p1')) as Success<String>)
+              .value;
 
       expect(firstId, isNot(secondId));
       final firstPath =
-          ((await store.pathFor(firstId)) as Success<String>).value;
+          ((await store.pathFor(firstId, pieceId: 'p1')) as Success<String>)
+              .value;
       final secondPath =
-          ((await store.pathFor(secondId)) as Success<String>).value;
+          ((await store.pathFor(secondId, pieceId: 'p1')) as Success<String>)
+              .value;
       expect(File(firstPath).readAsBytesSync(), [1, 2, 3, 4]);
       expect(File(secondPath).readAsBytesSync(), [5, 6, 7]);
     });

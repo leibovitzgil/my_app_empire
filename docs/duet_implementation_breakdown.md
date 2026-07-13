@@ -142,7 +142,7 @@ in the Track B backlog.
 | M3.2 | ☑ `FirestoreAnnotationRepository` | M3.1 |
 | M3.3 | ☑ PDF upload on import (checksum dedupe + progress UI) | M3.1 |
 | M3.4 | ☑ Binary download/cache manager (offline reading) | M3.3 |
-| M3.5 | ☐ `CloudAudioAssetStore` + offline upload queue | M3.2 |
+| M3.5 | ☑ `CloudAudioAssetStore` + offline upload queue | M3.2 |
 | M3.6 | ☐ DI flip + one-time local→cloud migration | M3.1–M3.5 |
 | M3.7 | ☐ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
 | M3.8 | ☐ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
@@ -1444,6 +1444,46 @@ and `review_sync`'s import re-`put`s) — G3 blast-radius task.
 
 **Done when:** record-offline → reconnect → collaborator hears the note on
 the emulator (covered by M3.8's E2E); gate green.
+
+**Landed.** Widened `AudioAssetStore` so **every** op is piece-scoped —
+`put`/`pathFor`/`delete` each take `{required String pieceId}` (the Storage
+object is `pieces/{pieceId}/audio/{assetId}`, needed by all three, not just
+`put`). Swept: `LocalAudioAssetStore` (ignores `pieceId` — its on-device
+layout is one flat `audio_notes/` dir keyed by asset id), the
+`ScoreViewerScreen` call sites (`_saveAudioNote`, `_playNote`),
+`review_sync`'s import/export re-`put`/`pathFor`/`delete`,
+`LocalPieceRepository.deletePiece`, and the harness/screenshot fakes.
+`AudioUploadQueue` (persisted via `LocalStorageService`, key
+`audio.upload_queue`): `AudioUploadTask` (pieceId/assetId/localPath/attempts,
+JSON round-trip); `enqueue` idempotent by assetId; `drain(uploadOne)`
+re-entrant-guarded and **reconciled against current storage** (an enqueue
+racing a drain isn't clobbered); a failed upload bumps `attempts` and is
+dropped past `maxAttempts` (default 5); exposes `Stream<int> pending` +
+`pendingCount` for M4.1's sync badge; survives a restart (fresh instance over
+the same storage). `CloudAudioAssetStore implements AudioAssetStore`: `put` =
+copy into the on-device `audio_notes/` cache (plays back instantly, survives
+the recorder temp file) + enqueue + best-effort `unawaited(drainUploads())`;
+`pathFor` = cache hit or download-into-cache (a collaborator's note); `delete`
+= best-effort remote delete + local evict. Storage transfer sits behind an
+`AudioObjectStore` seam (upload/download/delete by pieceId+assetId) so the
+cache/queue orchestration is fake-tested; `FirebaseAudioObjectStore` does the
+transfer (`putFile`/`writeToFile`/`delete` swallowing `object-not-found`).
+**Deviations (recorded in M2.1 doc):** (1) `pathFor`/`delete` widened too, not
+just `put` — every op resolves a per-piece object. (2)
+`FirebaseAudioObjectStore` is emulator-verified, not unit-tested (no Storage
+fake — as with M3.3/M3.4). (3) **Not wired into DI** — the default/mock branch
+keeps the local trio (G2); M3.6 flips `AudioAssetStore` to `CloudAudioAssetStore`
+under `useFirebase`. (4) A connectivity-triggered drain is deferred to app
+wiring (M4.1 consumes `pending`; the queue exposes `drainUploads` for it) —
+`put` still kicks a best-effort drain so an online recording uploads at once.
+Tests: `audio_upload_queue_test.dart` (6: idempotent enqueue, drain
+clears, retry-on-failure, drop past cap, restart-survival, pending stream) +
+`cloud_audio_asset_store_test.dart` (7 over a `_FakeObjectStore`: caches +
+enqueues, best-effort upload, offline→reconnect drain, cache-hit no download,
+collaborator download, neither-cached-nor-remote fails, delete removes
+remote + local). Full gate green (incl. golden); the record-offline →
+reconnect → collaborator-hears guarantee is proven end-to-end by M3.8's
+emulator E2E.
 
 ### M3.6 — DI flip + one-time local→cloud migration
 

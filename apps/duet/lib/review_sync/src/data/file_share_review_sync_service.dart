@@ -208,7 +208,10 @@ class FileShareReviewSyncService implements ReviewSyncService {
     final archive = Archive();
     final audioEntries = <ManifestAudioEntry>[];
     for (final note in authorNotes) {
-      final pathResult = await _audioAssetStore.pathFor(note.audioAssetId);
+      final pathResult = await _audioAssetStore.pathFor(
+        note.audioAssetId,
+        pieceId: pieceId,
+      );
       final assetPath = switch (pathResult) {
         Success<String>(:final value) => value,
         ResultFailure<String>(:final error) => throw ReviewSyncException(
@@ -357,7 +360,10 @@ class FileShareReviewSyncService implements ReviewSyncService {
           );
           final tempFile = File(tempPath);
           await tempFile.writeAsBytes(audioBytes);
-          final putResult = await _audioAssetStore.put(tempPath);
+          final putResult = await _audioAssetStore.put(
+            tempPath,
+            pieceId: manifest.pieceId,
+          );
           if (tempFile.existsSync()) await tempFile.delete();
           final assetId = switch (putResult) {
             Success<String>(:final value) => value,
@@ -399,7 +405,7 @@ class FileShareReviewSyncService implements ReviewSyncService {
         )).orThrow();
 
         for (final assetId in staleAssetIds) {
-          await _audioAssetStore.delete(assetId);
+          await _audioAssetStore.delete(assetId, pieceId: manifest.pieceId);
         }
 
         await _storage.setInt(lastAppliedKey, manifest.exportedAtMillis);

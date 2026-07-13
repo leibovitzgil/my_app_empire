@@ -226,7 +226,7 @@ class LocalPieceRepository implements PieceRepository {
         final annotationRepository = _annotationRepository();
         final annotations = await annotationRepository.watch(pieceId).first;
         for (final note in annotations.audioNotes) {
-          await _audioAssetStore.delete(note.audioAssetId);
+          await _audioAssetStore.delete(note.audioAssetId, pieceId: pieceId);
         }
         (await annotationRepository.clearPiece(pieceId)).orThrow();
 
