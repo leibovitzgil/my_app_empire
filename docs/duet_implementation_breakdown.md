@@ -147,7 +147,7 @@ in the Track B backlog.
 | M3.7 | ☑ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
 | M3.8 | ☑ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
 | M4.1 | ☑ Real `ScoreSyncStatus` from repository state | M3.2 |
-| M4.2 | ☐ Demote bundles; "nudge collaborator" affordances | M4.1 |
+| M4.2 | ☑ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☐ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☐ Soft-delete tombstones for audio notes | M3.2 |
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
@@ -1819,6 +1819,34 @@ annotations" / "Import review bundle"
 **Done when:** reader shows no bundle UI; nudge lands in the other
 account's inbox (emulator); bundle flow still works from piece detail
 (escape hatch preserved); gate + goldens green.
+
+**Landed.** **Nudge send path.** New `NudgeService` seam (feature_pairing)
+— a `<name> added notes` ping distinct from an access-granting invite.
+`DefaultNudgeService` resolves the piece's participants and sends a
+`nudge`-type `UserMessage` (`{type, pieceId, fromName}`) to each *other*
+participant through the in-memory gateway (the existing foreground inbox
+bridge surfaces it; push activates with M5.3, interface unchanged). Under
+Firebase the send is server-authoritative via a new **`sendNudge` Cloud
+Function** — clients can't create `userInbox` docs (M2.4), so the callable
+verifies the caller is a participant (`pieces/{id}.participantIds`), derives
+`fromName` from the caller's token (not client-trusted), and fans out with
+the Admin SDK. `CallableNudgeService` wraps it; DI binds callable under
+`useFirebase`, default otherwise (G2). **Reader UI.** The overflow menu
+drops both bundle items; `onShareRequested`/`onImportRequested` collapse to
+one `onNudgeRequested`; the Layers-panel prompt is now
+`Let <name> know you added notes` + **Nudge** (target resolved from the
+piece's other participants — one name, "your collaborators", or hidden when
+solo); the save-note snackbar action is **Nudge**. `feature_score` stays
+presentation-only (G3). **Offline sharing.** Bundle export/import move to a
+new **"Offline sharing"** section on `PieceDetailScreen`, wired from app
+glue (`ReviewSyncService` + file picker) threaded LibraryPage →
+LibraryHomeScreen → PieceDetailPage — escape hatch preserved, off the
+reader. **Tests:** `DefaultNudgeService` (fan-out / self-exclusion / solo
+no-op / failure), `sendNudge` vitest (auth, participant gate, fan-out, name
+fallback — 38 functions tests green), piece-detail Offline-sharing section,
+reader-bar menu + layers-panel nudge copy, injection bindings; layers-panel
+golden reshot for the nudge card, reader-bar goldens **unchanged**. Full
+workspace gate + functions tsc/eslint/vitest green.
 
 ### M4.3 — Attention loop: per-layer new-annotation markers + audio-pin "new"
 
