@@ -16,6 +16,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -311,6 +312,38 @@ describe('pieces/{id}/reads/{uid}', () => {
       setDoc(doc(stranger(), 'pieces/p1/reads/uid-stranger'), {
         lastOpenedAt: new Date(),
       }),
+    );
+  });
+
+  it('collection-group: a user reads only their own watermarks', async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'pieces/p1/reads/uid-collab'), {
+        uid: 'uid-collab',
+        lastOpenedAt: new Date(),
+      });
+      await setDoc(doc(db, 'pieces/p1/reads/uid-owner'), {
+        uid: 'uid-owner',
+        lastOpenedAt: new Date(),
+      });
+    });
+
+    // Their own watermarks across pieces resolve in one query (the library).
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(collab(), 'reads'),
+          where('uid', '==', 'uid-collab'),
+        ),
+      ),
+    );
+    // Filtering for someone else's is denied by the collection-group rule.
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(collab(), 'reads'),
+          where('uid', '==', 'uid-owner'),
+        ),
+      ),
     );
   });
 });

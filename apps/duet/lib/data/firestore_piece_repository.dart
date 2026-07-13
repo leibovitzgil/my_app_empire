@@ -150,6 +150,42 @@ class FirestorePieceRepository implements PieceRepository {
       });
 
   @override
+  Stream<Map<String, DateTime>> watchReads() {
+    // A collection-group query gathers the caller's own `reads/{uid}` docs
+    // across every piece in one listener. The `uid` field (mirrored from the
+    // doc id) is what the query filters on — the security rules gate a
+    // collection-group read on `resource.data.uid == request.auth.uid`.
+    return _firestore
+        .collectionGroup('reads')
+        .where('uid', isEqualTo: _currentUserId())
+        .snapshots()
+        .map((snapshot) {
+          final reads = <String, DateTime>{};
+          for (final doc in snapshot.docs) {
+            final pieceRef = doc.reference.parent.parent;
+            final lastOpenedAt = doc.data()['lastOpenedAt'];
+            if (pieceRef != null && lastOpenedAt is Timestamp) {
+              reads[pieceRef.id] = lastOpenedAt.toDate();
+            }
+          }
+          return reads;
+        });
+  }
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) =>
+      _guarded<void>(pieceId, () async {
+        final uid = _currentUserId();
+        await _pieces.doc(pieceId).collection('reads').doc(uid).set(
+          <String, dynamic>{
+            'uid': uid,
+            'lastOpenedAt': Timestamp.fromDate(_now()),
+          },
+          SetOptions(merge: true),
+        );
+      });
+
+  @override
   Future<Result<Piece>> importPiece({
     required String title,
     required String sourcePath,

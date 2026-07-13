@@ -62,6 +62,12 @@ void main() {
       when(
         () => repository.watchPieces(),
       ).thenAnswer((_) => piecesController.stream);
+      when(
+        () => repository.watchReads(),
+      ).thenAnswer((_) => const Stream<Map<String, DateTime>>.empty());
+      when(
+        () => repository.markOpened(any()),
+      ).thenAnswer((_) async => const Success<void>(null));
     });
 
     tearDown(() async => piecesController.close());

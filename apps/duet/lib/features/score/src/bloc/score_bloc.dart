@@ -97,6 +97,11 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
                 currentPage: 0,
               ),
             );
+            // Advance this user's unread watermark now that the reader has
+            // actually opened the piece (M3.7) — not just on the gallery tap,
+            // so a deep-linked open clears the dot too. Best-effort: a failed
+            // write just leaves the dot for the next open.
+            unawaited(_pieceRepository.markOpened(piece.id));
             _annotationsSubscription = _annotationRepository
                 .watch(piece.id)
                 .listen(

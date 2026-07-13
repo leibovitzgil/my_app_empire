@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:core_utils/core_utils.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/library/library.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,7 @@ void main() {
 
     late MockPieceRepository repository;
     late StreamController<List<Piece>> piecesController;
+    late StreamController<Map<String, DateTime>> readsController;
 
     Piece piece({
       String id = 'p1',
@@ -42,13 +44,21 @@ void main() {
     setUp(() {
       repository = MockPieceRepository();
       piecesController = StreamController<List<Piece>>.broadcast();
+      readsController = StreamController<Map<String, DateTime>>.broadcast();
       when(
         () => repository.watchPieces(),
       ).thenAnswer((_) => piecesController.stream);
+      when(
+        () => repository.watchReads(),
+      ).thenAnswer((_) => readsController.stream);
+      when(
+        () => repository.markOpened(any()),
+      ).thenAnswer((_) async => const Success<void>(null));
     });
 
     tearDown(() async {
       await piecesController.close();
+      await readsController.close();
     });
 
     test('initial state carries the given currentUserId and no pieces', () {
@@ -107,17 +117,18 @@ void main() {
     );
 
     blocTest<LibraryBloc, LibraryState>(
-      'PieceViewed clears the unread indicator for that piece',
+      'PieceViewed clears the unread dot for a shared piece and persists it',
+      // The current user is a collaborator here, so the piece is shared with
+      // them and can carry an unread dot (an owner's own piece never does).
       build: () => LibraryBloc(
         pieceRepository: repository,
-        currentUserId: ownerId,
+        currentUserId: collaboratorId,
       ),
       act: (bloc) async {
         bloc.add(const LibraryStarted());
         await Future<void>.delayed(Duration.zero);
-        piecesController.add([
-          piece(createdAt: DateTime(2024), updatedAt: DateTime(2024, 1, 2)),
-        ]);
+        // Shared, never opened → unread.
+        piecesController.add([piece(updatedAt: DateTime(2024, 1, 2))]);
         await Future<void>.delayed(Duration.zero);
         bloc.add(const PieceViewed('p1'));
       },
@@ -125,15 +136,16 @@ void main() {
       expect: () => [
         isA<LibraryState>().having(
           (s) => s.isUnread(s.pieces.single),
-          'isUnread',
+          'isUnread (never opened)',
           true,
         ),
         isA<LibraryState>().having(
           (s) => s.isUnread(s.pieces.single),
-          'isUnread',
+          'isUnread (just opened)',
           false,
         ),
       ],
+      verify: (_) => verify(() => repository.markOpened('p1')).called(1),
     );
 
     group('ownership partitioning', () {
@@ -490,48 +502,36 @@ void main() {
         expect(state.visiblePieces.map((p) => p.id), ['p2', 'p1']);
       });
 
-      test('unreadSharedCount counts only unread sharedWithMe pieces', () {
-        final state =
-            const LibraryState.initial(
-              currentUserId: ownerId,
-            ).copyWith(
-              status: LibraryStatus.ready,
-              pieces: [
-                // Owned + unread: not shared, must not count.
-                piece(
-                  createdAt: DateTime(2024),
-                  updatedAt: DateTime(2024, 1, 2),
-                ),
-                // Shared + unread: counts.
-                piece(
-                  id: 'p2',
-                  pieceOwnerId: 'someone-else',
-                  collaborators: const [Collaborator(uid: ownerId)],
-                  createdAt: DateTime(2024),
-                  updatedAt: DateTime(2024, 1, 2),
-                ),
-                // Shared + read (createdAt == updatedAt): must not count.
-                piece(
-                  id: 'p3',
-                  pieceOwnerId: 'someone-else',
-                  collaborators: const [Collaborator(uid: ownerId)],
-                  createdAt: DateTime(2024),
-                  updatedAt: DateTime(2024),
-                ),
-                // Shared + unread but already viewed: must not count.
-                piece(
-                  id: 'p4',
-                  pieceOwnerId: 'someone-else',
-                  collaborators: const [Collaborator(uid: ownerId)],
-                  createdAt: DateTime(2024),
-                  updatedAt: DateTime(2024, 1, 2),
-                ),
-              ],
-              viewedPieceIds: const {'p4'},
-            );
+      test(
+        'unreadSharedCount counts shared pieces changed since last open',
+        () {
+          Piece shared(String id) => piece(
+            id: id,
+            pieceOwnerId: 'someone-else',
+            collaborators: const [Collaborator(uid: ownerId)],
+            updatedAt: DateTime(2024, 1, 2),
+          );
+          final state = const LibraryState.initial(currentUserId: ownerId)
+              .copyWith(
+                status: LibraryStatus.ready,
+                pieces: [
+                  // Owned + updated: an owner's own sheet never dots.
+                  piece(updatedAt: DateTime(2024, 1, 2)),
+                  shared('p2'), // never opened → unread
+                  shared('p3'), // opened after its update → read
+                  shared('p4'), // opened before its update → unread again
+                ],
+                lastOpenedAt: {
+                  'p3': DateTime(2024, 1, 3), // after p3's update
+                  'p4': DateTime(2024), // before p4's update
+                },
+              );
 
-        expect(state.unreadSharedCount, 1);
-      });
+          // p2 (never opened) + p4 (stale watermark); p1 owned, p3 read.
+          expect(state.unreadSharedCount, 2);
+          expect(state.isUnread(state.myPieces.single), isFalse);
+        },
+      );
     });
   });
 }

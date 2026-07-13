@@ -729,6 +729,32 @@ void main() {
         expect(asOwner.single.collaborators, isEmpty);
       },
     );
+
+    test('markOpened records a watermark that watchReads emits', () async {
+      expect(await repository.watchReads().first, isEmpty);
+
+      (await repository.markOpened('p1')).orThrow();
+
+      final reads = await repository.watchReads().first;
+      expect(reads.keys, ['p1']);
+      expect(reads['p1'], isNotNull);
+    });
+
+    test('read watermarks are scoped per user', () async {
+      (await repository.markOpened('p1')).orThrow();
+      expect((await repository.watchReads().first).keys, ['p1']);
+
+      // Switching the signed-in user yields their own (empty) watermarks; the
+      // stored map is keyed per uid.
+      currentUserId = 'someone-else';
+      expect(await repository.watchReads().first, isEmpty);
+      (await repository.markOpened('p2')).orThrow();
+      expect((await repository.watchReads().first).keys, ['p2']);
+
+      // The original user's watermark is untouched.
+      currentUserId = 'owner-1';
+      expect((await repository.watchReads().first).keys, ['p1']);
+    });
   });
 
   test(
@@ -880,4 +906,11 @@ class _DeferredPieceRepository implements PieceRepository {
 
   @override
   Stream<List<Piece>> watchPieces() => _resolve().watchPieces();
+
+  @override
+  Stream<Map<String, DateTime>> watchReads() => _resolve().watchReads();
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) =>
+      _resolve().markOpened(pieceId);
 }

@@ -37,7 +37,7 @@ final class LibraryState extends Equatable {
     required this.currentUserId,
     this.status = LibraryStatus.loading,
     this.pieces = const [],
-    this.viewedPieceIds = const {},
+    this.lastOpenedAt = const {},
     this.error,
     this.filter = LibraryFilter.all,
     this.query = '',
@@ -59,9 +59,10 @@ final class LibraryState extends Equatable {
   /// first by the repository.
   final List<Piece> pieces;
 
-  /// Ids of pieces opened this session, via [PieceViewed]. Session-local
-  /// only: see [isUnread].
-  final Set<String> viewedPieceIds;
+  /// Per-piece "last opened" watermarks for this user (`pieceId` → when they
+  /// last opened it), sourced from [PieceRepository.watchReads] and advanced
+  /// by [PieceViewed]. A missing entry means never opened. Backs [isUnread].
+  final Map<String, DateTime> lastOpenedAt;
 
   /// The most recent failure, if any.
   final String? error;
@@ -77,18 +78,19 @@ final class LibraryState extends Equatable {
 
   /// Whether [piece] should show an "unread activity" indicator.
   ///
-  /// GAP: there is no persisted per-user "last viewed" watermark anywhere in
-  /// this factory yet (no repository tracks it), so this is a placeholder
-  /// heuristic: a piece counts as unread if it has been modified since it was
-  /// imported (`updatedAt` after `createdAt`) and hasn't been opened this
-  /// session. It resets on every app launch and can't distinguish "a new
-  /// stroke since I last looked" from "a new stroke ever" across sessions —
-  /// a real implementation needs a persisted `(userId, pieceId) ->
-  /// lastViewedAt` store, e.g. alongside `review_sync`'s local-storage
-  /// bookkeeping.
-  bool isUnread(Piece piece) =>
-      piece.updatedAt.isAfter(piece.createdAt) &&
-      !viewedPieceIds.contains(piece.id);
+  /// Unread only when the piece is **shared with** this user (they're a
+  /// collaborator, not the owner — an owner's own edits never dot their own
+  /// sheet) and its content has changed since they last opened it:
+  /// [Piece.updatedAt] is after their [lastOpenedAt] watermark. A missing
+  /// watermark means never opened, so a freshly-shared piece reads as unread.
+  /// The watermark is persisted per user via [PieceRepository.markOpened] /
+  /// [PieceRepository.watchReads] (M3.7), replacing the old session-local
+  /// `updatedAt > createdAt` heuristic.
+  bool isUnread(Piece piece) {
+    if (!piece.isCollaborator(currentUserId)) return false;
+    final openedAt = lastOpenedAt[piece.id];
+    return openedAt == null || piece.updatedAt.isAfter(openedAt);
+  }
 
   /// The sheets this user owns (imported themselves) — the "My sheets" shelf.
   List<Piece> get myPieces =>
@@ -172,7 +174,7 @@ final class LibraryState extends Equatable {
   LibraryState copyWith({
     LibraryStatus? status,
     List<Piece>? pieces,
-    Set<String>? viewedPieceIds,
+    Map<String, DateTime>? lastOpenedAt,
     String? error,
     bool clearError = false,
     LibraryFilter? filter,
@@ -183,7 +185,7 @@ final class LibraryState extends Equatable {
       currentUserId: currentUserId,
       status: status ?? this.status,
       pieces: pieces ?? this.pieces,
-      viewedPieceIds: viewedPieceIds ?? this.viewedPieceIds,
+      lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
       error: clearError ? null : (error ?? this.error),
       filter: filter ?? this.filter,
       query: query ?? this.query,
@@ -196,7 +198,7 @@ final class LibraryState extends Equatable {
     currentUserId,
     status,
     pieces,
-    viewedPieceIds,
+    lastOpenedAt,
     error,
     filter,
     query,

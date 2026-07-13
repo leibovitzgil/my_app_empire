@@ -25,6 +25,14 @@ class _FakePieceRepository implements PieceRepository {
   Stream<List<Piece>> watchPieces() => Stream.value(pieces);
 
   @override
+  Stream<Map<String, DateTime>> watchReads() =>
+      Stream.value(const <String, DateTime>{});
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) async =>
+      const Success<void>(null);
+
+  @override
   Future<Result<void>> addCollaborator(
     String pieceId, {
     required String userId,

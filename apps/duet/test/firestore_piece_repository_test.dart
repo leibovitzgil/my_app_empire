@@ -4,6 +4,7 @@
 // separately by the M2.3 emulator suite; here we exercise the repository logic.
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/firestore_piece_mappers.dart';
 import 'package:duet/data/firestore_piece_repository.dart';
@@ -306,6 +307,28 @@ void main() {
         sourcePath: sourcePdf.path,
       );
       expect(second, isA<ResultFailure<Piece>>());
+    });
+
+    test('markOpened writes the caller watermark with a uid field', () async {
+      (await repository.markOpened('p1')).orThrow();
+
+      final doc = await firestore.doc('pieces/p1/reads/owner-1').get();
+      // The mirrored uid backs the collection-group query in watchReads.
+      expect(doc.data()!['uid'], 'owner-1');
+      expect(doc.data()!['lastOpenedAt'], isA<Timestamp>());
+    });
+
+    test('watchReads gathers only the current user watermarks', () async {
+      (await repository.markOpened('p1')).orThrow();
+      // Another participant's watermark on the same piece is not the caller's.
+      await firestore.doc('pieces/p1/reads/friend').set(<String, dynamic>{
+        'uid': 'friend',
+        'lastOpenedAt': Timestamp.now(),
+      });
+
+      final reads = await repository.watchReads().first;
+      expect(reads.keys, ['p1']);
+      expect(reads.length, 1);
     });
   });
 }

@@ -144,7 +144,7 @@ in the Track B backlog.
 | M3.4 | ☑ Binary download/cache manager (offline reading) | M3.3 |
 | M3.5 | ☑ `CloudAudioAssetStore` + offline upload queue | M3.2 |
 | M3.6 | ☑ DI flip + one-time local→cloud migration | M3.1–M3.5 |
-| M3.7 | ☐ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
+| M3.7 | ☑ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
 | M3.8 | ☐ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
 | M4.1 | ☐ Real `ScoreSyncStatus` from repository state | M3.2 |
 | M4.2 | ☐ Demote bundles; "nudge collaborator" affordances | M4.1 |
@@ -1605,6 +1605,46 @@ session-local via the `PieceViewed` event. The schema slot is
 **Done when:** dots appear for the collaborator and clear on open, across
 two emulator accounts; `unreadSharedCount` badges
 (`library_screen.dart` filter chips/pills) keep their widget tests green.
+
+**Landed.** **Contract.** `PieceRepository` gained `markOpened(pieceId)` +
+`watchReads() → Stream<Map<String, DateTime>>` (pieceId → the caller's
+`lastOpenedAt`). The **local** repo persists a per-uid `pieces.reads.<uid>`
+JSON map and emits over a broadcast controller; the **cloud** repo writes
+`pieces/{id}/reads/{uid} = {uid, lastOpenedAt}` and watches all of the
+caller's watermarks with one `collectionGroup('reads').where('uid', ==, me)`
+listener. The `uid` field mirrors the doc id because a collection-group query
+can't filter on it, and a new `match /{path=**}/reads/{uid}` rule authorizes
+the query (`resource.data.uid == request.auth.uid`); direct get/write stay on
+the per-piece `reads/{uid}` rule (rules test + repo tests added).
+**Unread signal.** `LibraryState` swapped its session-local `viewedPieceIds`
+set for a persisted `lastOpenedAt` map; `isUnread(piece)` is now *shared-with-me
+AND `updatedAt.isAfter(lastOpenedAt[id])`* (a missing entry = never opened =
+unread) — an owner's own sheet **never** dots. `LibraryBloc` combines
+`watchPieces` + `watchReads`; `PieceViewed` optimistically clears the dot then
+calls `markOpened` (the stream reconciles). The reader also marks opened on
+`ScoreOpened` success (`ScoreBloc`), so a deep-linked open clears it too.
+**Cross-user fire.** Annotation writes never touch the piece doc and a
+collaborator's rules can't update it, so `onLayerWrite` / `onNoteWrite`
+Firestore triggers bump `pieces/{id}.updatedAt` (a `Timestamp`) on each
+layer/note create/update — and advance the *editing* author's own
+`reads/{uid}.lastOpenedAt` to the **same** instant, so an author never dots
+their own edit while every other participant does. Removals are skipped; no
+trigger loop (it writes the piece + a `reads` doc, neither a layer/note).
+**Deviations (recorded in M2.1 doc):** (1) the read-watermark doc gained a
+`uid` field (for the collection-group query) beyond the schema's original
+`{lastOpenedAt}`. (2) The trigger also advancing the editor's watermark is
+past a literal "bump `updatedAt`", but it's what prevents self-dotting
+server-side (no client clock-skew hack). (3) `LibraryBloc` gained an optional
+`clock` for the optimistic stamp (defaults to `DateTime.now`). Tests: rewrote
+the two placeholder-heuristic `library_bloc_test` cases against the watermark
+model (shared-piece dot appears/clears + `markOpened` verified; owner's own
+never counts; opened-after vs opened-before), repo read-state tests (local +
+Firestore fakes), the collection-group rules test, and the `onLayerWrite`/
+`onNoteWrite` functions tests; regenerated the library gallery goldens (owner
+sheets lose their dot, one shared sheet reads unread and one read). Full gate
+green (format-check/lint/test/golden + functions tsc/eslint/vitest + rules).
+The cross-account emulator proof (B annotates → A's gallery dots) lands with
+M3.8's E2E.
 
 ### M3.8 — Delete cascade + purge v2 + cloud-pieces emulator E2E
 

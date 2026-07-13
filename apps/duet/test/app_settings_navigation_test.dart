@@ -51,6 +51,14 @@ class _EmptyPieceRepository implements PieceRepository {
   Stream<List<Piece>> watchPieces() => Stream.value(const []);
 
   @override
+  Stream<Map<String, DateTime>> watchReads() =>
+      Stream.value(const <String, DateTime>{});
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) async =>
+      const Success<void>(null);
+
+  @override
   Future<Result<Piece>> getPiece(String pieceId) => throw UnimplementedError();
 
   @override

@@ -10,6 +10,18 @@ abstract class PieceRepository {
   /// Fetches a single piece by [pieceId].
   Future<Result<Piece>> getPiece(String pieceId);
 
+  /// Emits the current user's per-piece "last opened" watermarks (`pieceId` →
+  /// when they last opened it), updating as they open pieces. Backs the
+  /// library's unread signal: a piece shared with the caller is unread when
+  /// its [Piece.updatedAt] is after the caller's watermark for it (M3.7); a
+  /// missing entry means never opened.
+  Stream<Map<String, DateTime>> watchReads();
+
+  /// Records that the current user has just opened [pieceId], advancing their
+  /// "last opened" watermark to now — clearing the piece's unread signal for
+  /// them until its content next changes.
+  Future<Result<void>> markOpened(String pieceId);
+
   /// Imports a new piece titled [title] from the PDF at [sourcePath], owned
   /// by the current user. [ownerName] is the importing user's display name, if
   /// the caller has one to offer (sourced from auth identity) — nullable since
