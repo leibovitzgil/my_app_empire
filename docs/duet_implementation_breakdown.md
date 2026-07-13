@@ -148,7 +148,7 @@ in the Track B backlog.
 | M3.8 | ☑ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
 | M4.1 | ☑ Real `ScoreSyncStatus` from repository state | M3.2 |
 | M4.2 | ☑ Demote bundles; "nudge collaborator" affordances | M4.1 |
-| M4.3 | ☐ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
+| M4.3 | ☑ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☐ Soft-delete tombstones for audio notes | M3.2 |
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☐ Invite tokens as expiring Firestore docs | M2.4 |
@@ -1878,6 +1878,31 @@ they last looked*.
 **Done when:** two-account emulator check: B annotates while A is away; A
 reopens and sees layer dot + new pin; markers gone on next reopen; gate +
 goldens green.
+
+**Landed.** **Newness source.** `InkLayer` gained `updatedAt` (mapped from the
+cloud layer doc's `updatedAt`; `null` on the on-device store, so the mock path
+shows no cross-participant newness — G2). `ScoreOpened` now carries the
+viewer's `lastOpenedAt`, which `DuetScorePage` reads via
+`watchReads().first[pieceId]` **before** the bloc's `markOpened` bumps it (the
+one-shot read resolves immediately — the local `watchReads` yields the current
+map on subscribe). Threaded via the event payload, not a bloc-side repo read,
+so the mocktail-mocked `score_bloc_test` needed no `watchReads` stub. **Bloc
+projection.** `ScoreBloc` derives `ParticipantLayer.hasNewInk`
+(`layer.updatedAt > lastOpenedAt`, never the viewer's own, false when either is
+null) and `ScoreState.isNoteNew` (`note.createdAt > lastOpenedAt`, other author,
+not yet played). Newness is computed once per open and clears on the next
+reopen (that reopen's `markOpened` advanced the watermark); the only mid-session
+decay is the `AudioNotePlayed` event, which adds the note to a session-local
+`seenNoteIds` so playing a "new" note drops its marker. **UI.** Layers-panel
+`_LayerRow` shows a primary dot + ", new annotations" semantics;
+`AudioPinMarker` gains a corner "new" badge (hidden while playing);
+`PageInkPresence` gained `hasNew`, hinting fresh ink/notes on the page rail's
+`_PageThumb`. **Tests:** bloc projection (fixed dates) for
+hasNewInk/isNoteNew/play-drops-marker; widget tests for the layer-row dot, pin
+new-state, and page-rail accent + semantics; goldens reshot for the pin
+new-badge, page rail, and the layers-panel dot (the `clean_workspace` layers
+golden reshot too — same shared fixture). Full workspace gate + score goldens
+green.
 
 ### M4.4 — Soft-delete tombstones for audio notes
 
