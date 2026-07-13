@@ -41,6 +41,8 @@ void main() {
       required String currentUserId,
       void Function(Piece piece)? onOpenCollaborators,
       void Function(Piece piece)? onInvitePiece,
+      void Function(Piece piece)? onExportBundle,
+      VoidCallback? onImportBundle,
     }) async {
       when(
         () => repository.getPiece(piece.id),
@@ -54,6 +56,8 @@ void main() {
             onOpenScore: (_) {},
             onOpenCollaborators: onOpenCollaborators,
             onInvitePiece: onInvitePiece,
+            onExportBundle: onExportBundle,
+            onImportBundle: onImportBundle,
           ),
         ),
       );
@@ -181,6 +185,38 @@ void main() {
         );
 
         expect(find.text('Invite a friend'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'Offline sharing: shows the section and Export invokes onExportBundle',
+      (tester) async {
+        Piece? exported;
+        await pumpScreen(
+          tester,
+          piece: piece(),
+          currentUserId: ownerId,
+          onExportBundle: (p) => exported = p,
+          onImportBundle: () {},
+        );
+
+        expect(find.text('Offline sharing'), findsOneWidget);
+        expect(find.text('Import review bundle'), findsOneWidget);
+
+        await tester.tap(find.text('Export review bundle'));
+        await tester.pump();
+
+        expect(exported?.id, 'p1');
+      },
+    );
+
+    testWidgets(
+      'Offline sharing: the section hides when neither callback is wired',
+      (tester) async {
+        await pumpScreen(tester, piece: piece(), currentUserId: ownerId);
+
+        expect(find.text('Offline sharing'), findsNothing);
+        expect(find.text('Export review bundle'), findsNothing);
       },
     );
 

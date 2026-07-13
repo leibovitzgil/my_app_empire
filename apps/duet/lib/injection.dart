@@ -11,6 +11,7 @@ import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
+import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
 import 'package:duet/data/current_user.dart';
@@ -443,6 +444,25 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     return CallableCollaboratorInviteService(
       local: local,
       functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+    );
+  });
+
+  // Nudge a piece's other participants ("<name> added notes") — a lightweight
+  // ping distinct from an access-granting invite (M4.2). The default sends the
+  // nudge `UserMessage` straight through the in-memory gateway (visible on the
+  // recipient's inbox stream in-process); under Firebase the send goes through
+  // the `sendNudge` callable, since clients can't write `userInbox` directly
+  // (M2.4). Both resolve the piece's participants and fan out the same payload.
+  getIt.registerLazySingleton<NudgeService>(() {
+    if (useFirebase) {
+      return CallableNudgeService(
+        functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+      );
+    }
+    return DefaultNudgeService(
+      pieceRepository: getIt<PieceRepository>(),
+      messageGateway: getIt<UserMessageGateway>(),
+      currentUserId: getIt<CurrentUser>().call,
     );
   });
 

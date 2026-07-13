@@ -18,6 +18,8 @@ class PieceDetailPage extends StatelessWidget {
     required this.onOpenScore,
     this.onInvitePiece,
     this.onOpenCollaborators,
+    this.onExportBundle,
+    this.onImportBundle,
     super.key,
   });
 
@@ -45,6 +47,18 @@ class PieceDetailPage extends StatelessWidget {
   /// cross-package reason as [onOpenScore]. `null` hides the tile entirely.
   final void Function(Piece piece)? onOpenCollaborators;
 
+  /// Called when the user taps "Export review bundle" in Offline sharing, to
+  /// export this piece's annotations as a `.duet` bundle and share it — the
+  /// airplane-mode escape hatch (M4.2). A callback for the same cross-package
+  /// reason as [onOpenScore] (`review_sync` is app-glue's dependency). `null`
+  /// hides the action.
+  final void Function(Piece piece)? onExportBundle;
+
+  /// Called when the user taps "Import review bundle" in Offline sharing, to
+  /// pick and merge a `.duet` bundle a collaborator sent. See [onExportBundle].
+  /// `null` hides the action.
+  final VoidCallback? onImportBundle;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<PieceDetailCubit>(
@@ -60,6 +74,8 @@ class PieceDetailPage extends StatelessWidget {
         onOpenScore: onOpenScore,
         onInvitePiece: onInvitePiece,
         onOpenCollaborators: onOpenCollaborators,
+        onExportBundle: onExportBundle,
+        onImportBundle: onImportBundle,
       ),
     );
   }
@@ -74,6 +90,8 @@ class PieceDetailScreen extends StatelessWidget {
     required this.onOpenScore,
     this.onInvitePiece,
     this.onOpenCollaborators,
+    this.onExportBundle,
+    this.onImportBundle,
     super.key,
   });
 
@@ -85,6 +103,12 @@ class PieceDetailScreen extends StatelessWidget {
 
   /// See [PieceDetailPage.onOpenCollaborators].
   final void Function(Piece piece)? onOpenCollaborators;
+
+  /// See [PieceDetailPage.onExportBundle].
+  final void Function(Piece piece)? onExportBundle;
+
+  /// See [PieceDetailPage.onImportBundle].
+  final VoidCallback? onImportBundle;
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +151,8 @@ class PieceDetailScreen extends StatelessWidget {
               onOpenScore: onOpenScore,
               onInvitePiece: onInvitePiece,
               onOpenCollaborators: onOpenCollaborators,
+              onExportBundle: onExportBundle,
+              onImportBundle: onImportBundle,
             ),
           },
         );
@@ -141,12 +167,16 @@ class _ReadyBody extends StatelessWidget {
     required this.onOpenScore,
     this.onInvitePiece,
     this.onOpenCollaborators,
+    this.onExportBundle,
+    this.onImportBundle,
   });
 
   final PieceDetailState state;
   final void Function(Piece piece) onOpenScore;
   final void Function(Piece piece)? onInvitePiece;
   final void Function(Piece piece)? onOpenCollaborators;
+  final void Function(Piece piece)? onExportBundle;
+  final VoidCallback? onImportBundle;
 
   @override
   Widget build(BuildContext context) {
@@ -212,8 +242,65 @@ class _ReadyBody extends StatelessWidget {
             label: 'Open score',
             onPressed: () => onOpenScore(piece),
           ),
+          if (onExportBundle != null || onImportBundle != null)
+            _OfflineSharingSection(
+              piece: piece,
+              onExportBundle: onExportBundle,
+              onImportBundle: onImportBundle,
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// The airplane-mode escape hatch (M4.2): export this piece's annotations as a
+/// `.duet` bundle to share by hand, or import one a collaborator sent — kept
+/// off the primary reader UI (live sync is the default there) but reachable
+/// here when there's no connection.
+class _OfflineSharingSection extends StatelessWidget {
+  const _OfflineSharingSection({
+    required this.piece,
+    this.onExportBundle,
+    this.onImportBundle,
+  });
+
+  final Piece piece;
+  final void Function(Piece piece)? onExportBundle;
+  final VoidCallback? onImportBundle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onExport = onExportBundle;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.lg),
+        Text('Offline sharing', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'No connection? Export a review bundle to share by hand, or import '
+          'one a collaborator sent you.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (onExport != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SecondaryButton(
+            label: 'Export review bundle',
+            onPressed: () => onExport(piece),
+          ),
+        ],
+        if (onImportBundle != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SecondaryButton(
+            label: 'Import review bundle',
+            onPressed: onImportBundle,
+          ),
+        ],
+      ],
     );
   }
 }

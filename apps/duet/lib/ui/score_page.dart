@@ -4,21 +4,23 @@ import 'package:audio/audio.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
+import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/features/score/score.dart';
 import 'package:duet/injection.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 
 /// Hosts `feature_score`'s Score Viewer for [pieceId]: builds the
 /// [ScoreBloc] from the shared repositories, and wires the app-glue
-/// `feature_score` deliberately doesn't own — the review-sync bundle
-/// (share/import) actions, and the live sync badge, which subscribes to a
-/// [PieceSyncMonitor] and maps its [PieceSyncState] onto the reader's
-/// presentational [ScoreSyncStatus] (the feature stays Firebase-blind; G3).
+/// `feature_score` deliberately doesn't own — the "nudge a collaborator"
+/// action (`NudgeService`, M4.2; bundle share/import moved to Piece Detail),
+/// and the live sync badge, which subscribes to a [PieceSyncMonitor] and maps
+/// its [PieceSyncState] onto the reader's presentational [ScoreSyncStatus]
+/// (the feature stays Firebase-blind; G3).
 class DuetScorePage extends StatefulWidget {
   /// Creates a [DuetScorePage] for [pieceId].
   const DuetScorePage({required this.pieceId, super.key});
@@ -87,8 +89,7 @@ class _DuetScorePageState extends State<DuetScorePage> {
           recordingPathBuilder: recordingPathBuilder.call,
           audioAssetStore: getIt<AudioAssetStore>(),
           syncStatus: _syncStatusFor(snapshot.data),
-          onShareRequested: _share,
-          onImportRequested: _import,
+          onNudgeRequested: _nudge,
         ),
       ),
     );
@@ -107,45 +108,23 @@ class _DuetScorePageState extends State<DuetScorePage> {
     null => ScoreSyncStatus.syncing,
   };
 
-  Future<void> _share() async {
-    final exportResult = await getIt<ReviewSyncService>().exportBundle(
-      widget.pieceId,
+  /// Pings the piece's other participants that the current user added notes —
+  /// the reader's "Nudge" affordance (Layers panel + save-note snackbar). The
+  /// send is server-authoritative under Firebase (`sendNudge` callable) and
+  /// in-memory otherwise; either way the app glue owns it so the feature stays
+  /// Firebase-blind (G3). `fromName` seeds the mock path's copy; the callable
+  /// resolves it from the caller's token instead.
+  Future<void> _nudge() async {
+    final result = await getIt<NudgeService>().nudge(
+      pieceId: widget.pieceId,
+      fromName: getIt<CurrentUserName>().call() ?? 'Someone',
     );
-    if (!mounted) return;
-    switch (exportResult) {
-      case Success<ExportedBundle>(:final value):
-        final shareResult = await getIt<ReviewSyncService>().share(value);
-        if (!mounted) return;
-        // The badge is monitor-driven now, so a successful share needs no
-        // status plumbing here — only surface a failure.
-        if (shareResult case ResultFailure<void>(:final error)) {
-          AppSnackbar.error(context, "Couldn't share: $error");
-        }
-      case ResultFailure<ExportedBundle>(:final error):
-        AppSnackbar.error(context, "Couldn't export: $error");
-    }
-  }
-
-  Future<void> _import() async {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['duet'],
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final path = picked.files.single.path;
-    if (path == null) return;
-    if (!mounted) return;
-    final result = await getIt<ReviewSyncService>().importBundle(path);
     if (!mounted) return;
     switch (result) {
-      case Success<ReviewBundleSummary>(:final value):
-        AppSnackbar.success(
-          context,
-          'Imported ${value.strokeCount} strokes, '
-          '${value.audioNoteCount} notes',
-        );
-      case ResultFailure<ReviewBundleSummary>(:final error):
-        AppSnackbar.error(context, "Couldn't import: $error");
+      case Success<void>():
+        AppSnackbar.success(context, 'Nudge sent');
+      case ResultFailure<void>(:final error):
+        AppSnackbar.error(context, "Couldn't nudge: $error");
     }
   }
 }

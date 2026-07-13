@@ -69,8 +69,7 @@ class _HarnessScorePageState extends State<_HarnessScorePage> {
         playerService: _HarnessPlayerService(),
         recordingPathBuilder: () => 'rec.m4a',
         audioAssetStore: _HarnessAudioAssetStore(),
-        onShareRequested: () async {},
-        onImportRequested: () async {},
+        onNudgeRequested: () async {},
       ),
     );
   }

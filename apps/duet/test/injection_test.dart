@@ -107,5 +107,14 @@ void main() {
         expect(getIt<PieceSyncMonitor>(), isA<LocalPieceSyncMonitor>());
       },
     );
+
+    test(
+      'binds a DefaultNudgeService — never the callable (no Firebase)',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<NudgeService>(), isA<DefaultNudgeService>());
+      },
+    );
   });
 }

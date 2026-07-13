@@ -13,3 +13,4 @@ export { lookupEmail } from './lookupEmail';
 export { onLayerWrite, onNoteWrite } from './pieceActivity';
 export { onPieceDeleted } from './pieceCascade';
 export { sendInvite } from './sendInvite';
+export { sendNudge } from './sendNudge';
