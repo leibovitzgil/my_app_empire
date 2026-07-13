@@ -21,6 +21,7 @@ final class ParticipantLayer extends Equatable {
     required this.strokes,
     required this.visible,
     required this.isOwn,
+    this.hasNewInk = false,
   });
 
   /// The id of the participant this layer belongs to.
@@ -46,8 +47,18 @@ final class ParticipantLayer extends Equatable {
   /// and erase from it (and whose chip shows the owned indicator).
   final bool isOwn;
 
-  /// Returns a copy with [visible] and/or [strokes] replaced.
-  ParticipantLayer copyWith({bool? visible, List<InkStroke>? strokes}) {
+  /// Whether this (other participant's) layer has changed since the viewer
+  /// last opened the piece — its cloud `updatedAt` is newer than the viewer's
+  /// read watermark (M4.3). Always `false` for the viewer's own layer and
+  /// where no watermark/`updatedAt` is known.
+  final bool hasNewInk;
+
+  /// Returns a copy with [visible], [strokes], and/or [hasNewInk] replaced.
+  ParticipantLayer copyWith({
+    bool? visible,
+    List<InkStroke>? strokes,
+    bool? hasNewInk,
+  }) {
     return ParticipantLayer(
       ownerId: ownerId,
       label: label,
@@ -55,6 +66,7 @@ final class ParticipantLayer extends Equatable {
       strokes: strokes ?? this.strokes,
       visible: visible ?? this.visible,
       isOwn: isOwn,
+      hasNewInk: hasNewInk ?? this.hasNewInk,
     );
   }
 
@@ -66,5 +78,6 @@ final class ParticipantLayer extends Equatable {
     strokes,
     visible,
     isOwn,
+    hasNewInk,
   ];
 }

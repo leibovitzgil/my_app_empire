@@ -101,6 +101,126 @@ void main() {
       currentUserId: currentUserId,
     );
 
+    AudioNote noteBy(String authorId, String id, DateTime createdAt) =>
+        AudioNote(
+          id: id,
+          authorId: authorId,
+          audioAssetId: '/tmp/$id.m4a',
+          pageIndex: 0,
+          durationMs: 1000,
+          region: const Region(
+            pageIndex: 0,
+            left: 0,
+            top: 0,
+            width: 1,
+            height: 1,
+          ),
+          createdAt: createdAt,
+        );
+
+    // ── M4.3 attention loop ──────────────────────────────────────────────
+
+    blocTest<ScoreBloc, ScoreState>(
+      "flags another participant's layer newer than lastOpenedAt as "
+      "hasNewInk, never the viewer's own (M4.3)",
+      build: buildBloc, // viewer = ownerId
+      act: (bloc) async {
+        bloc.add(ScoreOpened(pieceId, lastOpenedAt: DateTime(2024, 1, 10)));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: [
+              // The viewer's own layer — never "new", even when newer.
+              InkLayer(
+                ownerId: ownerId,
+                role: PieceRole.owner,
+                strokes: const [],
+                updatedAt: DateTime(2024, 1, 20),
+              ),
+              InkLayer(
+                ownerId: collaboratorId,
+                role: PieceRole.collaborator,
+                strokes: const [],
+                updatedAt: DateTime(2024, 1, 20),
+              ),
+            ],
+            audioNotes: const [],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        final own = bloc.state.layers.firstWhere((l) => l.ownerId == ownerId);
+        final other = bloc.state.layers.firstWhere(
+          (l) => l.ownerId == collaboratorId,
+        );
+        expect(own.hasNewInk, isFalse);
+        expect(other.hasNewInk, isTrue);
+      },
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'does not flag a layer older than lastOpenedAt, nor any layer with no '
+      'watermark (M4.3)',
+      build: buildBloc,
+      act: (bloc) async {
+        // No watermark: nothing reads as new even though the layer is recent.
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: [
+              InkLayer(
+                ownerId: collaboratorId,
+                role: PieceRole.collaborator,
+                strokes: const [],
+                updatedAt: DateTime(2024, 1, 20),
+              ),
+            ],
+            audioNotes: const [],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) =>
+          expect(bloc.state.layers.every((l) => !l.hasNewInk), isTrue),
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      "isNoteNew flags another author's note after lastOpenedAt only, and "
+      'playing it drops the flag (M4.3)',
+      build: buildBloc, // viewer = ownerId
+      act: (bloc) async {
+        bloc.add(ScoreOpened(pieceId, lastOpenedAt: DateTime(2024, 1, 10)));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: const [],
+            audioNotes: [
+              noteBy(collaboratorId, 'n_new', DateTime(2024, 1, 20)),
+              noteBy(collaboratorId, 'n_old', DateTime(2024)),
+              noteBy(ownerId, 'n_own', DateTime(2024, 1, 20)),
+            ],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const AudioNotePlayed('n_new'));
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        final state = bloc.state;
+        AudioNote byId(String id) => state.notes.firstWhere((n) => n.id == id);
+        // Played, so no longer new; the older and own notes were never new.
+        expect(state.isNoteNew(byId('n_new')), isFalse);
+        expect(state.seenNoteIds, contains('n_new'));
+        expect(state.isNoteNew(byId('n_old')), isFalse);
+        expect(state.isNoteNew(byId('n_own')), isFalse);
+      },
+    );
+
     test('initial state is loading with the given currentUserId', () {
       final bloc = buildBloc();
       expect(bloc.state.status, ScoreStatus.loading);

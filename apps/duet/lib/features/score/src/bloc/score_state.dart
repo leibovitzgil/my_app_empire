@@ -30,6 +30,8 @@ final class ScoreState extends Equatable {
     this.hiddenInkOwnerIds = const {},
     this.audioPinsVisible = true,
     this.cleanWorkspace = false,
+    this.lastOpenedAt,
+    this.seenNoteIds = const {},
     this.error,
   });
 
@@ -105,8 +107,28 @@ final class ScoreState extends Equatable {
   /// computed visibility.
   final bool cleanWorkspace;
 
+  /// This viewer's read watermark captured at open (M4.3): a layer or note
+  /// newer than it reads as "new since you last looked". `null` — no prior
+  /// open, or a backend without watermarks — disables newness entirely.
+  final DateTime? lastOpenedAt;
+
+  /// Audio notes the viewer has played this session, so their "new" markers
+  /// drop after first play. Session-local; never rebuilt from the repository.
+  final Set<String> seenNoteIds;
+
   /// The most recent (usually transient/non-blocking) error, if any.
   final String? error;
+
+  /// Whether [note] should show a "new since you last looked" marker: authored
+  /// by someone else, created after [lastOpenedAt], and not yet played this
+  /// session (playing marks it seen — see [seenNoteIds]).
+  bool isNoteNew(AudioNote note) {
+    final watermark = lastOpenedAt;
+    return watermark != null &&
+        note.authorId != currentUserId &&
+        note.createdAt.isAfter(watermark) &&
+        !seenNoteIds.contains(note.id);
+  }
 
   /// Whether [currentPage] is the first page.
   bool get isFirstPage => currentPage <= 0;
@@ -154,6 +176,8 @@ final class ScoreState extends Equatable {
     Set<String>? hiddenInkOwnerIds,
     bool? audioPinsVisible,
     bool? cleanWorkspace,
+    DateTime? lastOpenedAt,
+    Set<String>? seenNoteIds,
     String? error,
     bool clearError = false,
   }) {
@@ -179,6 +203,8 @@ final class ScoreState extends Equatable {
       hiddenInkOwnerIds: hiddenInkOwnerIds ?? this.hiddenInkOwnerIds,
       audioPinsVisible: audioPinsVisible ?? this.audioPinsVisible,
       cleanWorkspace: cleanWorkspace ?? this.cleanWorkspace,
+      lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
+      seenNoteIds: seenNoteIds ?? this.seenNoteIds,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -202,6 +228,8 @@ final class ScoreState extends Equatable {
     hiddenInkOwnerIds,
     audioPinsVisible,
     cleanWorkspace,
+    lastOpenedAt,
+    seenNoteIds,
     error,
   ];
 }

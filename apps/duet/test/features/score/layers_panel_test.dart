@@ -122,6 +122,27 @@ void main() {
       expect(toggled, 'c1');
     });
 
+    testWidgets('a changed layer announces "new annotations" (M4.3)', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        layers: const [
+          ParticipantLayer(
+            ownerId: 'c1',
+            label: 'Bea',
+            colorId: 'p1',
+            visible: true,
+            isOwn: false,
+            hasNewInk: true,
+            strokes: [],
+          ),
+        ],
+      );
+
+      expect(find.bySemanticsLabel(RegExp('new annotations')), findsOneWidget);
+    });
+
     testWidgets('shows the audio pins row with the on-page count', (
       tester,
     ) async {

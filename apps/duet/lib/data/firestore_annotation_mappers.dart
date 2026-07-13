@@ -76,6 +76,9 @@ InkLayer layerFromFirestore(String uid, Map<String, dynamic> data) => InkLayer(
   ownerId: uid,
   role: _roleFromName(data['role'] as String?),
   strokes: strokesFromLayer(data),
+  // The write time the reader compares against a viewer's last-opened
+  // watermark to flag a layer as changed since (M4.3).
+  updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
 );
 
 PieceRole _roleFromName(String? name) => PieceRole.values.firstWhere(

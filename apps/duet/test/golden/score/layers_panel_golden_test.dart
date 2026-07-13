@@ -27,6 +27,7 @@ const List<ParticipantLayer> _layers = [
     colorId: 'p1',
     isOwn: false,
     visible: true,
+    hasNewInk: true,
     strokes: [],
   ),
   ParticipantLayer(

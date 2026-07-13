@@ -32,6 +32,7 @@ Future<void> _pump(
   WidgetTester tester, {
   required String currentUserId,
   bool isPlaying = false,
+  bool isNew = false,
   double? progress,
 }) {
   return tester.pumpWidget(
@@ -43,6 +44,7 @@ Future<void> _pump(
             note: _note('owner1'),
             currentUserId: currentUserId,
             isPlaying: isPlaying,
+            isNew: isNew,
             progress: progress,
             onTap: () {},
             onDelete: () {},
@@ -68,6 +70,14 @@ void main() {
       await expectLater(
         find.byType(AudioPinMarker),
         matchesGoldenFile('goldens/audio_pin_marker_idle_other.png'),
+      );
+    });
+
+    testWidgets('new, owned by the other participant', (tester) async {
+      await _pump(tester, currentUserId: 'collaborator1', isNew: true);
+      await expectLater(
+        find.byType(AudioPinMarker),
+        matchesGoldenFile('goldens/audio_pin_marker_new.png'),
       );
     });
 

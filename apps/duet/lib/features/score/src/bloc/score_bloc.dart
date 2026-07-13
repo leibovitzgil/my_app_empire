@@ -35,6 +35,7 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
        _now = clock ?? DateTime.now,
        super(ScoreState.initial(currentUserId: currentUserId)) {
     on<ScoreOpened>(_onOpened);
+    on<AudioNotePlayed>(_onAudioNotePlayed);
     on<ScoreAnnotationsUpdated>(_onAnnotationsUpdated);
     on<PageChanged>(_onPageChanged);
     on<PageCountResolved>(_onPageCountResolved);
@@ -95,6 +96,10 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
                 piece: piece,
                 currentRole: role,
                 currentPage: 0,
+                // Captured before markOpened bumps the watermark below, so the
+                // reader can flag what changed since this viewer last looked
+                // (M4.3).
+                lastOpenedAt: event.lastOpenedAt,
               ),
             );
             // Advance this user's unread watermark now that the reader has
@@ -128,6 +133,13 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
       ),
       ResultFailure<String>(:final error) => ResultFailure(error),
     };
+  }
+
+  /// Marks the played note seen for the rest of this session (playing a "new"
+  /// note drops its marker — M4.3). Idempotent.
+  void _onAudioNotePlayed(AudioNotePlayed event, Emitter<ScoreState> emit) {
+    if (state.seenNoteIds.contains(event.noteId)) return;
+    emit(state.copyWith(seenNoteIds: {...state.seenNoteIds, event.noteId}));
   }
 
   void _onAnnotationsUpdated(
@@ -164,6 +176,12 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
           strokes: _strokesForOwner(annotations, participantIds[i]),
           visible: !state.hiddenInkOwnerIds.contains(participantIds[i]),
           isOwn: participantIds[i] == state.currentUserId,
+          hasNewInk: _hasNewInk(
+            annotations,
+            participantIds[i],
+            isOwn: participantIds[i] == state.currentUserId,
+            lastOpenedAt: state.lastOpenedAt,
+          ),
         ),
     ];
   }
@@ -173,6 +191,26 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
       if (layer.ownerId == owner) return layer.strokes;
     }
     return const [];
+  }
+
+  /// Whether [owner]'s layer changed since the viewer last opened the piece —
+  /// their layer document's cloud `updatedAt` is after [lastOpenedAt] (M4.3).
+  /// Never true for the viewer's own layer, or where no watermark/`updatedAt`
+  /// is known (e.g. the on-device store).
+  bool _hasNewInk(
+    PieceAnnotations annotations,
+    String owner, {
+    required bool isOwn,
+    required DateTime? lastOpenedAt,
+  }) {
+    if (isOwn || lastOpenedAt == null) return false;
+    for (final layer in annotations.layers) {
+      if (layer.ownerId == owner) {
+        final updatedAt = layer.updatedAt;
+        return updatedAt != null && updatedAt.isAfter(lastOpenedAt);
+      }
+    }
+    return false;
   }
 
   /// A display label for the participant at [index] in [Piece.participantIds]:

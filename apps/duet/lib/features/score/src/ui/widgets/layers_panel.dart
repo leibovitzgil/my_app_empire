@@ -190,7 +190,8 @@ class _LayerRow extends StatelessWidget {
     return Semantics(
       button: true,
       label:
-          '${layer.label} layer${layer.isOwn ? ' (yours)' : ''}, '
+          '${layer.label} layer${layer.isOwn ? ' (yours)' : ''}'
+          '${layer.hasNewInk ? ', new annotations' : ''}, '
           '${layer.visible ? 'shown' : 'hidden'}. Double tap to '
           '${layer.visible ? 'hide' : 'show'}.',
       child: SizedBox(
@@ -230,6 +231,19 @@ class _LayerRow extends StatelessWidget {
                             if (layer.isOwn) ...[
                               const SizedBox(width: AppSpacing.xs),
                               Icon(Icons.edit, size: 14, color: subColor),
+                            ],
+                            // "New since you last looked" dot (M4.3) — only on
+                            // another participant's changed layer.
+                            if (layer.hasNewInk) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: scheme.primary,
+                                ),
+                              ),
                             ],
                           ],
                         ),

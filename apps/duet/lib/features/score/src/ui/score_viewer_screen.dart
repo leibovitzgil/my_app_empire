@@ -724,6 +724,16 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
               if (layer.strokes.any((stroke) => stroke.pageIndex == page))
                 inkColorForId(layer.colorId),
           ].take(5).toList(),
+          // Fresh ink or a new note on this page (M4.3), for the rail hint.
+          hasNew:
+              state.layers.any(
+                (layer) =>
+                    layer.hasNewInk &&
+                    layer.strokes.any((s) => s.pageIndex == page),
+              ) ||
+              state.notes.any(
+                (note) => note.pageIndex == page && state.isNoteNew(note),
+              ),
         ),
     ];
   }
@@ -810,6 +820,7 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
                                 currentUserId: state.currentUserId,
                                 accentColor: _pinAccent(state, note, scheme),
                                 isPlaying: playback.isPlaying(note.id),
+                                isNew: state.isNoteNew(note),
                                 progress: _progressValue(playback, note.id),
                                 onTap: () => _onPinTap(context, note, playback),
                                 onDelete: () => context.read<ScoreBloc>().add(
@@ -1044,6 +1055,9 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
     if (playback.isPlaying(note.id)) {
       unawaited(playbackCubit.stop());
     } else {
+      // Playing a "new" note marks it seen for the rest of this session, so
+      // its marker drops (M4.3).
+      context.read<ScoreBloc>().add(AudioNotePlayed(note.id));
       unawaited(_playNote(playbackCubit, note));
     }
   }
