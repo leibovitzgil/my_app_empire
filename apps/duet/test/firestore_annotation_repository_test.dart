@@ -211,6 +211,37 @@ void main() {
       expect(annotations.audioNotes, isEmpty);
     });
 
+    test(
+      'deleteAudioNote tombstones rather than hard-deleting (M4.4): watch '
+      'hides it, but the doc survives with deletedAt and the snapshot keeps it',
+      () async {
+        await repository.addAudioNote(piece.id, note());
+        expect(
+          await repository.deleteAudioNote(piece.id, 'n1'),
+          isA<Success<void>>(),
+        );
+
+        // Hidden from the reader…
+        expect((await repository.watch(piece.id).first).audioNotes, isEmpty);
+
+        // …but the document survives as a tombstone (not a hard delete), so a
+        // stale offline copy can't resurrect it, and the daily GC reclaims it.
+        final doc = await firestore
+            .collection('pieces')
+            .doc(piece.id)
+            .collection('notes')
+            .doc('n1')
+            .get();
+        expect(doc.exists, isTrue);
+        expect(doc.data()!['deletedAt'], isNotNull);
+
+        // The sync snapshot retains the tombstone for the review-sync export.
+        final snapshot = await repository.snapshotWithTombstones(piece.id);
+        expect(snapshot.audioNotes.single.id, 'n1');
+        expect(snapshot.audioNotes.single.isTombstoned, isTrue);
+      },
+    );
+
     test('deleteAudioNote fails for an unknown note', () async {
       final result = await repository.deleteAudioNote(piece.id, 'ghost');
       expect(result, isA<ResultFailure<void>>());

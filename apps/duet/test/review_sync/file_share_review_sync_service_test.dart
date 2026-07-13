@@ -131,8 +131,18 @@ class _FakeAnnotationRepository implements AnnotationRepository {
 
   @override
   Stream<PieceAnnotations> watch(String pieceId) async* {
-    yield _for(pieceId);
+    // Mirror the real repositories: hide tombstoned notes from consumers.
+    final all = _for(pieceId);
+    yield PieceAnnotations(
+      pieceId: all.pieceId,
+      layers: all.layers,
+      audioNotes: all.audioNotes.where((n) => !n.isTombstoned).toList(),
+    );
   }
+
+  @override
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId) async =>
+      _for(pieceId);
 
   @override
   Future<Result<void>> replaceAuthorSlice(
@@ -452,6 +462,76 @@ void main() {
           File((importedPath as Success<String>).value).readAsBytesSync(),
           [1, 2, 3, 4, 5],
         );
+      },
+    );
+
+    test(
+      'a tombstoned note travels in the bundle and drops on the receiver '
+      '(M4.4 convergence), while the tombstone itself is retained',
+      () async {
+        // Sender owner-1 has one live note (n2) and one they deleted (n1,
+        // tombstoned). Only n1's delete needs to converge; n2 transfers as
+        // ordinary live audio.
+        senderAnnotations.seed(
+          piece.id,
+          PieceAnnotations(
+            pieceId: piece.id,
+            layers: [
+              InkLayer(
+                ownerId: 'owner-1',
+                role: PieceRole.owner,
+                strokes: [stroke('s1')],
+              ),
+            ],
+            audioNotes: [
+              note(
+                'n1',
+                audioAssetId: senderAssetId,
+              ).copyWith(deletedAt: DateTime(2024, 2)),
+              note('n2', audioAssetId: senderAssetId),
+            ],
+          ),
+        );
+
+        final exportResult = await senderService.exportBundle(piece.id);
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+        // The summary counts only live notes — a tombstone isn't shared audio.
+        expect(bundle.manifest.audioNoteCount, 1);
+
+        // The receiver still has n1 live from before; importing must drop it
+        // rather than let a stale copy resurrect it.
+        final receiverAnnotations = _FakeAnnotationRepository()
+          ..seed(
+            piece.id,
+            PieceAnnotations(
+              pieceId: piece.id,
+              layers: const [],
+              audioNotes: [note('n1', audioAssetId: 'receiver-old')],
+            ),
+          );
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: receiverAnnotations,
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'collaborator-1',
+          bundlesDirectory: () async => tempDir,
+        );
+
+        await receiverService.importBundle(bundle.filePath);
+
+        // watch() hides the tombstoned note; only the live n2 survives.
+        final visible = await receiverAnnotations.watch(piece.id).first;
+        expect(visible.audioNotes.map((n) => n.id), ['n2']);
+
+        // The tombstone is retained (not resurrected as live) so a *future*
+        // export from this device re-converges the delete downstream.
+        final all = await receiverAnnotations.snapshotWithTombstones(piece.id);
+        final n1 = all.audioNotes.firstWhere((n) => n.id == 'n1');
+        expect(n1.isTombstoned, isTrue);
       },
     );
 

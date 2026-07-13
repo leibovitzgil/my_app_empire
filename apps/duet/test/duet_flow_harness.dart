@@ -336,6 +336,10 @@ class FakeAnnotationRepository implements AnnotationRepository {
   }
 
   @override
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId) async =>
+      _for(pieceId);
+
+  @override
   Future<Result<void>> addStroke(String pieceId, InkStroke stroke) async {
     final current = _for(pieceId);
     final existing = current.layers.where((l) => l.ownerId == stroke.authorId);

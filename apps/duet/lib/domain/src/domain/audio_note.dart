@@ -43,6 +43,7 @@ class AudioNote extends Equatable {
     required this.durationMs,
     required this.region,
     required this.createdAt,
+    this.deletedAt,
   });
 
   /// The stable identifier for this note.
@@ -67,6 +68,38 @@ class AudioNote extends Equatable {
   /// When this note was recorded.
   final DateTime createdAt;
 
+  /// When this note was soft-deleted (M4.4), or `null` for a live note.
+  /// Deletes tombstone rather than physically removing the document so they
+  /// converge across offline peers instead of resurrecting; `watch` filters
+  /// tombstoned notes out, so blocs and UI never see a non-null [deletedAt].
+  final DateTime? deletedAt;
+
+  /// Whether this note is a tombstone (soft-deleted) rather than live.
+  bool get isTombstoned => deletedAt != null;
+
+  /// Returns a copy of this note with the given fields replaced. Cannot clear
+  /// [deletedAt] back to `null` (tombstones are terminal — a delete never
+  /// un-deletes), which the tombstone convergence relies on.
+  AudioNote copyWith({
+    String? id,
+    String? authorId,
+    String? audioAssetId,
+    int? pageIndex,
+    int? durationMs,
+    Region? region,
+    DateTime? createdAt,
+    DateTime? deletedAt,
+  }) => AudioNote(
+    id: id ?? this.id,
+    authorId: authorId ?? this.authorId,
+    audioAssetId: audioAssetId ?? this.audioAssetId,
+    pageIndex: pageIndex ?? this.pageIndex,
+    durationMs: durationMs ?? this.durationMs,
+    region: region ?? this.region,
+    createdAt: createdAt ?? this.createdAt,
+    deletedAt: deletedAt ?? this.deletedAt,
+  );
+
   @override
   List<Object?> get props => [
     id,
@@ -76,5 +109,6 @@ class AudioNote extends Equatable {
     durationMs,
     region,
     createdAt,
+    deletedAt,
   ];
 }

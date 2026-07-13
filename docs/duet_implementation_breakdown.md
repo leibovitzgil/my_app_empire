@@ -149,7 +149,7 @@ in the Track B backlog.
 | M4.1 | ☑ Real `ScoreSyncStatus` from repository state | M3.2 |
 | M4.2 | ☑ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☑ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
-| M4.4 | ☐ Soft-delete tombstones for audio notes | M3.2 |
+| M4.4 | ☑ Soft-delete tombstones for audio notes | M3.2 |
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☐ Invite tokens as expiring Firestore docs | M2.4 |
 | M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
@@ -1941,6 +1941,33 @@ Firestore impl M3.2 mirrored it). Schema already reserves `deletedAt`
 
 **Done when:** convergence tests green on emulator; no resurrection after
 reconnect; gate green.
+
+**Landed.** **Domain.** `AudioNote` gained `DateTime? deletedAt` (+ `copyWith`,
+`isTombstoned`, `props`); both mappers round-trip it (local JSON: nullable
+ISO-8601; Firestore: `Timestamp?`). **Repos.** `deleteAudioNote` now sets
+`deletedAt` instead of removing the note — the local repo keeps it in storage
+(a delete on an already-tombstoned note reads as unknown, matching the cloud
+repo); the Firestore repo issues `update({deletedAt})` (the only note mutation
+the M2.2 rules permit). Both `watch`es hide tombstoned notes, so blocs/UI are
+unchanged; a new `snapshotWithTombstones` on the contract exposes the raw set
+for one caller only — the review-sync export. **Bundles.**
+`ManifestAudioEntry.audioFile` went nullable and the manifest round-trips
+`deletedAtMillis`; `exportBundle` reads `snapshotWithTombstones` and packages a
+tombstone as a metadata-only entry (no audio bytes), while `importBundle`
+applies it through `replaceAuthorSlice` so an offline peer drops the note
+instead of resurrecting it (summary/notification count only live notes).
+**GC.** `gcTombstones` (scheduled, daily) collection-group-queries `notes` for
+`deletedAt` ≤ now−30d and hard-deletes the doc + its `audio/{assetId}` Storage
+object; a type guard skips live notes (`deletedAt: null` sorts before every
+timestamp, so it can slip the `<=` filter). **Ink is out of scope** — erases
+are single-author `layers/{uid}` rewrites that converge by last-writer-wins on
+one doc, nothing to resurrect (rationale recorded in the M2.1 schema doc).
+**Tests:** local + Firestore repo tombstone (watch hides / doc survives with
+`deletedAt` / fresh repo never resurrects / snapshot retains); both mapper
+round-trips; a review-sync bundle convergence test (sender tombstones → export
+→ receiver's live copy drops on import, tombstone retained); and a `vitest`
+`gcTombstones` suite (expired swept, fresh + live kept, collection-group span).
+Full workspace gate + functions suite green.
 
 ### M4.5 — Reader E2E against the emulator in CI
 

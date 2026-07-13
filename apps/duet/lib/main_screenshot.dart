@@ -208,6 +208,10 @@ class _HarnessAnnotationRepository implements AnnotationRepository {
   }
 
   @override
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId) async =>
+      _current;
+
+  @override
   Future<Result<void>> addStroke(String pieceId, InkStroke stroke) async {
     _emit(
       PieceAnnotations(

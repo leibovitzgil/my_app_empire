@@ -92,6 +92,16 @@ void main() {
       expect(audioNoteFromFirestore('doc-id', data).id, 'doc-id');
     });
 
+    test('audioNote round-trips a deletedAt tombstone (M4.4)', () {
+      final tombstoned = note.copyWith(deletedAt: DateTime(2024, 2, 3));
+      final data = audioNoteToFirestore(tombstoned);
+      expect(data['deletedAt'], isA<Timestamp>());
+      expect(isAudioNoteTombstoned(data), isTrue);
+      final restored = audioNoteFromFirestore('n1', data);
+      expect(restored, tombstoned);
+      expect(restored.isTombstoned, isTrue);
+    });
+
     test('isAudioNoteTombstoned only when deletedAt is set', () {
       expect(isAudioNoteTombstoned(audioNoteToFirestore(note)), isFalse);
       expect(isAudioNoteTombstoned(<String, dynamic>{}), isFalse);

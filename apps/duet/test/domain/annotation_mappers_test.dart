@@ -53,6 +53,29 @@ void main() {
     expect(audioNoteFromJson(audioNoteToJson(note)), note);
   });
 
+  test('audioNote round-trip preserves a deletedAt tombstone (M4.4)', () {
+    final tombstoned = AudioNote(
+      id: 'n1',
+      authorId: 'owner-1',
+      audioAssetId: 'asset-1',
+      pageIndex: 1,
+      durationMs: 4200,
+      region: const Region(
+        pageIndex: 1,
+        left: 0.1,
+        top: 0.2,
+        width: 0.3,
+        height: 0.15,
+      ),
+      createdAt: DateTime(2024, 5, 6),
+      deletedAt: DateTime(2024, 5, 7),
+    );
+
+    final restored = audioNoteFromJson(audioNoteToJson(tombstoned));
+    expect(restored, tombstoned);
+    expect(restored.isTombstoned, isTrue);
+  });
+
   test('pieceAnnotationsToJson / pieceAnnotationsFromJson round-trip', () {
     final annotations = PieceAnnotations(
       pieceId: 'piece-1',

@@ -160,7 +160,23 @@ One document per audio note, id = the note id. Mirrors `AudioNote`
 | `durationMs` | `int` | Recording length. |
 | `region` | `{pageIndex, left, top, width, height}` | Fractional pin location (`Region`). |
 | `createdAt` | `Timestamp` | When recorded. |
-| `deletedAt` | `Timestamp?` | **New (cloud-only) tombstone.** Soft-delete marker so a delete converges across offline peers instead of resurrecting (M4.4 uses it). `null`/absent = live. Notes are never hard-deleted by clients. |
+| `deletedAt` | `Timestamp?` | **Cloud tombstone (M4.4).** Soft-delete marker so a delete converges across offline peers instead of resurrecting. `null`/absent = live. `deleteAudioNote` sets it (the only note mutation the rules permit); `watch` filters tombstoned notes out so blocs/UI never see them. Notes are never hard-deleted by clients. |
+
+**Reclamation.** Tombstones aren't kept forever: the `gcTombstones` scheduled
+Function (daily) collection-group-queries `notes` for `deletedAt` older than 30
+days and hard-deletes the doc **and** its `pieces/{id}/audio/{assetId}` Storage
+object. The 30-day window is generous headroom for every offline peer to have
+observed the tombstone before it's reclaimed.
+
+**Why only audio notes tombstone (ink strokes don't).** A note is its own
+document that any participant can delete, so a physical delete on one device
+would resurrect from another's stale cache — hence the tombstone. Ink, by
+contrast, lives in a **single per-author document** (`layers/{uid}`) that only
+its author writes; an erase is a whole-document rewrite of that one doc, so
+concurrent edits converge by last-writer-wins on it (ordered by the monotonic
+`rev`/`updatedAt`) with nothing to resurrect. Tombstoning strokes would add
+convergence machinery for a race that the single-writer layer model already
+precludes, so it's deliberately out of scope.
 
 ### `/pieces/{pieceId}/reads/{uid}`
 

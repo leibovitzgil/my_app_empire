@@ -158,6 +158,27 @@ class FirestoreAnnotationRepository implements AnnotationRepository {
   }
 
   @override
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId) async {
+    // A one-shot read that, unlike [watch], keeps tombstoned notes so the
+    // review-sync export can carry a soft-delete through an offline bundle
+    // (M4.4). Role isn't re-derived from the piece here — the only caller
+    // resolves the author's role itself — so the stored layer role is fine.
+    final layersSnapshot = await _layers(pieceId).get();
+    final notesSnapshot = await _notes(pieceId).get();
+    return PieceAnnotations(
+      pieceId: pieceId,
+      layers: [
+        for (final doc in layersSnapshot.docs)
+          layerFromFirestore(doc.id, doc.data()),
+      ],
+      audioNotes: [
+        for (final doc in notesSnapshot.docs)
+          audioNoteFromFirestore(doc.id, doc.data()),
+      ],
+    );
+  }
+
+  @override
   Future<Result<void>> addStroke(String pieceId, InkStroke stroke) =>
       _guarded<void>(stroke.id, () async {
         final authorId = stroke.authorId;
@@ -269,10 +290,14 @@ class FirestoreAnnotationRepository implements AnnotationRepository {
         if (data['authorId'] != _currentUserId()) {
           throw OwnershipViolation(noteId, reason: 'not the note author');
         }
-        // Plain delete for M3.2; M4.4 converts this to a `deletedAt` tombstone
-        // update (the only note mutation the rules permit) so deletes converge
-        // across offline peers instead of resurrecting.
-        await ref.delete();
+        // Tombstone rather than hard-delete (M4.4): set `deletedAt` — the only
+        // note mutation the M2.2 rules permit — so a delete converges across
+        // offline peers instead of resurrecting. `watch` filters tombstoned
+        // notes out, and the daily `gcTombstones` Function hard-deletes the
+        // doc + audio object once it's older than the retention window.
+        await ref.update(<String, dynamic>{
+          'deletedAt': Timestamp.fromDate(_now()),
+        });
       });
 
   @override

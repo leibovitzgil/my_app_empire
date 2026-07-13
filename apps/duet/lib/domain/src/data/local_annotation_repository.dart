@@ -25,15 +25,18 @@ class LocalAnnotationRepository implements AnnotationRepository {
     required LocalStorageService storage,
     required String Function() currentUserId,
     required PieceRepository pieceRepository,
+    DateTime Function()? clock,
   }) : _storage = storage,
        _currentUserId = currentUserId,
-       _pieceRepository = pieceRepository;
+       _pieceRepository = pieceRepository,
+       _now = clock ?? DateTime.now;
 
   static const String _keyPrefix = 'pieces.annotations.';
 
   final LocalStorageService _storage;
   final String Function() _currentUserId;
   final PieceRepository _pieceRepository;
+  final DateTime Function() _now;
   final Map<String, PieceAnnotations> _cache = <String, PieceAnnotations>{};
   final StreamController<PieceAnnotations> _controller =
       StreamController<PieceAnnotations>.broadcast();
@@ -74,9 +77,29 @@ class LocalAnnotationRepository implements AnnotationRepository {
 
   @override
   Stream<PieceAnnotations> watch(String pieceId) async* {
-    yield _annotationsFor(pieceId);
-    yield* _controller.stream.where((a) => a.pieceId == pieceId);
+    yield _withoutTombstones(_annotationsFor(pieceId));
+    yield* _controller.stream
+        .where((a) => a.pieceId == pieceId)
+        .map(_withoutTombstones);
   }
+
+  @override
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId) async =>
+      _annotationsFor(pieceId);
+
+  /// [annotations] with tombstoned (soft-deleted) audio notes stripped so
+  /// blocs and UI never see a deleted note (M4.4). Storage retains the
+  /// tombstone (see [deleteAudioNote]) so the delete converges across offline
+  /// peers instead of resurrecting — only this consumer-facing projection
+  /// hides it.
+  PieceAnnotations _withoutTombstones(PieceAnnotations annotations) =>
+      PieceAnnotations(
+        pieceId: annotations.pieceId,
+        layers: annotations.layers,
+        audioNotes: annotations.audioNotes
+            .where((n) => !n.isTombstoned)
+            .toList(),
+      );
 
   @override
   Future<Result<void>> addStroke(String pieceId, InkStroke stroke) =>
@@ -169,21 +192,29 @@ class LocalAnnotationRepository implements AnnotationRepository {
   Future<Result<void>> deleteAudioNote(String pieceId, String noteId) =>
       Result.guard<void>(() async {
         final current = _annotationsFor(pieceId);
-        final match = current.audioNotes.where((n) => n.id == noteId);
+        // A tombstoned note reads as already-gone (watch hides it), so it's
+        // "unknown" here too — matching the Firestore repository's guard.
+        final match = current.audioNotes.where(
+          (n) => n.id == noteId && !n.isTombstoned,
+        );
         if (match.isEmpty) {
           throw StateError('Unknown audio note: $noteId');
         }
         if (match.first.authorId != _currentUserId()) {
           throw OwnershipViolation(noteId, reason: 'not the note author');
         }
+        // Tombstone rather than physically remove (M4.4): the note stays in
+        // storage with a `deletedAt`, so the delete converges across offline
+        // peers instead of resurrecting from a stale copy; `watch` hides it.
         await _emit(
           pieceId,
           PieceAnnotations(
             pieceId: pieceId,
             layers: current.layers,
-            audioNotes: current.audioNotes
-                .where((n) => n.id != noteId)
-                .toList(),
+            audioNotes: [
+              for (final n in current.audioNotes)
+                if (n.id == noteId) n.copyWith(deletedAt: _now()) else n,
+            ],
           ),
         );
       });
