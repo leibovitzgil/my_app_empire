@@ -1881,12 +1881,19 @@ goldens green.
 
 **Landed.** **Newness source.** `InkLayer` gained `updatedAt` (mapped from the
 cloud layer doc's `updatedAt`; `null` on the on-device store, so the mock path
-shows no cross-participant newness — G2). `ScoreOpened` now carries the
-viewer's `lastOpenedAt`, which `DuetScorePage` reads via
-`watchReads().first[pieceId]` **before** the bloc's `markOpened` bumps it (the
+shows no cross-participant newness — G2). **The reader is the single watermark
+writer.** `ScoreBloc._onOpened` reads the viewer's `lastOpenedAt` itself from
+`watchReads().first[pieceId]` **before** its own `markOpened` bumps it (the
 one-shot read resolves immediately — the local `watchReads` yields the current
-map on subscribe). Threaded via the event payload, not a bloc-side repo read,
-so the mocktail-mocked `score_bloc_test` needed no `watchReads` stub. **Bloc
+map on subscribe; a best-effort `_readWatermark` folds any stream error to
+`null`). `ScoreOpened` carries only the id. The gallery tap
+(`LibraryBloc._onPieceViewed`) now *optimistically* clears the dot but no longer
+persists `markOpened`, and opening the Piece Detail screen doesn't mark viewed
+at all — so the reader's pre-open capture can't lose a race to the library's
+own on-tap write (the review-caught bug: the library bumped the watermark
+before the reader read it, defeating newness on the primary open path).
+`score_bloc_test` stubs `watchReads` accordingly, including a stateful stub
+proving the captured value is the pre-`markOpened` one. **Bloc
 projection.** `ScoreBloc` derives `ParticipantLayer.hasNewInk`
 (`layer.updatedAt > lastOpenedAt`, never the viewer's own, false when either is
 null) and `ScoreState.isNoteNew` (`note.createdAt > lastOpenedAt`, other author,

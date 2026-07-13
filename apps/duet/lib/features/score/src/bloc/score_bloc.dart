@@ -90,16 +90,20 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
             final role = piece.ownerId == state.currentUserId
                 ? PieceRole.owner
                 : PieceRole.collaborator;
+            // Capture this viewer's last-opened watermark BEFORE our own
+            // markOpened below bumps it (M4.3). The reader is the single
+            // writer of the watermark now, so it reads the pre-open value
+            // itself rather than trusting a caller-supplied one — the library
+            // tap used to persist markOpened first and race this capture,
+            // defeating newness on the primary open path.
+            final lastOpenedAt = await _readWatermark(piece.id);
             emit(
               state.copyWith(
                 status: ScoreStatus.ready,
                 piece: piece,
                 currentRole: role,
                 currentPage: 0,
-                // Captured before markOpened bumps the watermark below, so the
-                // reader can flag what changed since this viewer last looked
-                // (M4.3).
-                lastOpenedAt: event.lastOpenedAt,
+                lastOpenedAt: lastOpenedAt,
               ),
             );
             // Advance this user's unread watermark now that the reader has
@@ -117,6 +121,20 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
         }
       case ResultFailure<Piece>(:final error):
         emit(state.copyWith(status: ScoreStatus.failure, error: '$error'));
+    }
+  }
+
+  /// Reads this viewer's last-opened watermark for [pieceId] (M4.3),
+  /// best-effort: any failure to reach the reads stream yields `null`, which
+  /// the reader treats as "nothing is new" rather than blocking the open. Read
+  /// via the stream's first value so the local store (which yields the current
+  /// map synchronously) resolves without a round-trip.
+  Future<DateTime?> _readWatermark(String pieceId) async {
+    try {
+      final reads = await _pieceRepository.watchReads().first;
+      return reads[pieceId];
+    } on Object catch (_) {
+      return null;
     }
   }
 

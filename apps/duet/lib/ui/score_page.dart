@@ -40,7 +40,7 @@ class _DuetScorePageState extends State<DuetScorePage> {
     // Resolves the base PDF to a readable local path (cache/download) before
     // the reader opens it — offline reads hit the cache (M3.4).
     pdfBinaryCache: getIt<PdfBinaryCache>(),
-  );
+  )..add(ScoreOpened(widget.pieceId));
 
   // The reader's live sync signal (M4.1): a `PieceSyncMonitor` folds real
   // persistence state (Firestore pending writes + the audio upload-queue depth
@@ -59,17 +59,6 @@ class _DuetScorePageState extends State<DuetScorePage> {
   void initState() {
     super.initState();
     unawaited(_loadRecordingPathBuilder());
-    unawaited(_openScore());
-  }
-
-  /// Reads this user's last-opened watermark for the piece *before* the bloc's
-  /// `markOpened` bumps it — so the reader can flag the layers/notes that
-  /// changed since this viewer last looked (M4.3) — then opens the score.
-  Future<void> _openScore() async {
-    final reads = await getIt<PieceRepository>().watchReads().first;
-    _scoreBloc.add(
-      ScoreOpened(widget.pieceId, lastOpenedAt: reads[widget.pieceId]),
-    );
   }
 
   Future<void> _loadRecordingPathBuilder() async {

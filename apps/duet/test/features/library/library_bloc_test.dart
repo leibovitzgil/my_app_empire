@@ -117,7 +117,8 @@ void main() {
     );
 
     blocTest<LibraryBloc, LibraryState>(
-      'PieceViewed clears the unread dot for a shared piece and persists it',
+      'PieceViewed clears the unread dot optimistically, without persisting — '
+      'the reader is the single watermark writer (M4.3)',
       // The current user is a collaborator here, so the piece is shared with
       // them and can carry an unread dot (an owner's own piece never does).
       build: () => LibraryBloc(
@@ -145,7 +146,10 @@ void main() {
           false,
         ),
       ],
-      verify: (_) => verify(() => repository.markOpened('p1')).called(1),
+      // No persist here: the reader captures the pre-open watermark and calls
+      // markOpened itself, so persisting on the gallery tap would race that
+      // capture and defeat newness.
+      verify: (_) => verifyNever(() => repository.markOpened(any())),
     );
 
     group('ownership partitioning', () {

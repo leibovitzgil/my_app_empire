@@ -10,20 +10,18 @@ sealed class ScoreEvent extends Equatable {
 /// Opens the piece identified by [pieceId]: loads it and subscribes to its
 /// live annotations.
 ///
-/// [lastOpenedAt] is this viewer's read watermark *captured before this open
-/// bumps it* (M4.3, M3.7) — the reader flags any layer/note newer than it as
-/// "new since you last looked". The app glue reads it; `null` (no prior open,
-/// or a backend without watermarks) means nothing reads as new.
+/// The bloc captures this viewer's read watermark itself while handling this
+/// event — before its own `markOpened` bumps it (M4.3, M3.7) — so the reader
+/// can flag any layer/note newer than the last open as "new since you last
+/// looked". Callers pass only the id; the watermark is not a constructor
+/// param, keeping the reader the single source of the pre-open value.
 final class ScoreOpened extends ScoreEvent {
-  const ScoreOpened(this.pieceId, {this.lastOpenedAt});
+  const ScoreOpened(this.pieceId);
 
   final String pieceId;
 
-  /// The viewer's last-opened timestamp for this piece, or `null`.
-  final DateTime? lastOpenedAt;
-
   @override
-  List<Object?> get props => [pieceId, lastOpenedAt];
+  List<Object?> get props => [pieceId];
 }
 
 /// The current user played (and thereby "saw") the audio note [noteId], so its

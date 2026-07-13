@@ -386,16 +386,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     }
   }
 
-  void _markViewed(BuildContext context, Piece piece) =>
-      context.read<LibraryBloc>().add(PieceViewed(piece.id));
-
   void _openScore(BuildContext context, Piece piece) {
-    _markViewed(context, piece);
+    // Opening the reader is what "views" a piece — optimistically clear its
+    // unread dot here (the reader itself persists the watermark, M4.3).
+    // Opening the *detail* screen deliberately does not, so a piece stays
+    // flagged new until it's actually read.
+    context.read<LibraryBloc>().add(PieceViewed(piece.id));
     widget.onOpenScore(piece);
   }
 
   void _openDetail(BuildContext context, Piece piece) {
-    _markViewed(context, piece);
     unawaited(
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
