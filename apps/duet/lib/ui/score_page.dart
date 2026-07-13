@@ -43,7 +43,9 @@ class _DuetScorePageState extends State<DuetScorePage> {
   // The reader's live sync signal (M4.1): a `PieceSyncMonitor` folds real
   // persistence state (Firestore pending writes + the audio upload-queue depth
   // + server reachability) into a `PieceSyncState`. Held once here (not
-  // re-`watch`ed per build) so the subscription is stable across rebuilds.
+  // re-`watch`ed per build) so the single `StreamBuilder` below subscribes to
+  // a stable stream exactly once — `watch` is single-subscription and one
+  // `DuetScorePage` is alive per open piece.
   late final Stream<PieceSyncState> _syncStates = getIt<PieceSyncMonitor>()
       .watch(widget.pieceId);
 

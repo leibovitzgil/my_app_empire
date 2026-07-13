@@ -22,6 +22,16 @@ class SyncSignal {
   final bool hasPendingWrites;
 }
 
+/// The signal a collection's stream folds to when it *errors* rather than
+/// emitting (e.g. a rules `permission-denied` on a sign-out/teardown race, or
+/// a transient `unavailable`): treat it as an unconfirmed cache read so the
+/// badge degrades to `offline` (or stays `syncing` if writes are pending
+/// elsewhere) instead of the error escaping as an uncaught zone error.
+const _sourceErrorSignal = SyncSignal(
+  isFromCache: true,
+  hasPendingWrites: false,
+);
+
 /// The [PieceSyncMonitor] backing the `useFirebase` composition.
 ///
 /// Combines three live signals for a piece and folds them into a
@@ -111,14 +121,26 @@ Stream<PieceSyncState> combinePieceSyncSignals({
   controller = StreamController<PieceSyncState>(
     onListen: () {
       subscriptions.addAll(<StreamSubscription<void>>[
-        layers.listen((signal) {
-          latestLayers = signal;
-          emit();
-        }),
-        notes.listen((signal) {
-          latestNotes = signal;
-          emit();
-        }),
+        layers.listen(
+          (signal) {
+            latestLayers = signal;
+            emit();
+          },
+          onError: (Object _) {
+            latestLayers = _sourceErrorSignal;
+            emit();
+          },
+        ),
+        notes.listen(
+          (signal) {
+            latestNotes = signal;
+            emit();
+          },
+          onError: (Object _) {
+            latestNotes = _sourceErrorSignal;
+            emit();
+          },
+        ),
         audioDepth.listen((depth) {
           latestDepth = depth;
           emit();

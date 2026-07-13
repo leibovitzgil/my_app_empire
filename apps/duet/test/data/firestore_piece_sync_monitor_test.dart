@@ -147,6 +147,24 @@ void main() {
       expect(emitted, [PieceSyncState.syncing, PieceSyncState.synced]);
     });
 
+    test('a collection stream error degrades that source to offline', () async {
+      // A snapshot stream can error (permission-denied on a sign-out race, a
+      // transient unavailable). It must not escape as an uncaught zone error —
+      // the source folds to an unconfirmed cache read.
+      layers.addError(StateError('permission-denied'));
+      notes.add(_serverClean);
+      audioDepth.add(0);
+      await _tick();
+      expect(emitted, [PieceSyncState.offline]);
+    });
+
+    test('a stream error stays syncing when writes are pending', () async {
+      notes.add(_serverPending);
+      layers.addError(StateError('unavailable'));
+      await _tick();
+      expect(emitted, [PieceSyncState.syncing]);
+    });
+
     test('de-duplicates consecutive equal states', () async {
       layers.add(_serverClean);
       notes.add(_serverClean);

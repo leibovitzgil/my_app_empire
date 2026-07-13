@@ -33,6 +33,7 @@ enum PieceSyncState {
 // ignore: one_member_abstracts
 abstract class PieceSyncMonitor {
   /// Emits [pieceId]'s sync state on subscribe and on every change, until the
-  /// subscription is cancelled.
+  /// subscription is cancelled. Single-subscription — one reader is open per
+  /// piece at a time.
   Stream<PieceSyncState> watch(String pieceId);
 }
