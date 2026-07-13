@@ -168,20 +168,34 @@ One document per participant, id = the reader's uid — the **persistent unread
 watermark**.
 
 ```jsonc
-{ "lastOpenedAt": <Timestamp> }
+{ "uid": "uid_abc", "lastOpenedAt": <Timestamp> }
 ```
 
 | Field | Type | Notes |
 | --- | --- | --- |
+| `uid` | `string` | Mirrors the doc id. Lets a **collection-group** query gather one user's watermarks across every piece in a single listener (M3.7) — the doc id isn't filterable that way, so the id is duplicated as a field. |
 | `lastOpenedAt` | `Timestamp` | When this user last opened this piece. |
 
 This backs the "unread dots" the library already wants. Today
-`LibraryState.isUnread` derives unread from
+`LibraryState.isUnread` derived unread from
 `updatedAt.isAfter(createdAt) && !viewedPieceIds.contains(id)`, where
-`viewedPieceIds` is **session-local** — its own doc comment explicitly calls
-for "a persistent `lastViewedAt` store". This collection **is** that store:
-unread becomes `piece.updatedAt > reads/{me}.lastOpenedAt` (M3.7), and it also
-feeds the reader's attention markers (M4.3).
+`viewedPieceIds` was **session-local**. **M3.7** replaces that with this store:
+`FirestorePieceRepository.watchReads()` runs
+`collectionGroup('reads').where('uid', ==, me).snapshots()` → a
+`{pieceId: lastOpenedAt}` map (the local repo mirrors it in a
+`pieces.reads.<uid>` map), and `isUnread` becomes *shared-with-me AND
+`piece.updatedAt > lastOpenedAt`* (a missing entry = never opened = unread).
+The collection-group read is authorized by a `match /{path=**}/reads/{uid}`
+rule gated on `resource.data.uid == request.auth.uid`; direct get/write stay
+scoped by the per-piece `reads/{uid}` rule. It also feeds the reader's
+attention markers (M4.3).
+
+**Who advances the watermark.** The reader calls `markOpened` on open, and —
+because an annotation write bumps the piece's `updatedAt` via the `onLayerWrite`
+/ `onNoteWrite` trigger (below) — that same trigger also advances the
+**editor's own** `reads/{uid}.lastOpenedAt` to the identical timestamp, so an
+author never sees their own edit as unread while every *other* participant
+does.
 
 ### `/inviteTokens/{token}`
 
@@ -425,6 +439,16 @@ Client mutations the rules can't safely express, named here so each has a home
    slice; a client applying its *own* returned bundle slice
    (`replaceAuthorSlice` with `authorId == auth.uid`) is the supported cloud
    path.
+8. **Piece-activity bump** (`onLayerWrite` / `onNoteWrite` Firestore triggers,
+   M3.7). Annotation writes land in the `layers`/`notes` subcollections and
+   never touch the parent piece doc, and a collaborator's rules can't update
+   `pieces/{id}` — so a Function (not the client) bumps `pieces/{id}.updatedAt`
+   on each layer/note create/update, which is what makes the library's unread
+   dots fire cross-user. The same trigger advances the *editing* author's own
+   `reads/{uid}.lastOpenedAt` to the identical `Timestamp`, so an author never
+   dots their own edit. A layer/note *removal* is skipped (nothing to surface,
+   and the piece may be mid-cascade). No loop: it writes the piece doc + a
+   `reads` doc, neither of which is a layer/note.
 
 ---
 

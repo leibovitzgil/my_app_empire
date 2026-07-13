@@ -50,6 +50,11 @@ class LocalPieceRepository implements PieceRepository {
 
   static const String _storageKey = 'pieces.records';
 
+  /// Per-user "last opened" watermarks, keyed `pieces.reads.<uid>` → a JSON
+  /// `{pieceId: millisSinceEpoch}` map (M3.7). Per-uid so switching accounts
+  /// on one device keeps each user's unread state separate.
+  static const String _readsKeyPrefix = 'pieces.reads.';
+
   final LocalStorageService _storage;
   final String Function() _currentUserId;
   final PdfRenderService _pdfRenderService;
@@ -59,6 +64,8 @@ class LocalPieceRepository implements PieceRepository {
   final DateTime Function() _now;
   final StreamController<List<Piece>> _controller =
       StreamController<List<Piece>>.broadcast();
+  final StreamController<Map<String, DateTime>> _readsController =
+      StreamController<Map<String, DateTime>>.broadcast();
 
   late List<Piece> _pieces;
   int _seq = 0;
@@ -153,6 +160,40 @@ class LocalPieceRepository implements PieceRepository {
     }
     return Success(piece);
   }
+
+  String get _readsKey => '$_readsKeyPrefix${_currentUserId()}';
+
+  Map<String, DateTime> _loadReads() {
+    final raw = _storage.getString(_readsKey);
+    if (raw == null) return <String, DateTime>{};
+    return (jsonDecode(raw) as Map<String, dynamic>).map(
+      (pieceId, millis) => MapEntry(
+        pieceId,
+        DateTime.fromMillisecondsSinceEpoch(millis as int),
+      ),
+    );
+  }
+
+  @override
+  Stream<Map<String, DateTime>> watchReads() async* {
+    yield _loadReads();
+    yield* _readsController.stream;
+  }
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) =>
+      Result.guard<void>(() async {
+        final reads = _loadReads()..[pieceId] = _now();
+        await _storage.setString(
+          _readsKey,
+          jsonEncode(
+            reads.map(
+              (id, at) => MapEntry(id, at.millisecondsSinceEpoch),
+            ),
+          ),
+        );
+        if (!_readsController.isClosed) _readsController.add(reads);
+      });
 
   @override
   Future<Result<Piece>> importPiece({

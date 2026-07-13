@@ -23,6 +23,17 @@ final class LibraryPiecesUpdated extends LibraryEvent {
   List<Object?> get props => [pieces];
 }
 
+/// Internal: [PieceRepository.watchReads] emitted the user's latest per-piece
+/// "last opened" watermarks.
+final class LibraryReadsUpdated extends LibraryEvent {
+  const LibraryReadsUpdated(this.reads);
+
+  final Map<String, DateTime> reads;
+
+  @override
+  List<Object?> get props => [reads];
+}
+
 /// Internal: the repository's stream emitted an error.
 final class LibraryFailed extends LibraryEvent {
   const LibraryFailed(this.error);
@@ -33,10 +44,8 @@ final class LibraryFailed extends LibraryEvent {
   List<Object?> get props => [error];
 }
 
-/// Marks [pieceId] as viewed this session, clearing its unread indicator.
-///
-/// Session-local only — see `LibraryState.isUnread` for why (no persisted
-/// last-viewed watermark exists yet).
+/// Marks [pieceId] as opened, clearing its unread indicator. Persists the
+/// watermark via [PieceRepository.markOpened] (M3.7) — no longer session-local.
 final class PieceViewed extends LibraryEvent {
   const PieceViewed(this.pieceId);
 

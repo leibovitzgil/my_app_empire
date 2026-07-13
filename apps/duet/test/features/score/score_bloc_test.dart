@@ -72,6 +72,9 @@ void main() {
         () => pieceRepository.getPiece(pieceId),
       ).thenAnswer((_) async => Success(piece));
       when(
+        () => pieceRepository.markOpened(any()),
+      ).thenAnswer((_) async => const Success<void>(null));
+      when(
         () => annotationRepository.watch(pieceId),
       ).thenAnswer((_) => annotationsController.stream);
       when(

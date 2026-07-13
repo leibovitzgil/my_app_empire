@@ -114,9 +114,14 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
 
   final bloc = _MockLibraryBloc();
-  final state = const LibraryState.initial(
-    currentUserId: 'me',
-  ).copyWith(status: LibraryStatus.ready, pieces: pieces);
+  final state = const LibraryState.initial(currentUserId: 'me').copyWith(
+    status: LibraryStatus.ready,
+    pieces: pieces,
+    // An owner's own sheets never dot; among the shared ones, p5 was opened
+    // after its last change (read) while p4 hasn't been (unread) — so the
+    // gallery shows exactly one "shared with me" dot (M3.7).
+    lastOpenedAt: {'p5': _now},
+  );
   whenListen(bloc, const Stream<LibraryState>.empty(), initialState: state);
 
   await tester.pumpWidget(

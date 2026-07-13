@@ -12,14 +12,19 @@ part 'library_state.dart';
 /// user's own sheets ([LibraryState.myPieces]) and sheets shared with them
 /// ([LibraryState.sharedWithMe]).
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
-  /// Creates a [LibraryBloc] for [currentUserId].
+  /// Creates a [LibraryBloc] for [currentUserId]. [clock] stamps the
+  /// optimistic "just opened" watermark on [PieceViewed]; defaults to
+  /// [DateTime.now].
   LibraryBloc({
     required PieceRepository pieceRepository,
     required String currentUserId,
+    DateTime Function()? clock,
   }) : _repository = pieceRepository,
+       _now = clock ?? DateTime.now,
        super(LibraryState.initial(currentUserId: currentUserId)) {
     on<LibraryStarted>(_onStarted);
     on<LibraryPiecesUpdated>(_onPiecesUpdated);
+    on<LibraryReadsUpdated>(_onReadsUpdated);
     on<LibraryFailed>(_onFailed);
     on<PieceViewed>(_onPieceViewed);
     on<LibraryFilterChanged>(_onFilterChanged);
@@ -28,17 +33,26 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   }
 
   final PieceRepository _repository;
+  final DateTime Function() _now;
   StreamSubscription<List<Piece>>? _subscription;
+  StreamSubscription<Map<String, DateTime>>? _readsSubscription;
 
   Future<void> _onStarted(
     LibraryStarted event,
     Emitter<LibraryState> emit,
   ) async {
     await _subscription?.cancel();
+    await _readsSubscription?.cancel();
     emit(state.copyWith(status: LibraryStatus.loading, clearError: true));
     _subscription = _repository.watchPieces().listen(
       (pieces) => add(LibraryPiecesUpdated(pieces)),
       onError: (Object error) => add(LibraryFailed('$error')),
+    );
+    // The unread watermarks feed the dots only; a failure here shouldn't blank
+    // the library (the piece stream owns the screen's status), so it has no
+    // onError — the dots simply stop refreshing.
+    _readsSubscription = _repository.watchReads().listen(
+      (reads) => add(LibraryReadsUpdated(reads)),
     );
   }
 
@@ -49,17 +63,30 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     emit(state.copyWith(status: LibraryStatus.ready, pieces: event.pieces));
   }
 
+  void _onReadsUpdated(
+    LibraryReadsUpdated event,
+    Emitter<LibraryState> emit,
+  ) {
+    emit(state.copyWith(lastOpenedAt: event.reads));
+  }
+
   void _onFailed(LibraryFailed event, Emitter<LibraryState> emit) {
     emit(state.copyWith(status: LibraryStatus.failure, error: event.error));
   }
 
-  void _onPieceViewed(PieceViewed event, Emitter<LibraryState> emit) {
-    if (state.viewedPieceIds.contains(event.pieceId)) return;
+  Future<void> _onPieceViewed(
+    PieceViewed event,
+    Emitter<LibraryState> emit,
+  ) async {
+    // Optimistically clear the dot; `markOpened` persists the watermark and
+    // the `watchReads` stream reconciles it (best-effort — a failed write just
+    // lets the stream keep the dot).
     emit(
       state.copyWith(
-        viewedPieceIds: {...state.viewedPieceIds, event.pieceId},
+        lastOpenedAt: {...state.lastOpenedAt, event.pieceId: _now()},
       ),
     );
+    await _repository.markOpened(event.pieceId);
   }
 
   void _onFilterChanged(
@@ -83,6 +110,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   @override
   Future<void> close() async {
     await _subscription?.cancel();
+    await _readsSubscription?.cancel();
     return super.close();
   }
 }

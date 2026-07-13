@@ -149,12 +149,25 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // Each participant's own unread watermark (id == their uid).
+      // Each participant's own unread watermark (id == their uid). The
+      // mirrored `uid` field lets the collection-group read below gather a
+      // user's watermarks across pieces; direct get/write stay scoped here.
       match /reads/{uid} {
         allow read, write: if isSignedIn() &&
           request.auth.uid == uid &&
           isPieceParticipant();
       }
+    }
+
+    // Collection-group read of a user's own unread watermarks across every
+    // piece (M3.7) — the library gathers them in one query. Scoped to the
+    // caller's own docs by the mirrored `uid` field, which the query filters
+    // on; writes still go through the per-piece `reads/{uid}` rule above.
+    match /{path=**}/reads/{readUid} {
+      // `isSignedIn()` is scoped to the pieces block above, so inline the
+      // signed-in guard here (a null auth can't match `resource.data.uid`).
+      allow read: if request.auth != null &&
+        request.auth.uid == resource.data.uid;
     }
 
     // Deny-by-default: any path not explicitly matched above (this is what

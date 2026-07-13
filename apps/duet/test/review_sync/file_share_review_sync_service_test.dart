@@ -108,6 +108,12 @@ class _FakePieceRepository implements PieceRepository {
 
   @override
   Stream<List<Piece>> watchPieces() => throw UnimplementedError();
+
+  @override
+  Stream<Map<String, DateTime>> watchReads() => throw UnimplementedError();
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) => throw UnimplementedError();
 }
 
 /// A minimal in-memory [AnnotationRepository] fake, scoped to what
