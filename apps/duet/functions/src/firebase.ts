@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 /**
  * Lazily initialized Admin SDK singletons.
@@ -17,3 +18,12 @@ export const db = () => getFirestore(app());
 
 /** The Admin Auth client, initializing the app on first use. */
 export const adminAuth = () => getAuth(app());
+
+/**
+ * The default Cloud Storage bucket, initializing the app on first use.
+ *
+ * Deployed, the bucket name comes from the runtime's `FIREBASE_CONFIG`; in a
+ * unit test with no bucket configured, `.bucket()` throws synchronously, so
+ * callers that only need best-effort cleanup (the delete cascade) wrap it.
+ */
+export const bucket = () => getStorage(app()).bucket();

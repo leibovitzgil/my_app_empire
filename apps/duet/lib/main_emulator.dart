@@ -5,6 +5,7 @@ import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/injection.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -41,9 +42,9 @@ String get _demoAppId {
   };
 }
 
-/// Runs Duet against the local Firebase Emulator Suite (Auth + Firestore).
-/// Run with `flutter run -t lib/main_emulator.dart` after starting
-/// `firebase emulators:start` (config in `firebase.json`).
+/// Runs Duet against the local Firebase Emulator Suite (Auth + Firestore +
+/// Functions + Storage). Run with `flutter run -t lib/main_emulator.dart`
+/// after starting `firebase emulators:start` (config in `firebase.json`).
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -64,6 +65,10 @@ Future<void> main() async {
   FirebaseFunctions.instanceFor(
     region: duetFunctionsRegion,
   ).useFunctionsEmulator(_emulatorHost, 5001);
+  // Storage backs base-PDF upload/download (M3.3/M3.4) and audio notes (M3.5),
+  // and the delete cascade (M3.8) sweeps its objects — point it at the local
+  // Storage emulator (`firebase.json` :9199) too.
+  await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
   await configureDependencies(useFirebase: true);
   runApp(const App());
 }

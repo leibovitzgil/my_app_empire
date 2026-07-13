@@ -8,6 +8,8 @@ const INVITE_TYPE = 'invite';
 
 interface AcceptInviteData {
   messageId?: unknown;
+  accepterName?: unknown;
+  accepterEmail?: unknown;
 }
 
 /**
@@ -18,17 +20,20 @@ interface AcceptInviteData {
  * the caller's own inbox, be addressed to them, be an `invite`, and be unread;
  * this callable marks it read (consumed) so it can't be replayed.
  *
- * Pre-M3 there is no `pieces` document to mutate, so the participant-array
- * write lives client-side (the piece is on-device) and this callable only
- * verifies + consumes the message. Post-M3 (`// M3.6`) it additionally adds
- * the caller to `pieces/{id}.participantIds`/`collaborators` transactionally
- * and re-checks the cap.
+ * Now that pieces live in Firestore (M3.8), it also **adds the caller to the
+ * piece** transactionally — appending their uid to `participantIds` and a
+ * `{uid, name, email}` entry to `collaborators`, idempotently — which is what
+ * lets the collaborator's `watchPieces` (a `participantIds array-contains`
+ * query) actually see the sheet. The per-piece collaborator **cap** stays
+ * deferred to M6.3: enforcing it needs the *owner's* pro tier, which isn't
+ * knowable server-side yet (see `collaboratorLimits.ts`).
  */
 export const acceptInvite = onCall({ region: REGION }, async (request) => {
   if (request.auth == null) {
     throw new HttpsError('unauthenticated', 'Sign in to accept an invite.');
   }
-  const { messageId } = (request.data ?? {}) as AcceptInviteData;
+  const { messageId, accepterName, accepterEmail } = (request.data ??
+    {}) as AcceptInviteData;
   if (typeof messageId !== 'string' || messageId.length === 0) {
     throw new HttpsError('invalid-argument', 'A messageId is required.');
   }
@@ -54,9 +59,37 @@ export const acceptInvite = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('failed-precondition', 'That invite was already used.');
   }
 
-  // M3.6: re-check the cap against pieces/{pieceId}.collaborators and add
-  // `uid` to participantIds + collaborators in a transaction. Pre-M3 the
-  // piece is on-device, so the client performs that mutation.
+  // Add the caller to the piece transactionally (server-authoritative: the
+  // rules make participantIds immutable to clients). Idempotent — re-accepting
+  // a piece the caller already joined is a no-op — and done before marking the
+  // message read, so a failure here leaves the invite replayable.
+  const pieceId = message.data?.pieceId;
+  if (typeof pieceId === 'string' && pieceId.length > 0) {
+    const name =
+      typeof accepterName === 'string'
+        ? accepterName
+        : ((request.auth.token.name as string | undefined) ?? null);
+    const email =
+      typeof accepterEmail === 'string'
+        ? accepterEmail
+        : ((request.auth.token.email as string | undefined) ?? null);
+    const pieceRef = firestore.doc(`pieces/${pieceId}`);
+    await firestore.runTransaction(async (tx) => {
+      const pieceSnap = await tx.get(pieceRef);
+      if (!pieceSnap.exists) return; // the piece was deleted; nothing to join
+      const piece = pieceSnap.data() as {
+        participantIds?: string[];
+        collaborators?: unknown[];
+      };
+      const participantIds = piece.participantIds ?? [];
+      if (participantIds.includes(uid)) return; // already a participant
+      // M6.3: enforce the per-piece cap here (needs the owner's pro tier).
+      tx.update(pieceRef, {
+        participantIds: [...participantIds, uid],
+        collaborators: [...(piece.collaborators ?? []), { uid, name, email }],
+      });
+    });
+  }
 
   await ref.set({ read: true }, { merge: true });
 

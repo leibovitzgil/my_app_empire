@@ -145,7 +145,7 @@ in the Track B backlog.
 | M3.5 | ☑ `CloudAudioAssetStore` + offline upload queue | M3.2 |
 | M3.6 | ☑ DI flip + one-time local→cloud migration | M3.1–M3.5 |
 | M3.7 | ☑ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
-| M3.8 | ☐ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
+| M3.8 | ☑ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
 | M4.1 | ☐ Real `ScoreSyncStatus` from repository state | M3.2 |
 | M4.2 | ☐ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☐ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
@@ -1671,6 +1671,40 @@ proves the whole M3 loop — the plan-M3 exit.
 the cascade; plan-M3 exit met ("two emulator accounts see the same piece,
 ink, and audio pins live; offline edit → reconnect converges; emulator E2E
 covers the loop").
+
+**Landed — the plan-M3 exit.** **Cascade** (`onPieceDeleted`, a v2
+`onDocumentDeleted` trigger on `pieces/{id}`): the piece's `layers`/`notes`/
+`reads` subcollections outlive the deleted doc, so it `recursiveDelete`s them
+(firebase-admin ^13) and deletes the whole `pieces/{id}/` Storage prefix
+(base.pdf + audio). Storage cleanup is best-effort (a new `bucket()` accessor
+in `firebase.ts`; wrapped so a bucketless unit test can't crash it) — the
+Firestore cascade is functions-tested, the Storage sweep is emulator/E2E-
+verified. **`deleteAccount` extended** (at the old `M3.8 extends` marker): one
+`participantIds array-contains` query gets the caller's pieces; owned ones are
+deleted whole (the cascade sweeps the rest), and for pieces they only
+collaborated on the caller is removed from `participantIds`/`collaborators` and
+the slice they authored (their layer doc, their notes, each note's Storage
+audio object) is deleted; the summary gained `ownedPieces`/`leftPieces`.
+**`acceptInvite` completed** (the M3.6-deferred marker): it now transactionally
+adds the caller to `participantIds` + `collaborators` (idempotent), which is
+what lets a collaborator's `watchPieces` actually see the sheet — the client
+(`CallableCollaboratorInviteService`) no longer does the rules-denied on-device
+`addCollaborator`, it passes the accepter's name/email to the callable. The
+per-piece **cap stays deferred to M6.3** (needs the owner's pro tier
+server-side). **E2E** `integration_test/cloud_pieces_flow_test.dart` (emulator,
+opt-in via `melos run e2e`, excluded from the headless gate like its siblings)
+drives the whole loop at the repository/service layer: owner import + upload →
+invite → collaborator accept → sees it → offline stroke + audio note →
+reconnect → owner sees both live → owner deletes → collaborator gallery empties
++ Storage prefix gone. `main_emulator.dart` now wires the Storage emulator too;
+the `duet-emulator` skill lists the new test. **Deviations:** (1) the cap
+enforcement in `acceptInvite` is deferred to M6.3 (owner pro tier). (2) The E2E
+is repository/service-level (not full UI-drive), mirroring
+`collaborator_flow_test`, and is human/CI-run against the emulator — the
+headless gate proves the server logic via the functions vitest (32 tests incl.
+the cascade, the participant-add, and the piece-purge) + the rules suite.
+Functions `tsc`/`eslint`/`vitest` green; full workspace gate green. **Plan M3
+is complete.**
 
 ---
 
