@@ -378,7 +378,8 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   ///
   /// Then closes the flow the way the design's "saved" moment does: back to
   /// view mode, where the new pin is visible on its passage, with a
-  /// confirmation snackbar (offering "Nudge" when a collaborator is wired).
+  /// confirmation snackbar (offering "Nudge" only when there's a collaborator
+  /// to nudge — hidden on a solo sheet).
   Future<void> _saveAudioNote(
     Region region,
     String recordedPath,
@@ -410,12 +411,19 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       ..add(const ModeChanged(ScoreMode.view));
     if (!mounted) return;
     final onNudge = widget.onNudgeRequested;
+    // Only offer "Nudge" when there's actually a collaborator to nudge —
+    // mirrors the Layers panel's prompt so a solo sheet shows no dead action.
+    final target = nudgeTargetNameFor(
+      scoreBloc.state.piece,
+      scoreBloc.state.currentUserId,
+    );
+    final canNudge = onNudge != null && target != null;
     AppSnackbar.show(
       context,
       message: 'Audio note added · Page ${region.pageIndex + 1}',
       variant: AppSnackbarVariant.success,
-      actionLabel: onNudge == null ? null : 'Nudge',
-      onAction: onNudge == null ? null : () => unawaited(onNudge()),
+      actionLabel: canNudge ? 'Nudge' : null,
+      onAction: canNudge ? () => unawaited(onNudge()) : null,
     );
   }
 
@@ -525,19 +533,21 @@ Widget _buildLayersPanel(
     onNudge: onNudgeRequested == null
         ? null
         : () => unawaited(onNudgeRequested()),
-    nudgeTargetName: _nudgeTargetName(state),
+    nudgeTargetName: nudgeTargetNameFor(state.piece, state.currentUserId),
   );
 }
 
 /// The collaborator(s) a nudge from this reader would reach, for the Layers
-/// panel's prompt copy: the single other participant's name when there's
-/// exactly one, a generic "your collaborators" for several, or `null` on a
-/// solo sheet (no one to nudge, so the prompt hides).
-String? _nudgeTargetName(ScoreState state) {
-  final piece = state.piece;
+/// panel's prompt copy *and* the save-note snackbar's "Nudge" gate: the single
+/// other participant's name when there's exactly one, a generic "your
+/// collaborators" for several, or `null` on a solo sheet — no one to nudge, so
+/// both affordances hide rather than offer a dead action.
+@visibleForTesting
+String? nudgeTargetNameFor(Piece? piece, String currentUserId) {
   if (piece == null) return null;
-  final me = state.currentUserId;
-  final others = piece.participantIds.where((id) => id != me).toList();
+  final others = piece.participantIds
+      .where((id) => id != currentUserId)
+      .toList();
   if (others.isEmpty) return null;
   if (others.length > 1) return 'your collaborators';
   final id = others.single;
