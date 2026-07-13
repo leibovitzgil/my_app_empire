@@ -24,11 +24,12 @@ interface SendInviteData {
  * callable, via the Admin SDK, writes them, and only to a resolved,
  * *discoverable* recipient.
  *
- * Pre-M3 (no `pieces` collection yet) the server can't verify the caller owns
- * `pieceId`, nor count existing collaborators for the cap — both need the
- * piece document. It therefore records the caller as the owner and defers
- * those checks with `// M3.6` markers; the inbox-authorization guarantee is
- * already fully real.
+ * The caller must own `pieceId`, verified against the piece document (M3.6,
+ * now that pieces live in Firestore). The per-piece collaborator cap is
+ * re-checked on *accept*, not here — enforcing it needs the owner's pro tier,
+ * which isn't knowable server-side until M6.3 (see `collaboratorLimits.ts`).
+ * The inbox-authorization guarantee (only this callable writes an inbox doc,
+ * only to a discoverable recipient) is unchanged.
  */
 export const sendInvite = onCall({ region: REGION }, async (request) => {
   if (request.auth == null) {
@@ -43,11 +44,22 @@ export const sendInvite = onCall({ region: REGION }, async (request) => {
   }
 
   const ownerId = request.auth.uid;
-  // M3.6: verify the caller owns `pieceId` (read the piece doc), and count
-  // pieces/{id}.collaborators against capFor(isPro) — neither is possible
-  // until the pieces collection exists (M3).
-
   const firestore = db();
+
+  // Verify the caller owns `pieceId` before inviting anyone to it — now that
+  // pieces live in Firestore (M3) this replaces the pre-M3 placeholder that
+  // trusted the caller. (The collaborator cap is re-checked on accept; it
+  // needs the owner's pro tier, unknowable server-side until M6.3.)
+  const pieceSnap = await firestore.doc(`pieces/${pieceId}`).get();
+  if (!pieceSnap.exists) {
+    throw new HttpsError('not-found', 'That piece no longer exists.');
+  }
+  if (pieceSnap.data()?.ownerId !== ownerId) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the owner of a piece can invite collaborators.',
+    );
+  }
 
   // Resolve the invitee exactly as `FirestoreUserDirectory.lookupByEmail`
   // does — an exact-key GET gated on the target's own `discoverable` flag, so

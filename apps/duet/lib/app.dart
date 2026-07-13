@@ -10,6 +10,7 @@ import 'package:duet/domain/domain.dart';
 import 'package:duet/features/library/library.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/ui/migration_prompt.dart';
 import 'package:duet/ui/score_page.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
@@ -242,6 +243,10 @@ class HomeScreen extends StatelessWidget {
           onResend: () => getIt<AuthRepository>().sendEmailVerification(),
           onRefresh: () => getIt<AuthAccountProvider>().refreshAccount(),
         ),
+        // Offers a one-time upload of this device's local sheets to the
+        // signed-in account on first cloud sign-in (M3.6); renders nothing and
+        // is a no-op unless the Firebase composition registered a migrator.
+        const MigrationPrompt(),
         Expanded(
           child: LibraryPage(
             pieceRepository: getIt<PieceRepository>(),

@@ -32,7 +32,8 @@ import 'package:pdf_rendering/pdf_rendering.dart';
 /// tests; a rules-denied write is mapped to [OwnershipViolation] so bloc
 /// behaviour matches the local repository's documented contract.
 ///
-/// Not wired into DI yet — M3.6 flips `useFirebase` onto this.
+/// Bound under `useFirebase: true` (M3.6); the default composition keeps the
+/// local repository.
 class FirestorePieceRepository implements PieceRepository {
   /// Creates a [FirestorePieceRepository].
   FirestorePieceRepository({

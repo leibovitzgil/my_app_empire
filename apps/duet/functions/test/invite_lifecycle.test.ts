@@ -51,6 +51,15 @@ async function seedDirectory(
   });
 }
 
+/** Creates a `pieces/{pieceId}` doc owned by [ownerId] (sendInvite's gate). */
+async function seedPiece(pieceId: string, ownerId: string) {
+  await db().doc(`pieces/${pieceId}`).set({
+    ownerId,
+    title: pieceId,
+    participantIds: [ownerId],
+  });
+}
+
 async function inboxOf(uid: string) {
   return (await db().collection(`userInbox/${uid}/messages`).get()).docs.map(
     (d) => d.data(),
@@ -76,6 +85,7 @@ describe('sendInvite', () => {
     'resolves a discoverable invitee and writes their inbox',
     { timeout: TIMEOUT },
     async () => {
+      await seedPiece('p1', 'uid-owner');
       await seedDirectory('sam@example.com', 'uid-sam');
 
       const result = await sendInvite.run(
@@ -102,6 +112,7 @@ describe('sendInvite', () => {
     'a non-discoverable or absent email yields no-account and writes nothing',
     { timeout: TIMEOUT },
     async () => {
+      await seedPiece('p1', 'uid-owner');
       await seedDirectory('hidden@example.com', 'uid-hidden', false);
 
       const hidden = await sendInvite.run(
@@ -120,6 +131,40 @@ describe('sendInvite', () => {
       expect(hidden).toEqual({ status: 'no-account' });
       expect(absent).toEqual({ status: 'no-account' });
       expect(await inboxOf('uid-hidden')).toHaveLength(0);
+    },
+  );
+
+  it(
+    'rejects inviting to a piece the caller does not own',
+    { timeout: TIMEOUT },
+    async () => {
+      await seedPiece('p1', 'uid-someone-else');
+      await seedDirectory('sam@example.com', 'uid-sam');
+
+      await expect(
+        sendInvite.run(
+          requestFrom('uid-owner', {
+            pieceId: 'p1',
+            inviteeEmail: 'sam@example.com',
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'permission-denied' });
+      expect(await inboxOf('uid-sam')).toHaveLength(0);
+    },
+  );
+
+  it(
+    'rejects inviting to a piece that does not exist',
+    { timeout: TIMEOUT },
+    async () => {
+      await expect(
+        sendInvite.run(
+          requestFrom('uid-owner', {
+            pieceId: 'ghost',
+            inviteeEmail: 'sam@example.com',
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'not-found' });
     },
   );
 });

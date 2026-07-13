@@ -340,6 +340,39 @@ demands it (name it in the task that introduces the query).
 
 ---
 
+## Local→cloud migration (M3.6)
+
+When the app first boots against Firebase and the user signs in, any pieces it
+created while running on the in-memory/mock backend are on-device only. A
+one-time migration (`LocalPieceMigrator`, offered by `MigrationPrompt` on the
+Sheet Library) uploads them to the signed-in account. Recorded here so the
+data mapping has one home:
+
+- **Re-owned to the signed-in uid.** Each local piece is re-created in Firestore
+  **preserving its piece id**, with `ownerId` = the real uid (the local pieces
+  were owned by the prior mock identity). Its base PDF is uploaded via the M3.3
+  path (`PieceBinaryStore.uploadBasePdf`, checksum-deduped), and the owner's own
+  ink layer + audio notes are re-attributed to the new uid and written as a
+  single owner slice (`replaceAuthorSlice`). Audio objects are uploaded afresh —
+  each gets a **new** `assetId` (minted by `AudioAssetStore.put`) and the note's
+  `audioAssetId` is re-keyed to it.
+- **Owner-only.** Local collaborators reference mock uids that don't exist in the
+  cloud, so migrated pieces drop them (no `collaborators`/extra `participantIds`);
+  ink/notes authored by other (mock) participants are not migrated. The common
+  case is a single-user device uploading its own imported sheets.
+- **Resumable, non-destructive.** A per-uid set of migrated piece ids
+  (`local_storage` key `migration.pieces.migrated.<uid>`) lets a failed run
+  retry only what's left; the per-uid `migration.pieces.done.<uid>` flag records
+  that the prompt was answered (so it's offered once). A retry converges because
+  the piece-doc create reuses an existing doc, the PDF upload dedupes by
+  checksum, and the slice write is a full replace. Local data is **kept as a
+  read-through cache**, never deleted.
+- **Not in the headless gate.** Like every Firebase-only path, the migration's
+  orchestration is fake-tested (`local_piece_migrator_test.dart`) while the real
+  emulator round-trip lands with M3.8's cloud-pieces E2E.
+
+---
+
 ## ACL matrix
 
 M2.2 translates this table directly into `firestore.rules`. `P` = "is a
