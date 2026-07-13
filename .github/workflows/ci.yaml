@@ -114,3 +114,77 @@ jobs:
           name: golden-failures
           path: "**/test/golden/failures/*.png"
           if-no-files-found: ignore
+
+  changes:
+    name: Detect changed paths
+    # Per-job path filter: a workflow-level `on.paths` would gate *every* job,
+    # but analyze-and-test/rules-tests/goldens must run on all PRs. This job
+    # publishes whether Duet-relevant files changed so only the (heavy)
+    # emulator-e2e job below is skipped on unrelated PRs.
+    runs-on: ubuntu-latest
+    outputs:
+      duet: ${{ steps.filter.outputs.duet }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            duet:
+              - 'apps/duet/**'
+              - 'packages/**'
+              - 'melos.yaml'
+              - '.github/workflows/ci.yaml'
+
+  emulator-e2e:
+    name: Reader/cloud E2E (Firebase emulator)
+    # The plan-M4 exit (M4.5): drives the integration_test flows
+    # (auth_lifecycle, cloud_pieces_flow, collaborator_flow + reader
+    # assertions) against the REAL Auth+Firestore+Functions+Storage emulator,
+    # proving `useFirebase: true` server-authoritative end-to-end — the
+    # standard gate only exercises the in-memory fakes. Skipped on PRs that
+    # touch no Duet/package code (see the `changes` job).
+    needs: changes
+    if: needs.changes.outputs.duet == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/duet/functions/package-lock.json
+
+      - name: Set up Java (Firebase emulator runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Activate Melos
+        run: dart pub global activate melos
+
+      - name: Bootstrap
+        run: melos bootstrap
+
+      # Runs the emulator suite around `flutter test integration_test -d
+      # chrome` (ubuntu-latest ships Chrome). The functions are rebuilt inside
+      # the script so the Functions emulator serves the current callables. If
+      # `-d chrome` proves flaky here, switch the script to `flutter drive -d
+      # web-server` (documented on the melos `e2e-emulator` script).
+      - name: Reader/cloud E2E against the emulator
+        run: melos run e2e-emulator

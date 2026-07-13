@@ -42,6 +42,29 @@ scripts:
     run: melos exec --dir-exists="integration_test" -- flutter test integration_test
     description: Run integration_test end-to-end flows headlessly.
 
+  e2e-emulator:
+    run: >-
+      npm --prefix apps/duet/functions ci --no-audit --no-fund &&
+      npm --prefix apps/duet/functions run build &&
+      cd apps/duet &&
+      npx --yes firebase-tools emulators:exec
+      --only auth,firestore,functions,storage
+      --project demo-duet 'flutter test integration_test -d chrome'
+    description: |
+      Reader/cloud E2E against the REAL Firebase emulator suite (M4.5): boots
+      Auth + Firestore + Functions + Storage around the integration_test flows
+      (auth_lifecycle M1.10, cloud_pieces_flow M3.8, collaborator_flow, plus
+      the reader assertions of M4.1-M4.4), proving `useFirebase: true` is
+      server-authoritative end-to-end — not against the in-memory fakes the
+      standard gate uses. Unlike `e2e`, this boots the emulators itself, so it
+      is the single turnkey command.
+
+      Needs Java (emulator runtime), Node (the functions are rebuilt first so
+      the Functions emulator serves the current callables/triggers), and a web
+      engine for `-d chrome` (headless Chrome). If `-d chrome` proves flaky on
+      a runner, fall back to `flutter drive -d web-server`. CI runs this via
+      the `emulator-e2e` job (ci.yaml).
+
   functions-test:
     run: >-
       npm --prefix apps/duet/functions ci --no-audit --no-fund &&
