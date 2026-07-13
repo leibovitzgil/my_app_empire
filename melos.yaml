@@ -59,11 +59,14 @@ scripts:
       standard gate uses. Unlike `e2e`, this boots the emulators itself, so it
       is the single turnkey command.
 
-      Needs Java (emulator runtime), Node (the functions are rebuilt first so
-      the Functions emulator serves the current callables/triggers), and a web
-      engine for `-d chrome` (headless Chrome). If `-d chrome` proves flaky on
-      a runner, fall back to `flutter drive -d web-server`. CI runs this via
-      the `emulator-e2e` job (ci.yaml).
+      Needs Java (emulator runtime) and Node (the functions are rebuilt first
+      so the Functions emulator serves the current callables/triggers). Runs
+      today on a device/desktop target where `dart:io` + the native Firebase
+      plugins coexist (`./dev.sh --emulators-only` in one shell, then this in
+      another). NOTE: two suites (cloud_pieces_flow, auth_lifecycle) use
+      `dart:io`, so `-d chrome` (web) can't run them headlessly — the CI
+      `emulator-e2e` job is non-blocking until they move to `flutter drive` on
+      a native device or are refactored off `dart:io`.
 
   functions-test:
     run: >-
