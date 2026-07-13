@@ -140,6 +140,8 @@ describe('deleteAccount', () => {
         directoryEntries: 2,
         deviceTokens: 1,
         inboxMessages: 3,
+        ownedPieces: 0,
+        leftPieces: 0,
       });
       expect(await remainsOf('uid-sam')).toEqual({
         directoryEntries: 0,
@@ -170,7 +172,61 @@ describe('deleteAccount', () => {
         directoryEntries: 0,
         deviceTokens: 0,
         inboxMessages: 0,
+        ownedPieces: 0,
+        leftPieces: 0,
       });
+    },
+  );
+
+  it(
+    'M3.8: deletes owned pieces and removes the caller from shared ones',
+    { timeout: TIMEOUT },
+    async () => {
+      await seedUser('uid-sam', ['sam@example.com'], 0);
+      // An owned piece — deleted whole (onPieceDeleted cascades the subtree,
+      // which the functions emulator doesn't auto-fire here; we assert the doc).
+      await db().doc('pieces/owned-1').set({
+        ownerId: 'uid-sam',
+        title: 'Mine',
+        participantIds: ['uid-sam'],
+        collaborators: [],
+      });
+      // A piece Sam only collaborates on, with a layer + note she authored.
+      await db().doc('pieces/shared-1').set({
+        ownerId: 'uid-owner',
+        title: 'Theirs',
+        participantIds: ['uid-owner', 'uid-sam'],
+        collaborators: [{ uid: 'uid-sam', name: 'Sam', email: 's@x.z' }],
+      });
+      await db()
+        .doc('pieces/shared-1/layers/uid-sam')
+        .set({ ownerId: 'uid-sam', strokes: [] });
+      await db()
+        .doc('pieces/shared-1/notes/n1')
+        .set({ authorId: 'uid-sam', audioAssetId: 'a1' });
+      // The owner's own note must be left untouched.
+      await db()
+        .doc('pieces/shared-1/notes/n2')
+        .set({ authorId: 'uid-owner', audioAssetId: 'a2' });
+
+      const result = await deleteAccount.run(requestFor('uid-sam'));
+
+      expect(result).toMatchObject({ ownedPieces: 1, leftPieces: 1 });
+      expect((await db().doc('pieces/owned-1').get()).exists).toBe(false);
+      // Sam is dropped from the shared piece's participant arrays...
+      const shared = (await db().doc('pieces/shared-1').get()).data();
+      expect(shared?.participantIds).toEqual(['uid-owner']);
+      expect(shared?.collaborators).toEqual([]);
+      // ...her authored slice is deleted, the owner's note is not.
+      expect(
+        (await db().doc('pieces/shared-1/layers/uid-sam').get()).exists,
+      ).toBe(false);
+      expect((await db().doc('pieces/shared-1/notes/n1').get()).exists).toBe(
+        false,
+      );
+      expect((await db().doc('pieces/shared-1/notes/n2').get()).exists).toBe(
+        true,
+      );
     },
   );
 });

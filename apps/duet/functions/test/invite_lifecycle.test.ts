@@ -211,6 +211,52 @@ describe('acceptInvite', () => {
       acceptInvite.run(requestFrom('uid-sam', { messageId: 'm1' })),
     ).rejects.toMatchObject({ code: 'failed-precondition' });
   });
+
+  it(
+    'adds the caller to the piece participants (M3.8)',
+    { timeout: TIMEOUT },
+    async () => {
+      await seedPiece('p1', 'uid-owner');
+      await seedInvite('uid-sam', 'm1');
+
+      await acceptInvite.run(
+        requestFrom('uid-sam', {
+          messageId: 'm1',
+          accepterName: 'Sam',
+          accepterEmail: 'sam@example.com',
+        }),
+      );
+
+      const piece = (await db().doc('pieces/p1').get()).data();
+      expect(piece?.participantIds).toEqual(['uid-owner', 'uid-sam']);
+      expect(piece?.collaborators).toContainEqual({
+        uid: 'uid-sam',
+        name: 'Sam',
+        email: 'sam@example.com',
+      });
+    },
+  );
+
+  it(
+    'is a no-op on the piece when the caller already joined',
+    { timeout: TIMEOUT },
+    async () => {
+      await db().doc('pieces/p1').set({
+        ownerId: 'uid-owner',
+        title: 'p1',
+        participantIds: ['uid-owner', 'uid-sam'],
+        collaborators: [{ uid: 'uid-sam', name: 'Sam', email: null }],
+      });
+      await seedInvite('uid-sam', 'm1');
+
+      await acceptInvite.run(requestFrom('uid-sam', { messageId: 'm1' }));
+
+      // No duplicate participant/collaborator entry.
+      const piece = (await db().doc('pieces/p1').get()).data();
+      expect(piece?.participantIds).toEqual(['uid-owner', 'uid-sam']);
+      expect(piece?.collaborators).toHaveLength(1);
+    },
+  );
 });
 
 describe('leavePiece', () => {

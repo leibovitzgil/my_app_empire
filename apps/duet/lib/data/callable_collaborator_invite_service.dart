@@ -70,19 +70,18 @@ class CallableCollaboratorInviteService implements CollaboratorInviteService {
     String? accepterName,
     String? accepterEmail,
   }) => Result.guard<void>(() async {
-    // Re-check the cap and add the collaborator to the on-device piece first
-    // (pre-M3 the piece lives locally); this throws `AtCapInviteException` if
-    // the cap filled between send and accept.
-    (await _local.acceptInvite(
-      invite,
-      accepterId: accepterId,
-      accepterName: accepterName,
-      accepterEmail: accepterEmail,
-    )).orThrow();
-    // Then consume the inbox message server-side (marks it read), so it can't
-    // be replayed and — post-M3 — the participant mutation lands there.
+    // The whole acceptance is server-authoritative now (M3.8): the callable
+    // adds the caller to `pieces/{id}.participantIds`/`collaborators` — the
+    // rules make those immutable to clients, so the local `addCollaborator`
+    // that ran here pre-M3 would be denied — and marks the inbox message read
+    // so it can't be replayed. The caller's own display name/email ride along
+    // for the `collaborators` entry (the cap re-check is deferred to M6.3).
     await _functions.httpsCallable('acceptInvite').call<Object?>(
-      <String, dynamic>{'messageId': invite.messageId},
+      <String, dynamic>{
+        'messageId': invite.messageId,
+        'accepterName': accepterName,
+        'accepterEmail': accepterEmail,
+      },
     );
   });
 }

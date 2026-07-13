@@ -130,9 +130,10 @@ void main() {
       // 3. Switch this device's signed-in identity to the collaborator. The
       // invite is really in their Firestore inbox — proven by reading it as
       // themselves via the service (a recipient read the rules still allow),
-      // not the owner (whom the recipient-only rule would deny).
-      // The on-device `PieceRepository` already has the sheet (see this
-      // file's top-of-file note), so `addCollaborator` succeeds.
+      // not the owner (whom the recipient-only rule would deny). Acceptance is
+      // server-authoritative now (M3.8): the `acceptInvite` callable adds the
+      // caller to `pieces/{id}.participantIds`/`collaborators` (the rules make
+      // those immutable to clients), so `getPiece` below sees the membership.
       await getIt<AuthRepository>().logout();
       await firebase_auth.FirebaseAuth.instance.signInWithEmailAndPassword(
         email: collaboratorEmail,

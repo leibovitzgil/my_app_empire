@@ -411,11 +411,14 @@ get(pieces/{id}).data.participantIds`); `self` = the doc id equals
 Client mutations the rules can't safely express, named here so each has a home
 (G7 — "if a rule can't check it, it's a Function"):
 
-1. **Collaborator add (invite acceptance).** Atomically appends to
-   `pieces/{id}.collaborators` + `participantIds`, enforces the per-piece cap
-   (`CollaboratorLimits`, which reads monetization state), and sets
-   `inviteTokens/{token}.consumed`/`consumedBy`. (M2.4 pulls acceptance
-   server-side; M5 wires the tokenized + email paths to it.)
+1. **Collaborator add (invite acceptance).** The `acceptInvite` callable
+   (M2.4 email path) transactionally appends the caller to
+   `pieces/{id}.participantIds` + `collaborators` (idempotently) — **shipped
+   M3.8**, which is what lets the collaborator's `watchPieces` see the sheet.
+   The per-piece **cap** (`CollaboratorLimits`) stays deferred to **M6.3**: it
+   needs the *owner's* pro tier, which isn't knowable server-side yet
+   (`collaboratorLimits.ts`). M5 wires the tokenized `inviteTokens` path to the
+   same callable.
 2. **Collaborator remove / leave.** The reverse — removes from both arrays.
 3. **Inbox send** (`userInbox/.../messages` create). v1 lets any signed-in
    client write (documented spam vector); **M2.4** moves it behind a Function
@@ -424,8 +427,12 @@ Client mutations the rules can't safely express, named here so each has a home
    acceptance Function sets `consumed`/`consumedBy`.
 5. **Entitlement writes** (`entitlements/{uid}`). Only the RevenueCat webhook /
    server (M6.3) — never a client.
-6. **Account purge** (already shipped: `deleteAccount` callable, M1.8) — deletes
-   everything a uid owns server-side.
+6. **Account purge** (`deleteAccount` callable, M1.8; **extended M3.8**) —
+   deletes everything a uid owns server-side: directory/token/inbox docs, then
+   their pieces — owned pieces deleted whole (the `onPieceDeleted` cascade
+   below sweeps the rest), and for pieces they only collaborated on the uid is
+   removed from `participantIds`/`collaborators` and the slice they authored
+   (layer doc, notes, Storage audio objects) is deleted — then the Auth user.
 7. **Cross-author annotation cascades.** The `AnnotationRepository` privileged
    ops (`clearPiece`, `removeAuthorSlice`, and `replaceAuthorSlice` for a
    *different* author) write or delete layer/note documents the caller doesn't
@@ -449,10 +456,14 @@ Client mutations the rules can't safely express, named here so each has a home
    dots their own edit. A layer/note *removal* is skipped (nothing to surface,
    and the piece may be mid-cascade). No loop: it writes the piece doc + a
    `reads` doc, neither of which is a layer/note.
-
----
-
-## Naming supersession
+9. **Delete cascade** (`onPieceDeleted` Firestore trigger, **M3.8**). Deleting
+   `pieces/{id}` (owner-only) orphans its `layers`/`notes`/`reads`
+   subcollections (subcollections outlive their parent doc) and its Storage
+   objects. This trigger `recursiveDelete`s the subcollections and deletes the
+   whole `pieces/{id}/` Storage prefix (base.pdf + audio), so no orphans
+   remain. Storage cleanup is best-effort (logged on failure); the Firestore
+   cascade is covered by the functions test and the whole loop by the M3.8
+   emulator E2E (`cloud_pieces_flow_test.dart`).
 
 The commented-out `pieces` sketch in `apps/duet/firestore.rules` (~L63–76)
 uses `teacherId` / `collaboratorIds`. The real model — and this doc — use

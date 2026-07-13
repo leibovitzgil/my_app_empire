@@ -11,4 +11,5 @@ export { healthcheck } from './healthcheck';
 export { leavePiece } from './leavePiece';
 export { lookupEmail } from './lookupEmail';
 export { onLayerWrite, onNoteWrite } from './pieceActivity';
+export { onPieceDeleted } from './pieceCascade';
 export { sendInvite } from './sendInvite';
