@@ -33,9 +33,10 @@ export async function sweepTombstonesBefore(cutoff: Date): Promise<number> {
     .get();
   let deleted = 0;
   for (const doc of snapshot.docs) {
-    // A live note carries an explicit `deletedAt: null`; null sorts before
-    // every timestamp, so it can slip through the `<=` filter. Re-check the
-    // type and never hard-delete a note that isn't actually a tombstone.
+    // A live note carries an explicit `deletedAt: null`. Whether a range
+    // filter surfaces null is Firestore-version/emulator dependent (null sorts
+    // before every timestamp), so re-check the type and never hard-delete a
+    // note that isn't actually a tombstone regardless of what the query returns.
     const deletedAt = doc.get('deletedAt');
     if (!(deletedAt instanceof Timestamp)) continue;
     const pieceId = doc.ref.parent.parent?.id;

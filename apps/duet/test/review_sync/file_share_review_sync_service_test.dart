@@ -536,6 +536,75 @@ void main() {
     );
 
     test(
+      'a delete-only bundle (one tombstone, no live content) still drops the '
+      'note on the receiver but reports nothing and never notifies (M4.4)',
+      () async {
+        // The author's whole slice is a single tombstone: no strokes, no live
+        // notes. The delete must still converge, but it is not "new feedback".
+        senderAnnotations.seed(
+          piece.id,
+          PieceAnnotations(
+            pieceId: piece.id,
+            layers: const [],
+            audioNotes: [
+              note(
+                'n1',
+                audioAssetId: senderAssetId,
+              ).copyWith(deletedAt: DateTime(2024, 2)),
+            ],
+          ),
+        );
+
+        final exportResult = await senderService.exportBundle(piece.id);
+        final bundle = (exportResult as Success<ExportedBundle>).value;
+
+        var notifyCalls = 0;
+        final receiverAnnotations = _FakeAnnotationRepository()
+          ..seed(
+            piece.id,
+            PieceAnnotations(
+              pieceId: piece.id,
+              layers: const [],
+              audioNotes: [note('n1', audioAssetId: 'receiver-old')],
+            ),
+          );
+        final receiverService = FileShareReviewSyncService(
+          pieceRepository: _FakePieceRepository(piece),
+          annotationRepository: receiverAnnotations,
+          audioAssetStore: _FakeAudioAssetStore(
+            receiverAudioDir,
+            label: 'receiver-asset',
+          ),
+          storage: storage,
+          currentUserId: () => 'collaborator-1',
+          bundlesDirectory: () async => tempDir,
+          onImported: ({required title, required body}) async {
+            notifyCalls++;
+          },
+        );
+
+        final importResult = await receiverService.importBundle(
+          bundle.filePath,
+        );
+
+        // Applied (not a stale no-op), but with nothing to report and no
+        // notification for a pure deletion.
+        final summary = (importResult as Success<ReviewBundleSummary>).value;
+        expect(summary.strokeCount, 0);
+        expect(summary.audioNoteCount, 0);
+        expect(notifyCalls, 0);
+
+        // The note is nonetheless dropped, and its tombstone retained.
+        expect(
+          (await receiverAnnotations.watch(piece.id).first).audioNotes,
+          isEmpty,
+        );
+        final all = await receiverAnnotations.snapshotWithTombstones(piece.id);
+        expect(all.audioNotes.single.isTombstoned, isTrue);
+      },
+    );
+
+    test(
       'importBundle preserves fractional stroke and audio-region '
       'coordinates exactly through the export/import round trip',
       () async {
