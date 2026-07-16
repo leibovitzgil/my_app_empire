@@ -129,9 +129,14 @@ the in-memory fakes via `test/`).
 - **Java** — the Firestore emulator is a Java process. `java -version` should
   work.
 - **Node + npm** — builds the Cloud Functions workspace (`functions/`).
-- **Firebase CLI** — `dev.sh` uses `firebase` if it's on your PATH, otherwise
-  falls back to `npx firebase-tools` (downloaded on first run). For the snappiest
-  start: `npm i -g firebase-tools`.
+- **Firebase CLI** — you don't need one installed. `dev.sh` prefers the
+  `firebase-tools` pinned in `functions/package.json` (installed by the `npm ci`
+  it runs anyway), falling back to a global `firebase` and then to
+  `npx firebase-tools`. The pin wins on purpose: `firebase-functions` v7 removed
+  `functions.config()`, and an older global CLI still calls it while discovering
+  functions, so the Functions emulator crashloops on "Failed to load function"
+  and the healthcheck times out — with nothing in the output naming the CLI
+  version as the cause.
 
 The first run downloads the Firestore emulator jar (once, cached by the CLI).
 

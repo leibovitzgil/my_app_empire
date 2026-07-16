@@ -17,8 +17,10 @@ cd apps/duet
 ./dev.sh
 ```
 
-That one command resolves the Firebase CLI (falling back to `npx
-firebase-tools`), generates the web platform on first run, builds the Cloud
+That one command resolves the Firebase CLI (preferring the `firebase-tools`
+pinned in `functions/package.json` over a global install — see gotchas —
+then falling back to `npx firebase-tools`), generates the web platform on
+first run, builds the Cloud
 Functions workspace (`functions/`, npm — skipped when already fresh), starts
 the Auth (`:9099`) + Firestore (`:8080`) + Functions (`:5001`) + Storage
 (`:9199`) emulators in the `demo-duet` project, seeds two demo accounts, waits
@@ -82,6 +84,15 @@ exercises the in-memory fakes via `test/`).
 - **Java** (the Firestore emulator is a Java process) and **Node/npm** (builds
   `functions/`; also the `npx firebase-tools` fallback when the Firebase CLI
   isn't installed).
+- **A stale global `firebase` is not used.** `dev.sh` prefers `functions/`'s
+  pinned `firebase-tools`, because `firebase-functions` v7 removed
+  `functions.config()` and an older CLI still calls it while discovering
+  functions: the Functions emulator crashloops on "Failed to load function"
+  and the healthcheck times out, with nothing naming the CLI as the cause.
+  If you see that, check `firebase --version` against the pin.
+- **`sh: tsc: command not found`** means `functions/node_modules` is a partial
+  install (present, but no linked binaries). `dev.sh` now repairs it by
+  re-running `npm ci`; to fix by hand, `rm -rf apps/duet/functions/node_modules`.
 - **Android emulator:** `main_emulator.dart` targets `127.0.0.1`, which on
   Android is the device, not the host — prefer web / desktop / iOS simulator
   (all reach `127.0.0.1` directly), or remap the host to `10.0.2.2`.

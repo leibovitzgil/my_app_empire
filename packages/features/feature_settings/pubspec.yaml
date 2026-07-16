@@ -26,3 +26,9 @@ dev_dependencies:
     sdk: flutter
   mocktail: ^1.0.0
   very_good_analysis: ^10.3.0
+
+# This package ships widgets that use `Icons.*`, so it declares the Material
+# icon font itself: any app composing it then bundles the font, rather than
+# every app having to remember the flag to avoid question-mark boxes.
+flutter:
+  uses-material-design: true

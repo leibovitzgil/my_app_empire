@@ -134,6 +134,26 @@ When adding a new package, give it a one-line `analysis_options.yaml`
 (`include:` the root) and add `very_good_analysis` to its `dev_dependencies` so
 the shared rules resolve.
 
+## Icons: `uses-material-design`
+
+Any pubspec whose code draws `Icons.*` — every **app**, and every **package
+that ships widgets** — must declare:
+
+```yaml
+flutter:
+  uses-material-design: true
+```
+
+Without it Flutter never bundles `MaterialIcons-Regular.otf` and every icon
+falls back to the system font: question-mark boxes app-wide, and the odd
+emoji where a codepoint lands in that range. Nothing catches this — it
+analyzes, tests, and builds green, and only shows up by looking at a screen.
+It's declared on the **packages** too (not just apps) precisely so composing
+`core_ui`/`feature_*` is enough: Flutter aggregates the flag across the whole
+dependency graph, so an app that forgets it still gets icons. This is the fix
+for the workspace-wide outage where nothing declared it at all, `app_template`
+included, so every scaffolded app was born with broken icons.
+
 ## Code generation
 
 Dependency injection in `app_template` uses

@@ -32,3 +32,9 @@ dev_dependencies:
     sdk: flutter
   injectable_generator: ^3.1.0
   very_good_analysis: ^10.3.0
+
+# The Material icon font (MaterialIcons-Regular.otf) is only bundled when
+# this is declared. Without it every `Icons.*` codepoint falls back to the
+# system font and renders as a question mark box.
+flutter:
+  uses-material-design: true
