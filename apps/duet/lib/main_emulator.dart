@@ -56,6 +56,10 @@ Future<void> main() async {
       appId: _demoAppId,
       messagingSenderId: '0',
       projectId: 'demo-duet',
+      // Without a bucket the native SDK throws `no-bucket` from
+      // `useStorageEmulator` before `runApp` — a blank screen. The name is
+      // never resolved: the Storage emulator serves whatever it's given.
+      storageBucket: 'demo-duet.appspot.com',
     ),
   );
   await FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
