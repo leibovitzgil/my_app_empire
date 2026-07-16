@@ -19,13 +19,12 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Pinned: the floating `stable` channel drifts the Firebase
-          # ecosystem (firebase_core 4.12.0 / cloud_firestore 6.7.0 /
-          # _flutterfire_internals 1.3.74) to versions that reference a
+          # Version-only pin (no `channel:`, which would override it and let
+          # the floating stable drift the Firebase ecosystem — firebase_core
+          # 4.12.0 / cloud_firestore 6.7.0 — to versions referencing a
           # `FirebasePlugin` type the resolvable firebase_core lacks, breaking
-          # compilation across the firebase-using packages. 3.44.6 is the
-          # version this repo develops against and resolves the known-good set.
-          channel: stable
+          # compilation across the firebase packages). 3.44.6 is this repo's
+          # dev version and resolves the known-good set.
           flutter-version: 3.44.6
           cache: true
 
@@ -102,13 +101,12 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Pinned: the floating `stable` channel drifts the Firebase
-          # ecosystem (firebase_core 4.12.0 / cloud_firestore 6.7.0 /
-          # _flutterfire_internals 1.3.74) to versions that reference a
+          # Version-only pin (no `channel:`, which would override it and let
+          # the floating stable drift the Firebase ecosystem — firebase_core
+          # 4.12.0 / cloud_firestore 6.7.0 — to versions referencing a
           # `FirebasePlugin` type the resolvable firebase_core lacks, breaking
-          # compilation across the firebase-using packages. 3.44.6 is the
-          # version this repo develops against and resolves the known-good set.
-          channel: stable
+          # compilation across the firebase packages). 3.44.6 is this repo's
+          # dev version and resolves the known-good set.
           flutter-version: 3.44.6
           cache: true
 
@@ -177,13 +175,12 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Pinned: the floating `stable` channel drifts the Firebase
-          # ecosystem (firebase_core 4.12.0 / cloud_firestore 6.7.0 /
-          # _flutterfire_internals 1.3.74) to versions that reference a
+          # Version-only pin (no `channel:`, which would override it and let
+          # the floating stable drift the Firebase ecosystem — firebase_core
+          # 4.12.0 / cloud_firestore 6.7.0 — to versions referencing a
           # `FirebasePlugin` type the resolvable firebase_core lacks, breaking
-          # compilation across the firebase-using packages. 3.44.6 is the
-          # version this repo develops against and resolves the known-good set.
-          channel: stable
+          # compilation across the firebase packages). 3.44.6 is this repo's
+          # dev version and resolves the known-good set.
           flutter-version: 3.44.6
           cache: true
 
