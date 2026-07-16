@@ -62,16 +62,6 @@ done
 
 command -v flutter >/dev/null 2>&1 || die "Flutter is not on your PATH. See https://docs.flutter.dev/get-started"
 
-# ---- resolve the Firebase CLI ----------------------------------------------
-if command -v firebase >/dev/null 2>&1; then
-  FIREBASE=(firebase)
-elif command -v npx >/dev/null 2>&1; then
-  say "Firebase CLI not found — using 'npx firebase-tools' (first run downloads it)."
-  FIREBASE=(npx --yes firebase-tools)
-else
-  die "Need the Firebase CLI or Node/npx. Install with: npm i -g firebase-tools"
-fi
-
 # ---- ensure the target platform exists (apps here ship without it) ---------
 # The monorepo's apps are composable packages with no committed platform
 # scaffolding, so `flutter run` needs it generated once. Idempotent.
@@ -95,10 +85,35 @@ fi
 # repeat runs stay fast.
 FUNCTIONS_DIR="$SCRIPT_DIR/functions"
 command -v npm >/dev/null 2>&1 || die "npm is required to build functions/. Install Node: https://nodejs.org"
-if [ ! -d "$FUNCTIONS_DIR/node_modules" ] || \
+# `.bin/tsc` rather than just node_modules/: an install interrupted partway
+# leaves the directory in place with no binaries linked, and testing only for
+# the directory makes this step skip and the compile below fail with a bare
+# "sh: tsc: command not found". `npm ci` wipes node_modules itself, so simply
+# re-running it is the repair.
+if [ ! -x "$FUNCTIONS_DIR/node_modules/.bin/tsc" ] || \
    [ "$FUNCTIONS_DIR/package-lock.json" -nt "$FUNCTIONS_DIR/node_modules" ]; then
   say "Installing functions dependencies (first run / lockfile change)…"
   npm --prefix "$FUNCTIONS_DIR" ci --no-audit --no-fund >/dev/null
+fi
+
+# ---- resolve the Firebase CLI ----------------------------------------------
+# Resolved *after* the install above, so the pinned CLI is on disk to be found.
+# Prefer it over whatever global `firebase` happens to exist: firebase-functions
+# v7 dropped `functions.config()`, and an older CLI still calls it while
+# discovering functions — the emulator then crashloops on "Failed to load
+# function" and the healthcheck below times out with nothing pointing at the
+# version as the cause. Same reasoning as dev_device.sh preferring `fvm
+# flutter`: the pin in the repo should decide, not the machine.
+if [ -x "$FUNCTIONS_DIR/node_modules/.bin/firebase" ]; then
+  FIREBASE=("$FUNCTIONS_DIR/node_modules/.bin/firebase")
+elif command -v firebase >/dev/null 2>&1; then
+  warn "Using the global Firebase CLI ($(firebase --version 2>/dev/null | head -1)) — functions/'s pinned firebase-tools is missing."
+  FIREBASE=(firebase)
+elif command -v npx >/dev/null 2>&1; then
+  say "Firebase CLI not found — using 'npx firebase-tools' (first run downloads it)."
+  FIREBASE=(npx --yes firebase-tools)
+else
+  die "Need the Firebase CLI or Node/npx. Install with: npm i -g firebase-tools"
 fi
 if [ ! -d "$FUNCTIONS_DIR/lib" ] || \
    [ -n "$(find "$FUNCTIONS_DIR/src" "$FUNCTIONS_DIR/tsconfig.json" \
