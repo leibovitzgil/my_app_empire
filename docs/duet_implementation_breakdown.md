@@ -2244,6 +2244,11 @@ inside the app — today `watchInvites`/`acceptInvite` are **only called
 from tests**; production invitees get a one-shot local notification and
 then nothing.
 
+**Status:** step 4 landed ahead of this milestone (it was blocking the
+flow outright, not just the UI — see below); the invite now survives to
+be accepted. Steps 1–3 and 5 — the banner and its tests — are the work
+that remains.
+
 **Steps**
 1. Library surface: a pending-invites banner/section on `LibraryPage`
    ("Maya invited you to Clair de Lune — Accept / Dismiss"), fed by
@@ -2254,10 +2259,26 @@ then nothing.
    to the piece; at-cap → the existing paywall-gate pattern from
    `invite_sheet.dart`'s `_PaywallGateBody`.
 3. Dismiss → `markRead` only (sender unaffected).
-4. Since the M5.3 bridge change may bypass `showLocal`-then-`markRead`,
-   confirm inbox messages stay **unread until acted on** — adjust the
-   bridge (notify without auto-`markRead` for `invite` type) so the
-   banner persists; update `_InboxNotificationBridge` doc + tests.
+4. ☑ **Landed early** — inbox messages stay **unread until acted on**.
+   This wasn't just a UI prerequisite: the bridge marked *every* message
+   it surfaced read, and `acceptInvite` refuses a read message, so an
+   invite was consumed the instant the recipient signed in and every
+   accept failed with "That invite was already used" — the email flow
+   could not complete on any backend, UI or no UI. Found by running the
+   flow on two iPads against the emulators.
+
+   Implemented as `UserMessage.requiresAction` (a sender declares that
+   *seeing* a message doesn't finish it) rather than this step's original
+   sketch of special-casing `invite` **type** in the bridge. Reason:
+   `UserMessage` is deliberately domain-agnostic and
+   `services/notifications` is reused across apps, so the semantics ride
+   the envelope instead of every consumer keeping its own list of which
+   types are actionable — adding a message type stays a one-file change
+   at the send site. Both senders set it: `DefaultCollaboratorInviteService`
+   and the `sendInvite` callable (which writes the inbox doc server-side).
+   `InboxNotificationBridge` de-duplicates with a session-scoped set of
+   shown ids, is now `@visibleForTesting`, and is covered by
+   `apps/duet/test/inbox_notification_bridge_test.dart`.
 5. Tests: `duet_flow_test.dart` already drives invite→inbox→accept over
    in-memory fakes — extend it to go through the new banner UI instead of
    calling the service directly; widget tests for the banner states;
