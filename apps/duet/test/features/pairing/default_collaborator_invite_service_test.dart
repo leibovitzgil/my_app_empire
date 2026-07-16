@@ -229,6 +229,22 @@ void main() {
     );
 
     test(
+      'sendInvite marks the invite action-required, so surfacing it as a '
+      'notification cannot consume it',
+      () async {
+        await service.sendInvite(
+          pieceId: 'p1',
+          ownerId: ownerId,
+          ownerName: 'Jane',
+          email: recipientEmail,
+        );
+
+        final inbox = await messaging.inboxFor('sam-uid').first;
+        expect(inbox.single.requiresAction, isTrue);
+      },
+    );
+
+    test(
       'sendInvite on NoAccount sends nothing',
       () async {
         final result = await service.sendInvite(

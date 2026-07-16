@@ -94,6 +94,9 @@ class DefaultCollaboratorInviteService implements CollaboratorInviteService {
         title: '${ownerName ?? 'Someone'} invited you to collaborate',
         body: 'Join a shared piece on Duet.',
         sentAt: _now(),
+        // Surfacing an invite must not consume it: it stays pending until
+        // `acceptInvite`, which refuses an already-read message.
+        requiresAction: true,
         data: {
           'type': inviteMessageType,
           'pieceId': pieceId,

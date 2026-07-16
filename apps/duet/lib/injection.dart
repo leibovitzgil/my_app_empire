@@ -34,6 +34,7 @@ import 'package:duet/review_sync/review_sync.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
@@ -140,8 +141,8 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     );
     getIt.registerSingleton<DeviceTokenRegistry>(firestoreUserMessaging);
     getIt.registerSingleton<UserMessageGateway>(firestoreUserMessaging);
-    getIt.registerSingleton<_InboxNotificationBridge>(
-      _InboxNotificationBridge(
+    getIt.registerSingleton<InboxNotificationBridge>(
+      InboxNotificationBridge(
         userId: getIt<AuthRepository>().user,
         gateway: firestoreUserMessaging,
       ),
@@ -477,12 +478,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
 /// container, so there is no background push in v1 — see
 /// `FirestoreUserMessaging.sendToUser`'s doc). Re-subscribes to the
 /// message gateway's inbox whenever the signed-in user id changes (e.g.
-/// sign-in/out), and marks each surfaced message read so it's shown at
-/// most once. Only ever constructed under `useFirebase: true`.
-class _InboxNotificationBridge {
-  /// Creates an [_InboxNotificationBridge], subscribing to [userId]
+/// sign-in/out), showing each message at most once per session. Only ever
+/// constructed under `useFirebase: true`.
+///
+/// Surfacing a message is not the same as consuming it. A
+/// [UserMessage.requiresAction] message (an invite) stays unread until the
+/// user acts, because `read` is what the accept path checks for replay —
+/// marking it read here would burn the invite the instant it was notified.
+/// Everything else (a nudge) is done once shown, and is marked read so it
+/// leaves the inbox for good.
+///
+/// Public only so `test/inbox_notification_bridge_test.dart` can reach it:
+/// this bridge decides whether a message survives being notified, and that
+/// call is worth pinning.
+@visibleForTesting
+class InboxNotificationBridge {
+  /// Creates an [InboxNotificationBridge], subscribing to [userId]
   /// immediately.
-  _InboxNotificationBridge({
+  InboxNotificationBridge({
     required Stream<String?> userId,
     required UserMessageGateway gateway,
   }) : _gateway = gateway {
@@ -493,25 +506,40 @@ class _InboxNotificationBridge {
   late final StreamSubscription<String?> _userIdSubscription;
   StreamSubscription<List<UserMessage>>? _inboxSubscription;
 
+  /// Ids already shown this session. An action-required message stays in the
+  /// inbox until it's acted on, so it rides every subsequent snapshot —
+  /// without this it would re-notify on each one.
+  final Set<String> _shownIds = <String>{};
+
   void _onUserIdChanged(String? uid) {
     final previous = _inboxSubscription;
     _inboxSubscription = null;
     if (previous != null) unawaited(previous.cancel());
+    // A different user's inbox is a different set of ids; and re-notifying a
+    // still-pending invite on re-sign-in is correct — it *is* still pending.
+    _shownIds.clear();
     if (uid == null) return;
     _inboxSubscription = _gateway
         .inboxFor(uid)
-        .listen((messages) => unawaited(_showAndMarkRead(uid, messages)));
+        .listen((messages) => unawaited(_showUnshown(uid, messages)));
   }
 
-  /// Shows each of [messages] as a local notification and marks it read, so
-  /// a message the inbox has already surfaced isn't shown again on the next
-  /// snapshot.
-  Future<void> _showAndMarkRead(String uid, List<UserMessage> messages) async {
-    if (messages.isEmpty) return;
+  /// Shows each not-yet-shown message of [messages] as a local notification,
+  /// consuming only those that don't await an action from the user.
+  Future<void> _showUnshown(String uid, List<UserMessage> messages) async {
+    // `add` returns false for an id already present, so claiming the ids
+    // synchronously here keeps a snapshot arriving mid-await from re-showing.
+    final fresh = <UserMessage>[
+      for (final message in messages)
+        if (_shownIds.add(message.id)) message,
+    ];
+    if (fresh.isEmpty) return;
     final manager = await getIt.getAsync<NotificationsManager>();
-    for (final message in messages) {
+    for (final message in fresh) {
       await manager.showLocal(title: message.title, body: message.body);
-      await _gateway.markRead(uid, message.id);
+      if (!message.requiresAction) {
+        await _gateway.markRead(uid, message.id);
+      }
     }
   }
 

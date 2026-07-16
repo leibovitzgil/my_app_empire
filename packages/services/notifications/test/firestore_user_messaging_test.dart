@@ -31,6 +31,46 @@ void main() {
       expect(inbox, [message]);
     });
 
+    test('sendToUser round-trips requiresAction', () async {
+      final message = UserMessage(
+        id: 'm1',
+        toUid: 'uid-1',
+        title: 'Invite',
+        body: 'Join a shared piece',
+        sentAt: DateTime(2024, 1, 2),
+        requiresAction: true,
+      );
+
+      await messaging.sendToUser(message);
+
+      final inbox = await messaging.inboxFor('uid-1').first;
+      expect(inbox.single.requiresAction, isTrue);
+    });
+
+    test(
+      'a document written without requiresAction reads back as false',
+      () async {
+        // Documents predating the field (and any sender that omits it) must
+        // keep their original consumed-once-surfaced behaviour.
+        await firestore
+            .collection('userInbox')
+            .doc('uid-1')
+            .collection('messages')
+            .doc('legacy')
+            .set(<String, dynamic>{
+              'toUid': 'uid-1',
+              'title': 'Nudge',
+              'body': 'Open the sheet',
+              'data': <String, String>{'type': 'nudge'},
+              'sentAtMillis': DateTime(2024, 1, 2).millisecondsSinceEpoch,
+              'read': false,
+            });
+
+        final inbox = await messaging.inboxFor('uid-1').first;
+        expect(inbox.single.requiresAction, isFalse);
+      },
+    );
+
     test('inboxFor only ever includes messages for that uid', () async {
       await messaging.sendToUser(
         UserMessage(

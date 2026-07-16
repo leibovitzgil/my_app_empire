@@ -14,6 +14,7 @@ class UserMessage extends Equatable {
     required this.body,
     required this.sentAt,
     this.data = const <String, String>{},
+    this.requiresAction = false,
   });
 
   /// A stable identifier for this message, unique per recipient inbox.
@@ -36,6 +37,25 @@ class UserMessage extends Equatable {
   /// When this message was sent.
   final DateTime sentAt;
 
+  /// Whether the recipient must *act* on this message for it to be consumed,
+  /// rather than merely see it.
+  ///
+  /// Read as "showing this doesn't finish it". A nudge is done the moment
+  /// it's surfaced (`false`, the default) — a notification is the whole
+  /// point of it. An invite is not: it stays pending until accepted, so a
+  /// bridge that surfaces it must leave it unread. Marking such a message
+  /// read on display destroys it — `read` means *consumed*, and the accept
+  /// path refuses an already-read message.
+  final bool requiresAction;
+
   @override
-  List<Object?> get props => [id, toUid, title, body, data, sentAt];
+  List<Object?> get props => [
+    id,
+    toUid,
+    title,
+    body,
+    data,
+    sentAt,
+    requiresAction,
+  ];
 }

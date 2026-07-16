@@ -83,6 +83,11 @@ export const sendInvite = onCall({ region: REGION }, async (request) => {
     data: { type: INVITE_TYPE, pieceId, ownerId, ownerName: ownerName ?? '' },
     sentAtMillis: Date.now(),
     read: false,
+    // An invite is consumed by `acceptInvite`, never by being displayed. The
+    // client's inbox->notification bridge keys off this to leave it unread;
+    // without it the invite is burned the moment the recipient is notified,
+    // and every accept then fails as already-used.
+    requiresAction: true,
   });
 
   logger.info('sendInvite: delivered', { ownerId, recipientUid, pieceId });

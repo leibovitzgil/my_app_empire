@@ -60,6 +60,7 @@ class FirestoreUserMessaging
           'data': message.data,
           'sentAtMillis': message.sentAt.millisecondsSinceEpoch,
           'read': false,
+          'requiresAction': message.requiresAction,
         });
       });
 
@@ -96,5 +97,8 @@ class FirestoreUserMessaging
           (key, value) => MapEntry(key as String, value as String),
         ) ??
         const <String, String>{},
+    // Absent on documents written before the field existed; `false` keeps
+    // those behaving exactly as they did (consumed once surfaced).
+    requiresAction: data['requiresAction'] as bool? ?? false,
   );
 }
