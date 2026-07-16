@@ -76,7 +76,7 @@ jobs:
           java-version: 21
 
       - name: Cache Firebase emulator binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}
@@ -198,7 +198,7 @@ jobs:
           java-version: 21
 
       - name: Cache Firebase emulator binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}
