@@ -120,6 +120,9 @@ void main() {
         storage: getIt<LocalStorageService>(),
       ),
     );
+    // The score page subscribes to this on mount (M4.1); the local monitor
+    // reports always-synced.
+    getIt.registerLazySingleton<PieceSyncMonitor>(LocalPieceSyncMonitor.new);
 
     // The routed destinations resolve these at build time: the score page's
     // recording-path seam, and the settings page's repository + permission

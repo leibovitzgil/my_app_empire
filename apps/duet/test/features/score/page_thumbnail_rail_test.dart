@@ -98,7 +98,11 @@ void main() {
         tester,
         pageCount: 1,
         presence: const [
-          (hasAudio: false, inkColors: [Colors.blue, Colors.red]),
+          (
+            hasAudio: false,
+            inkColors: [Colors.blue, Colors.red],
+            hasNew: false,
+          ),
         ],
       );
 
@@ -116,10 +120,32 @@ void main() {
       await _pump(
         tester,
         pageCount: 1,
-        presence: const [(hasAudio: true, inkColors: [])],
+        presence: const [(hasAudio: true, inkColors: <Color>[], hasNew: false)],
       );
 
       expect(find.byIcon(Icons.mic), findsOneWidget);
+    });
+
+    testWidgets('shows a "new" accent + semantics when the page has new ink', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        pageCount: 1,
+        presence: const [(hasAudio: false, inkColors: <Color>[], hasNew: true)],
+      );
+
+      // No ink dots on this page, so the only circle is the new-accent hint.
+      final circles = find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            (widget.decoration as BoxDecoration?)?.shape == BoxShape.circle,
+      );
+      expect(circles, findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('new annotations')),
+        findsOneWidget,
+      );
     });
   });
 }

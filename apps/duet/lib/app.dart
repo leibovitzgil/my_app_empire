@@ -15,6 +15,7 @@ import 'package:duet/ui/score_page.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_paywall/feature_paywall.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -267,6 +268,12 @@ class HomeScreen extends StatelessWidget {
             onOpenCollaborators: (piece) => context.push(
               '/collaborators/${Uri.encodeComponent(piece.id)}',
             ),
+            // Offline sharing (M4.2): the `.duet` bundle escape hatch, moved
+            // off the reader and onto Piece Detail. Live sync is the default
+            // path now; these stay for airplane mode.
+            onExportBundle: (piece) =>
+                unawaited(_exportReviewBundle(context, piece)),
+            onImportBundle: () => unawaited(_importReviewBundle(context)),
             onOpenSettings: () => context.push('/settings'),
             currentUserName: getIt<CurrentUserName>().call(),
             appName: 'Duet',
@@ -274,5 +281,46 @@ class HomeScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Exports [piece]'s annotations as a `.duet` review bundle and hands it to
+/// the OS share sheet — the offline escape hatch surfaced from Piece Detail
+/// (M4.2). Snackbars surface on the app-level messenger.
+Future<void> _exportReviewBundle(BuildContext context, Piece piece) async {
+  final exportResult = await getIt<ReviewSyncService>().exportBundle(piece.id);
+  if (!context.mounted) return;
+  switch (exportResult) {
+    case Success<ExportedBundle>(:final value):
+      final shareResult = await getIt<ReviewSyncService>().share(value);
+      if (!context.mounted) return;
+      if (shareResult case ResultFailure<void>(:final error)) {
+        AppSnackbar.error(context, "Couldn't share: $error");
+      }
+    case ResultFailure<ExportedBundle>(:final error):
+      AppSnackbar.error(context, "Couldn't export: $error");
+  }
+}
+
+/// Picks a `.duet` review bundle and merges it via `ReviewSyncService` (M4.2).
+Future<void> _importReviewBundle(BuildContext context) async {
+  final picked = await FilePicker.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['duet'],
+  );
+  if (picked == null || picked.files.isEmpty) return;
+  final path = picked.files.single.path;
+  if (path == null || !context.mounted) return;
+  final result = await getIt<ReviewSyncService>().importBundle(path);
+  if (!context.mounted) return;
+  switch (result) {
+    case Success<ReviewBundleSummary>(:final value):
+      AppSnackbar.success(
+        context,
+        'Imported ${value.strokeCount} strokes, '
+        '${value.audioNoteCount} notes',
+      );
+    case ResultFailure<ReviewBundleSummary>(:final error):
+      AppSnackbar.error(context, "Couldn't import: $error");
   }
 }

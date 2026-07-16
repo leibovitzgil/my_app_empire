@@ -55,8 +55,7 @@ class ScoreViewerScreen extends StatefulWidget {
     required this.recordingPathBuilder,
     required this.audioAssetStore,
     this.syncStatus = ScoreSyncStatus.notSynced,
-    this.onShareRequested,
-    this.onImportRequested,
+    this.onNudgeRequested,
     super.key,
   });
 
@@ -87,16 +86,13 @@ class ScoreViewerScreen extends StatefulWidget {
   /// [ScoreSyncStatus.notSynced].
   final ScoreSyncStatus syncStatus;
 
-  /// Invoked when "Share" is selected (overflow menu or the Layers panel's
-  /// prompt), if provided; `null` hides every share affordance. A callback
-  /// rather than a direct `review_sync` dependency, for the same
-  /// cross-package reason as `feature_library`'s
-  /// `onOpenScore`/`onInvitePiece`.
-  final Future<void> Function()? onShareRequested;
-
-  /// Invoked when "Import review bundle" is selected from the overflow menu,
-  /// if provided; `null` hides the action. See [onShareRequested].
-  final Future<void> Function()? onImportRequested;
+  /// Invoked when "Nudge" is tapped (the Layers panel's prompt or the
+  /// save-note snackbar), if provided; `null` hides every nudge affordance. A
+  /// callback rather than a direct dependency, for the same cross-package
+  /// reason as `feature_library`'s `onOpenScore`/`onInvitePiece` — the app
+  /// glue owns the actual send (`NudgeService`); bundle export/import moved to
+  /// Piece Detail (M4.2).
+  final Future<void> Function()? onNudgeRequested;
 
   @override
   State<ScoreViewerScreen> createState() => _ScoreViewerScreenState();
@@ -244,8 +240,6 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
             ? null
             : () => bloc.add(PageChanged(state.currentPage + 1)),
         onOpenLayers: _onOpenLayers(context, state, bloc, width),
-        onShare: widget.onShareRequested,
-        onImport: widget.onImportRequested,
         onPracticePage: () => bloc
           ..add(const RegionSelectStarted(RegionIntent.practice))
           ..add(
@@ -293,8 +287,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
         child: _buildLayersPanel(
           bloc,
           state,
-          syncStatus: widget.syncStatus,
-          onShareRequested: widget.onShareRequested,
+          onNudgeRequested: widget.onNudgeRequested,
           onClose: () => Navigator.of(sheetContext).pop(),
         ),
       ),
@@ -313,8 +306,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       child: _buildLayersPanel(
         bloc,
         state,
-        syncStatus: widget.syncStatus,
-        onShareRequested: widget.onShareRequested,
+        onNudgeRequested: widget.onNudgeRequested,
         onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
       ),
     );
@@ -355,8 +347,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       state: state,
       renderService: widget.renderService,
       audioAssetStore: widget.audioAssetStore,
-      syncStatus: widget.syncStatus,
-      onShareRequested: widget.onShareRequested,
+      onNudgeRequested: widget.onNudgeRequested,
       recordingPathBuilder: widget.recordingPathBuilder,
       onSaveRecording: (region, path, elapsed) =>
           unawaited(_saveAudioNote(region, path, elapsed)),
@@ -387,7 +378,8 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   ///
   /// Then closes the flow the way the design's "saved" moment does: back to
   /// view mode, where the new pin is visible on its passage, with a
-  /// confirmation snackbar (offering "Share now" when sharing is wired).
+  /// confirmation snackbar (offering "Nudge" only when there's a collaborator
+  /// to nudge — hidden on a solo sheet).
   Future<void> _saveAudioNote(
     Region region,
     String recordedPath,
@@ -418,13 +410,20 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       ..add(AudioNoteSaved(note, recordedPath))
       ..add(const ModeChanged(ScoreMode.view));
     if (!mounted) return;
-    final onShare = widget.onShareRequested;
+    final onNudge = widget.onNudgeRequested;
+    // Only offer "Nudge" when there's actually a collaborator to nudge —
+    // mirrors the Layers panel's prompt so a solo sheet shows no dead action.
+    final target = nudgeTargetNameFor(
+      scoreBloc.state.piece,
+      scoreBloc.state.currentUserId,
+    );
+    final canNudge = onNudge != null && target != null;
     AppSnackbar.show(
       context,
       message: 'Audio note added · Page ${region.pageIndex + 1}',
       variant: AppSnackbarVariant.success,
-      actionLabel: onShare == null ? null : 'Share now',
-      onAction: onShare == null ? null : () => unawaited(onShare()),
+      actionLabel: canNudge ? 'Nudge' : null,
+      onAction: canNudge ? () => unawaited(onNudge()) : null,
     );
   }
 
@@ -514,8 +513,7 @@ class _MinimalTopBar extends StatelessWidget {
 Widget _buildLayersPanel(
   ScoreBloc bloc,
   ScoreState state, {
-  required ScoreSyncStatus syncStatus,
-  required Future<void> Function()? onShareRequested,
+  required Future<void> Function()? onNudgeRequested,
   VoidCallback? onClose,
   IconData closeIcon = Icons.close,
 }) {
@@ -532,11 +530,31 @@ Widget _buildLayersPanel(
     onCleanWorkspaceToggle: () => bloc.add(const CleanWorkspaceToggled()),
     onClose: onClose,
     closeIcon: closeIcon,
-    onShare: onShareRequested == null
+    onNudge: onNudgeRequested == null
         ? null
-        : () => unawaited(onShareRequested()),
-    annotationsShared: syncStatus == ScoreSyncStatus.synced,
+        : () => unawaited(onNudgeRequested()),
+    nudgeTargetName: nudgeTargetNameFor(state.piece, state.currentUserId),
   );
+}
+
+/// The collaborator(s) a nudge from this reader would reach, for the Layers
+/// panel's prompt copy *and* the save-note snackbar's "Nudge" gate: the single
+/// other participant's name when there's exactly one, a generic "your
+/// collaborators" for several, or `null` on a solo sheet — no one to nudge, so
+/// both affordances hide rather than offer a dead action.
+@visibleForTesting
+String? nudgeTargetNameFor(Piece? piece, String currentUserId) {
+  if (piece == null) return null;
+  final others = piece.participantIds
+      .where((id) => id != currentUserId)
+      .toList();
+  if (others.isEmpty) return null;
+  if (others.length > 1) return 'your collaborators';
+  final id = others.single;
+  if (id == piece.ownerId) return piece.ownerName ?? 'your collaborator';
+  final match = piece.collaborators.where((c) => c.uid == id);
+  if (match.isEmpty) return 'your collaborator';
+  return match.first.name ?? 'your collaborator';
 }
 
 /// Word-initials from a participant's real display name, e.g. "Maya K." ->
@@ -617,8 +635,7 @@ class _ReaderCanvas extends StatefulWidget {
     required this.state,
     required this.renderService,
     required this.audioAssetStore,
-    required this.syncStatus,
-    required this.onShareRequested,
+    required this.onNudgeRequested,
     required this.recordingPathBuilder,
     required this.onSaveRecording,
   });
@@ -626,8 +643,7 @@ class _ReaderCanvas extends StatefulWidget {
   final ScoreState state;
   final PdfRenderService renderService;
   final AudioAssetStore audioAssetStore;
-  final ScoreSyncStatus syncStatus;
-  final Future<void> Function()? onShareRequested;
+  final Future<void> Function()? onNudgeRequested;
   final String Function() recordingPathBuilder;
   final void Function(Region region, String path, Duration elapsed)
   onSaveRecording;
@@ -687,8 +703,7 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
                 child: _buildLayersPanel(
                   bloc,
                   state,
-                  syncStatus: widget.syncStatus,
-                  onShareRequested: widget.onShareRequested,
+                  onNudgeRequested: widget.onNudgeRequested,
                   onClose: () => setState(() => _layersPanelCollapsed = true),
                   closeIcon: Icons.last_page,
                 ),
@@ -709,6 +724,16 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
               if (layer.strokes.any((stroke) => stroke.pageIndex == page))
                 inkColorForId(layer.colorId),
           ].take(5).toList(),
+          // Fresh ink or a new note on this page (M4.3), for the rail hint.
+          hasNew:
+              state.layers.any(
+                (layer) =>
+                    layer.hasNewInk &&
+                    layer.strokes.any((s) => s.pageIndex == page),
+              ) ||
+              state.notes.any(
+                (note) => note.pageIndex == page && state.isNoteNew(note),
+              ),
         ),
     ];
   }
@@ -795,6 +820,7 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
                                 currentUserId: state.currentUserId,
                                 accentColor: _pinAccent(state, note, scheme),
                                 isPlaying: playback.isPlaying(note.id),
+                                isNew: state.isNoteNew(note),
                                 progress: _progressValue(playback, note.id),
                                 onTap: () => _onPinTap(context, note, playback),
                                 onDelete: () => context.read<ScoreBloc>().add(
@@ -1029,6 +1055,9 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
     if (playback.isPlaying(note.id)) {
       unawaited(playbackCubit.stop());
     } else {
+      // Playing a "new" note marks it seen for the rest of this session, so
+      // its marker drops (M4.3).
+      context.read<ScoreBloc>().add(AudioNotePlayed(note.id));
       unawaited(_playNote(playbackCubit, note));
     }
   }

@@ -4,8 +4,8 @@ import 'package:duet/features/score/src/ui/widgets/ink_palette.dart';
 import 'package:flutter/material.dart';
 
 /// The reader's Layers panel: one row per participant's ink layer, an audio
-/// pins row, a clean-workspace switch, and (when annotations haven't been
-/// shared yet) a bottom share prompt.
+/// pins row, a clean-workspace switch, and (when there's a collaborator to
+/// nudge) a bottom "let them know you added notes" prompt.
 ///
 /// Docked inline at ≥840dp, opened from a Layers button via `endDrawer` at
 /// 600-839dp, or shown in a bottom sheet below 600dp — this widget itself
@@ -23,8 +23,8 @@ class LayersPanel extends StatelessWidget {
     required this.onCleanWorkspaceToggle,
     this.onClose,
     this.closeIcon = Icons.close,
-    this.onShare,
-    this.annotationsShared = false,
+    this.onNudge,
+    this.nudgeTargetName,
     super.key,
   });
 
@@ -59,13 +59,14 @@ class LayersPanel extends StatelessWidget {
   /// tucks the panel away rather than dismissing an overlay.
   final IconData closeIcon;
 
-  /// Called when the bottom "Share" prompt is tapped. `null` (or
-  /// [annotationsShared]) hides the whole prompt.
-  final VoidCallback? onShare;
+  /// Called when the bottom "Nudge" prompt is tapped. `null` (or a null
+  /// [nudgeTargetName]) hides the whole prompt.
+  final VoidCallback? onNudge;
 
-  /// Whether annotations have already been shared — hides the bottom share
-  /// prompt when true.
-  final bool annotationsShared;
+  /// The collaborator(s) a nudge would reach, named in the prompt copy
+  /// (`Let <name> know you added notes`). `null` — a solo sheet with no one to
+  /// nudge — hides the prompt.
+  final String? nudgeTargetName;
 
   @override
   Widget build(BuildContext context) {
@@ -98,10 +99,10 @@ class LayersPanel extends StatelessWidget {
               ],
             ),
           ),
-          if (!annotationsShared && onShare != null)
+          if (onNudge != null && nudgeTargetName != null)
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: _ShareCard(onShare: onShare!),
+              child: _NudgeCard(name: nudgeTargetName!, onNudge: onNudge!),
             ),
         ],
       ),
@@ -189,7 +190,8 @@ class _LayerRow extends StatelessWidget {
     return Semantics(
       button: true,
       label:
-          '${layer.label} layer${layer.isOwn ? ' (yours)' : ''}, '
+          '${layer.label} layer${layer.isOwn ? ' (yours)' : ''}'
+          '${layer.hasNewInk ? ', new annotations' : ''}, '
           '${layer.visible ? 'shown' : 'hidden'}. Double tap to '
           '${layer.visible ? 'hide' : 'show'}.',
       child: SizedBox(
@@ -229,6 +231,19 @@ class _LayerRow extends StatelessWidget {
                             if (layer.isOwn) ...[
                               const SizedBox(width: AppSpacing.xs),
                               Icon(Icons.edit, size: 14, color: subColor),
+                            ],
+                            // "New since you last looked" dot (M4.3) — only on
+                            // another participant's changed layer.
+                            if (layer.hasNewInk) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: scheme.primary,
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -386,10 +401,11 @@ class _CleanWorkspaceRow extends StatelessWidget {
   }
 }
 
-class _ShareCard extends StatelessWidget {
-  const _ShareCard({required this.onShare});
+class _NudgeCard extends StatelessWidget {
+  const _NudgeCard({required this.name, required this.onNudge});
 
-  final VoidCallback onShare;
+  final String name;
+  final VoidCallback onNudge;
 
   @override
   Widget build(BuildContext context) {
@@ -398,21 +414,21 @@ class _ShareCard extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.cloud_off_outlined,
+            Icons.notifications_none_outlined,
             size: 19,
             color: scheme.onSurfaceVariant,
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Annotations not shared yet',
+              'Let $name know you added notes',
               style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
             ),
           ),
           Semantics(
             button: true,
-            label: 'Share annotations',
-            child: AppTextButton(label: 'Share', onPressed: onShare),
+            label: 'Nudge $name',
+            child: AppTextButton(label: 'Nudge', onPressed: onNudge),
           ),
         ],
       ),

@@ -19,7 +19,13 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # Version-only pin (no `channel:`, which would override it and let
+          # the floating stable drift the Firebase ecosystem — firebase_core
+          # 4.12.0 / cloud_firestore 6.7.0 — to versions referencing a
+          # `FirebasePlugin` type the resolvable firebase_core lacks, breaking
+          # compilation across the firebase packages). 3.44.6 is this repo's
+          # dev version and resolves the known-good set.
+          flutter-version: 3.44.6
           cache: true
 
       - name: Activate Melos
@@ -95,7 +101,13 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # Version-only pin (no `channel:`, which would override it and let
+          # the floating stable drift the Firebase ecosystem — firebase_core
+          # 4.12.0 / cloud_firestore 6.7.0 — to versions referencing a
+          # `FirebasePlugin` type the resolvable firebase_core lacks, breaking
+          # compilation across the firebase packages). 3.44.6 is this repo's
+          # dev version and resolves the known-good set.
+          flutter-version: 3.44.6
           cache: true
 
       - name: Activate Melos
@@ -114,3 +126,94 @@ jobs:
           name: golden-failures
           path: "**/test/golden/failures/*.png"
           if-no-files-found: ignore
+
+  changes:
+    name: Detect changed paths
+    # Per-job path filter: a workflow-level `on.paths` would gate *every* job,
+    # but analyze-and-test/rules-tests/goldens must run on all PRs. This job
+    # publishes whether Duet-relevant files changed so only the (heavy)
+    # emulator-e2e job below is skipped on unrelated PRs.
+    runs-on: ubuntu-latest
+    outputs:
+      duet: ${{ steps.filter.outputs.duet }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            duet:
+              - 'apps/duet/**'
+              - 'packages/**'
+              - 'melos.yaml'
+              - '.github/workflows/ci.yaml'
+
+  emulator-e2e:
+    name: Reader/cloud E2E (Firebase emulator)
+    # The plan-M4 exit (M4.5): drives the integration_test flows
+    # (auth_lifecycle, cloud_pieces_flow, collaborator_flow + reader
+    # assertions) against the REAL Auth+Firestore+Functions+Storage emulator,
+    # proving `useFirebase: true` server-authoritative end-to-end — the
+    # standard gate only exercises the in-memory fakes. Skipped on PRs that
+    # touch no Duet/package code (see the `changes` job).
+    #
+    # NON-BLOCKING for now: two of the three suites (cloud_pieces_flow,
+    # auth_lifecycle) use `dart:io` (File/Directory/HttpClient), which the
+    # Flutter web target (`-d chrome`) lacks, so they can't run headlessly on a
+    # runner. Making this a required green check needs either a native-device
+    # runner (`flutter drive`) or those two suites refactored off `dart:io`
+    # (HttpClient -> package:http, File uploads -> in-memory putData). Tracked
+    # as the M4.5 follow-up; the `melos e2e-emulator` script stays usable
+    # locally/on a device today.
+    continue-on-error: true
+    needs: changes
+    if: needs.changes.outputs.duet == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Version-only pin (no `channel:`, which would override it and let
+          # the floating stable drift the Firebase ecosystem — firebase_core
+          # 4.12.0 / cloud_firestore 6.7.0 — to versions referencing a
+          # `FirebasePlugin` type the resolvable firebase_core lacks, breaking
+          # compilation across the firebase packages). 3.44.6 is this repo's
+          # dev version and resolves the known-good set.
+          flutter-version: 3.44.6
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/duet/functions/package-lock.json
+
+      - name: Set up Java (Firebase emulator runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Activate Melos
+        run: dart pub global activate melos
+
+      - name: Bootstrap
+        run: melos bootstrap
+
+      # Runs the emulator suite around `flutter test integration_test -d
+      # chrome`; the functions are rebuilt inside the script so the Functions
+      # emulator serves the current callables. Expected to fail until the
+      # dart:io suites are made web-runnable or moved to `flutter drive` on a
+      # native device (hence continue-on-error above) — `web-server` is still
+      # the web platform, so it wouldn't help.
+      - name: Reader/cloud E2E against the emulator
+        run: melos run e2e-emulator

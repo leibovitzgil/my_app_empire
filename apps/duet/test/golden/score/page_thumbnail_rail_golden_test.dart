@@ -13,9 +13,13 @@ import 'package:flutter_test/flutter_test.dart';
 final ThemeData _theme = AppTheme.testTheme(brightness: Brightness.dark);
 
 const List<PageInkPresence> _presence = [
-  (hasAudio: false, inkColors: [Color(0xFF0072B2)]),
-  (hasAudio: true, inkColors: [Color(0xFF0072B2), Color(0xFFD55E00)]),
-  (hasAudio: false, inkColors: []),
+  (hasAudio: false, inkColors: [Color(0xFF0072B2)], hasNew: false),
+  (
+    hasAudio: true,
+    inkColors: [Color(0xFF0072B2), Color(0xFFD55E00)],
+    hasNew: true,
+  ),
+  (hasAudio: false, inkColors: <Color>[], hasNew: false),
 ];
 
 Future<void> _pump(WidgetTester tester, {bool dimmed = false}) {

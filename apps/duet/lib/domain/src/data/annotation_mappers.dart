@@ -76,7 +76,9 @@ Region regionFromJson(Map<String, dynamic> json) => Region(
   height: (json['height'] as num).toDouble(),
 );
 
-/// Serializes [note] to JSON.
+/// Serializes [note] to JSON. `deletedAt` is written as a nullable ISO-8601
+/// string so a tombstone (M4.4) round-trips through local storage and
+/// review bundles rather than resurrecting on reload.
 Map<String, dynamic> audioNoteToJson(AudioNote note) => <String, dynamic>{
   'id': note.id,
   'authorId': note.authorId,
@@ -85,9 +87,11 @@ Map<String, dynamic> audioNoteToJson(AudioNote note) => <String, dynamic>{
   'durationMs': note.durationMs,
   'region': regionToJson(note.region),
   'createdAt': note.createdAt.toIso8601String(),
+  'deletedAt': note.deletedAt?.toIso8601String(),
 };
 
-/// Reverses [audioNoteToJson].
+/// Reverses [audioNoteToJson]. `deletedAt` reads leniently (absent -> `null`)
+/// so notes persisted before the tombstone field existed keep decoding.
 AudioNote audioNoteFromJson(Map<String, dynamic> json) => AudioNote(
   id: json['id'] as String,
   authorId: json['authorId'] as String,
@@ -96,6 +100,10 @@ AudioNote audioNoteFromJson(Map<String, dynamic> json) => AudioNote(
   durationMs: json['durationMs'] as int,
   region: regionFromJson(json['region'] as Map<String, dynamic>),
   createdAt: DateTime.parse(json['createdAt'] as String),
+  deletedAt: switch (json['deletedAt']) {
+    final String iso => DateTime.parse(iso),
+    _ => null,
+  },
 );
 
 /// Serializes [annotations] to JSON.

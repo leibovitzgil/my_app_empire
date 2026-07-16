@@ -27,6 +27,7 @@ const List<ParticipantLayer> _layers = [
     colorId: 'p1',
     isOwn: false,
     visible: true,
+    hasNewInk: true,
     strokes: [],
   ),
   ParticipantLayer(
@@ -42,7 +43,8 @@ const List<ParticipantLayer> _layers = [
 Future<void> _pump(
   WidgetTester tester, {
   bool cleanWorkspace = false,
-  VoidCallback? onShare,
+  VoidCallback? onNudge,
+  String? nudgeTargetName,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -60,7 +62,8 @@ Future<void> _pump(
             onAudioToggle: () {},
             onCleanWorkspaceToggle: () {},
             onClose: () {},
-            onShare: onShare,
+            onNudge: onNudge,
+            nudgeTargetName: nudgeTargetName,
           ),
         ),
       ),
@@ -70,21 +73,21 @@ Future<void> _pump(
   // future (see `score_viewer_screen_golden_test.dart`'s failure-state note
   // for the same pattern) — a zero-duration pump alone leaves it pending,
   // which trips the test binding's "no pending timers" invariant at
-  // teardown once the "Share" button is on screen.
+  // teardown once the "Nudge" button is on screen.
   await tester.pump(const Duration(milliseconds: 1));
 }
 
 void main() {
   group('LayersPanel goldens', () {
-    testWidgets('collaborators, one hidden, unshared prompt', (tester) async {
-      await _pump(tester, onShare: () {});
+    testWidgets('collaborators, one hidden, nudge prompt', (tester) async {
+      await _pump(tester, onNudge: () {}, nudgeTargetName: 'Maya K.');
       await expectLater(
         find.byType(LayersPanel),
-        matchesGoldenFile('goldens/layers_panel_unshared.png'),
+        matchesGoldenFile('goldens/layers_panel_nudge.png'),
       );
     });
 
-    testWidgets('clean workspace on, already shared (no prompt)', (
+    testWidgets('clean workspace on, no nudge prompt', (
       tester,
     ) async {
       await _pump(tester, cleanWorkspace: true);

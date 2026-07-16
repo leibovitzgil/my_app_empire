@@ -76,6 +76,9 @@ InkLayer layerFromFirestore(String uid, Map<String, dynamic> data) => InkLayer(
   ownerId: uid,
   role: _roleFromName(data['role'] as String?),
   strokes: strokesFromLayer(data),
+  // The write time the reader compares against a viewer's last-opened
+  // watermark to flag a layer as changed since (M4.3).
+  updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
 );
 
 PieceRole _roleFromName(String? name) => PieceRole.values.firstWhere(
@@ -99,9 +102,10 @@ Region _regionFromFirestore(Map<String, dynamic> json) => Region(
   height: (json['height'] as num).toDouble(),
 );
 
-/// Serializes [note] to a `notes/{noteId}` document. `deletedAt` starts null;
-/// M4.4 flips it to a `Timestamp` tombstone instead of hard-deleting, so a
-/// delete converges across offline peers rather than resurrecting.
+/// Serializes [note] to a `notes/{noteId}` document. `deletedAt` is a
+/// `Timestamp` tombstone (M4.4) or null for a live note — `deleteAudioNote`
+/// sets it instead of hard-deleting so a delete converges across offline
+/// peers rather than resurrecting.
 Map<String, dynamic> audioNoteToFirestore(AudioNote note) => <String, dynamic>{
   'id': note.id,
   'authorId': note.authorId,
@@ -110,12 +114,15 @@ Map<String, dynamic> audioNoteToFirestore(AudioNote note) => <String, dynamic>{
   'durationMs': note.durationMs,
   'region': _regionToFirestore(note.region),
   'createdAt': Timestamp.fromDate(note.createdAt),
-  'deletedAt': null,
+  'deletedAt': note.deletedAt == null
+      ? null
+      : Timestamp.fromDate(note.deletedAt!),
 };
 
-/// Reverses [audioNoteToFirestore]. [id] is the document id; the `deletedAt`
-/// tombstone is ignored here (the repository filters tombstoned notes out
-/// before mapping — see [isAudioNoteTombstoned]).
+/// Reverses [audioNoteToFirestore]. [id] is the document id. The `deletedAt`
+/// tombstone is carried through (the reader's `watch` filters tombstoned notes
+/// out via [isAudioNoteTombstoned]; the review-sync export needs it to carry a
+/// delete through an offline bundle).
 AudioNote audioNoteFromFirestore(String id, Map<String, dynamic> data) =>
     AudioNote(
       id: data['id'] as String? ?? id,
@@ -125,6 +132,7 @@ AudioNote audioNoteFromFirestore(String id, Map<String, dynamic> data) =>
       durationMs: data['durationMs'] as int,
       region: _regionFromFirestore(data['region'] as Map<String, dynamic>),
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
     );
 
 /// Whether [data] is a tombstoned (soft-deleted) audio-note document (M4.4).

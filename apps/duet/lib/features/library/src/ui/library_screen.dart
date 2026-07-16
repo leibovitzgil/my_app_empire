@@ -55,6 +55,8 @@ class LibraryPage extends StatelessWidget {
     this.onInvitePiece,
     this.onOpenCollaborators,
     this.onOpenSettings,
+    this.onExportBundle,
+    this.onImportBundle,
     this.filePicker,
     this.currentUserName,
     this.onPasteInviteLink,
@@ -91,6 +93,15 @@ class LibraryPage extends StatelessWidget {
   /// callback for the same reason as [onOpenScore]/[onInvitePiece]. `null`
   /// hides the tile entirely (see `PieceDetailScreen.onOpenCollaborators`).
   final void Function(Piece piece)? onOpenCollaborators;
+
+  /// Called to export a piece's annotations as a `.duet` review bundle and
+  /// share it — the offline escape hatch surfaced from Piece Detail (M4.2). A
+  /// callback for the same reason as [onOpenScore]. `null` hides the action.
+  final void Function(Piece piece)? onExportBundle;
+
+  /// Called to pick and import a `.duet` review bundle from Piece Detail. See
+  /// [onExportBundle]. `null` hides the action.
+  final VoidCallback? onImportBundle;
 
   /// Called when the user wants to open the app's settings screen. A
   /// callback for the same reason as [onOpenScore]/[onInvitePiece]: settings
@@ -136,6 +147,8 @@ class LibraryPage extends StatelessWidget {
         onInvitePiece: onInvitePiece,
         onOpenCollaborators: onOpenCollaborators,
         onOpenSettings: onOpenSettings,
+        onExportBundle: onExportBundle,
+        onImportBundle: onImportBundle,
         filePicker: filePicker,
         currentUserName: currentUserName,
         appName: appName,
@@ -160,6 +173,8 @@ class LibraryHomeScreen extends StatefulWidget {
     this.onInvitePiece,
     this.onOpenCollaborators,
     this.onOpenSettings,
+    this.onExportBundle,
+    this.onImportBundle,
     this.filePicker,
     this.currentUserName,
     this.onPasteInviteLink,
@@ -187,6 +202,12 @@ class LibraryHomeScreen extends StatefulWidget {
 
   /// See [LibraryPage.onOpenCollaborators].
   final void Function(Piece piece)? onOpenCollaborators;
+
+  /// See [LibraryPage.onExportBundle].
+  final void Function(Piece piece)? onExportBundle;
+
+  /// See [LibraryPage.onImportBundle].
+  final VoidCallback? onImportBundle;
 
   /// See [LibraryPage.onOpenSettings].
   final VoidCallback? onOpenSettings;
@@ -365,16 +386,16 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
     }
   }
 
-  void _markViewed(BuildContext context, Piece piece) =>
-      context.read<LibraryBloc>().add(PieceViewed(piece.id));
-
   void _openScore(BuildContext context, Piece piece) {
-    _markViewed(context, piece);
+    // Opening the reader is what "views" a piece — optimistically clear its
+    // unread dot here (the reader itself persists the watermark, M4.3).
+    // Opening the *detail* screen deliberately does not, so a piece stays
+    // flagged new until it's actually read.
+    context.read<LibraryBloc>().add(PieceViewed(piece.id));
     widget.onOpenScore(piece);
   }
 
   void _openDetail(BuildContext context, Piece piece) {
-    _markViewed(context, piece);
     unawaited(
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
@@ -385,6 +406,8 @@ class _LibraryHomeScreenState extends State<LibraryHomeScreen> {
             onOpenScore: widget.onOpenScore,
             onInvitePiece: widget.onInvitePiece,
             onOpenCollaborators: widget.onOpenCollaborators,
+            onExportBundle: widget.onExportBundle,
+            onImportBundle: widget.onImportBundle,
           ),
         ),
       ),

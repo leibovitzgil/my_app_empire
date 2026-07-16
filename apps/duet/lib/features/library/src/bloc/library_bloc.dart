@@ -74,19 +74,19 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     emit(state.copyWith(status: LibraryStatus.failure, error: event.error));
   }
 
-  Future<void> _onPieceViewed(
-    PieceViewed event,
-    Emitter<LibraryState> emit,
-  ) async {
-    // Optimistically clear the dot; `markOpened` persists the watermark and
-    // the `watchReads` stream reconciles it (best-effort — a failed write just
-    // lets the stream keep the dot).
+  void _onPieceViewed(PieceViewed event, Emitter<LibraryState> emit) {
+    // Optimistically clear the dot the instant the reader is opened from the
+    // gallery — immediate feedback only, no persist. The reader itself is the
+    // single writer of the watermark now (M4.3): it captures the pre-open
+    // value, *then* calls `markOpened`, and the `watchReads` stream reconciles
+    // this optimistic value once that write lands. Persisting here too would
+    // bump the watermark before the reader captures it, defeating newness on
+    // the gallery-open path.
     emit(
       state.copyWith(
         lastOpenedAt: {...state.lastOpenedAt, event.pieceId: _now()},
       ),
     );
-    await _repository.markOpened(event.pieceId);
   }
 
   void _onFilterChanged(

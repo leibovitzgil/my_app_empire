@@ -4,20 +4,23 @@ import 'package:audio/audio.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
+import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/features/score/score.dart';
 import 'package:duet/injection.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 
 /// Hosts `feature_score`'s Score Viewer for [pieceId]: builds the
-/// [ScoreBloc] from the shared repositories, and wires the two bits of
-/// app-glue `feature_score` deliberately doesn't own — manual review-sync
-/// (share/import) actions, since sync in this MVP is explicit rather than
-/// automatic, and a session-local sync-status badge reflecting them.
+/// [ScoreBloc] from the shared repositories, and wires the app-glue
+/// `feature_score` deliberately doesn't own — the "nudge a collaborator"
+/// action (`NudgeService`, M4.2; bundle share/import moved to Piece Detail),
+/// and the live sync badge, which subscribes to a [PieceSyncMonitor] and maps
+/// its [PieceSyncState] onto the reader's presentational [ScoreSyncStatus]
+/// (the feature stays Firebase-blind; G3).
 class DuetScorePage extends StatefulWidget {
   /// Creates a [DuetScorePage] for [pieceId].
   const DuetScorePage({required this.pieceId, super.key});
@@ -39,12 +42,14 @@ class _DuetScorePageState extends State<DuetScorePage> {
     pdfBinaryCache: getIt<PdfBinaryCache>(),
   )..add(ScoreOpened(widget.pieceId));
 
-  // Session-local only: this MVP's sync is manual (explicit share/import),
-  // so there's no persisted "last synced at" to restore on reopen — every
-  // fresh visit to the Score Viewer starts `notSynced` until the user
-  // shares or imports again. See the phase report for the fuller judgment
-  // call this reflects.
-  ScoreSyncStatus _syncStatus = ScoreSyncStatus.notSynced;
+  // The reader's live sync signal (M4.1): a `PieceSyncMonitor` folds real
+  // persistence state (Firestore pending writes + the audio upload-queue depth
+  // + server reachability) into a `PieceSyncState`. Held once here (not
+  // re-`watch`ed per build) so the single `StreamBuilder` below subscribes to
+  // a stable stream exactly once — `watch` is single-subscription and one
+  // `DuetScorePage` is alive per open piece.
+  late final Stream<PieceSyncState> _syncStates = getIt<PieceSyncMonitor>()
+      .watch(widget.pieceId);
 
   // Resolved lazily/async (see `injection.dart`) rather than at app boot, so
   // it's loaded here, once, the first time this screen actually needs it.
@@ -75,65 +80,51 @@ class _DuetScorePageState extends State<DuetScorePage> {
     }
     return BlocProvider<ScoreBloc>.value(
       value: _scoreBloc,
-      child: ScoreViewerScreen(
-        renderService: getIt<PdfRenderService>(),
-        recorderService: getIt<AudioRecorderService>(),
-        playerService: getIt<AudioPlayerService>(),
-        recordingPathBuilder: recordingPathBuilder.call,
-        audioAssetStore: getIt<AudioAssetStore>(),
-        syncStatus: _syncStatus,
-        onShareRequested: _share,
-        onImportRequested: _import,
+      child: StreamBuilder<PieceSyncState>(
+        stream: _syncStates,
+        builder: (context, snapshot) => ScoreViewerScreen(
+          renderService: getIt<PdfRenderService>(),
+          recorderService: getIt<AudioRecorderService>(),
+          playerService: getIt<AudioPlayerService>(),
+          recordingPathBuilder: recordingPathBuilder.call,
+          audioAssetStore: getIt<AudioAssetStore>(),
+          syncStatus: _syncStatusFor(snapshot.data),
+          onNudgeRequested: _nudge,
+        ),
       ),
     );
   }
 
-  Future<void> _share() async {
-    setState(() => _syncStatus = ScoreSyncStatus.syncing);
-    final exportResult = await getIt<ReviewSyncService>().exportBundle(
-      widget.pieceId,
-    );
-    switch (exportResult) {
-      case Success<ExportedBundle>(:final value):
-        final shareResult = await getIt<ReviewSyncService>().share(value);
-        if (!mounted) return;
-        switch (shareResult) {
-          case Success<void>():
-            setState(() => _syncStatus = ScoreSyncStatus.synced);
-          case ResultFailure<void>(:final error):
-            setState(() => _syncStatus = ScoreSyncStatus.notSynced);
-            AppSnackbar.error(context, "Couldn't share: $error");
-        }
-      case ResultFailure<ExportedBundle>(:final error):
-        if (!mounted) return;
-        setState(() => _syncStatus = ScoreSyncStatus.notSynced);
-        AppSnackbar.error(context, "Couldn't export: $error");
-    }
-  }
+  /// Maps the monitor's [PieceSyncState] onto the reader's presentational
+  /// [ScoreSyncStatus]. `offline` maps to the `notSynced` badge (the
+  /// `cloud_off_outlined` pill) — copy intent for that state:
+  /// "Offline — changes saved on this iPad" (the work is safe on-device and
+  /// syncs on reconnect). A `null` (before the monitor's first emission) reads
+  /// as syncing while the piece's state is still being established.
+  ScoreSyncStatus _syncStatusFor(PieceSyncState? state) => switch (state) {
+    PieceSyncState.synced => ScoreSyncStatus.synced,
+    PieceSyncState.syncing => ScoreSyncStatus.syncing,
+    PieceSyncState.offline => ScoreSyncStatus.notSynced,
+    null => ScoreSyncStatus.syncing,
+  };
 
-  Future<void> _import() async {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['duet'],
+  /// Pings the piece's other participants that the current user added notes —
+  /// the reader's "Nudge" affordance (Layers panel + save-note snackbar). The
+  /// send is server-authoritative under Firebase (`sendNudge` callable) and
+  /// in-memory otherwise; either way the app glue owns it so the feature stays
+  /// Firebase-blind (G3). `fromName` seeds the mock path's copy; the callable
+  /// resolves it from the caller's token instead.
+  Future<void> _nudge() async {
+    final result = await getIt<NudgeService>().nudge(
+      pieceId: widget.pieceId,
+      fromName: getIt<CurrentUserName>().call() ?? 'Someone',
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final path = picked.files.single.path;
-    if (path == null) return;
-    if (!mounted) return;
-    setState(() => _syncStatus = ScoreSyncStatus.syncing);
-    final result = await getIt<ReviewSyncService>().importBundle(path);
     if (!mounted) return;
     switch (result) {
-      case Success<ReviewBundleSummary>(:final value):
-        setState(() => _syncStatus = ScoreSyncStatus.synced);
-        AppSnackbar.success(
-          context,
-          'Imported ${value.strokeCount} strokes, '
-          '${value.audioNoteCount} notes',
-        );
-      case ResultFailure<ReviewBundleSummary>(:final error):
-        setState(() => _syncStatus = ScoreSyncStatus.notSynced);
-        AppSnackbar.error(context, "Couldn't import: $error");
+      case Success<void>():
+        AppSnackbar.success(context, 'Nudge sent');
+      case ResultFailure<void>(:final error):
+        AppSnackbar.error(context, "Couldn't nudge: $error");
     }
   }
 }

@@ -74,6 +74,11 @@ void main() {
       when(
         () => pieceRepository.markOpened(any()),
       ).thenAnswer((_) async => const Success<void>(null));
+      // The reader reads its own last-opened watermark from this stream on
+      // open (M4.3); default to "never opened" so nothing reads as new.
+      when(
+        () => pieceRepository.watchReads(),
+      ).thenAnswer((_) => Stream.value(const <String, DateTime>{}));
       when(
         () => annotationRepository.watch(pieceId),
       ).thenAnswer((_) => annotationsController.stream);
@@ -99,6 +104,158 @@ void main() {
       pieceRepository: pieceRepository,
       annotationRepository: annotationRepository,
       currentUserId: currentUserId,
+    );
+
+    AudioNote noteBy(String authorId, String id, DateTime createdAt) =>
+        AudioNote(
+          id: id,
+          authorId: authorId,
+          audioAssetId: '/tmp/$id.m4a',
+          pageIndex: 0,
+          durationMs: 1000,
+          region: const Region(
+            pageIndex: 0,
+            left: 0,
+            top: 0,
+            width: 1,
+            height: 1,
+          ),
+          createdAt: createdAt,
+        );
+
+    // ── M4.3 attention loop ──────────────────────────────────────────────
+
+    blocTest<ScoreBloc, ScoreState>(
+      "flags another participant's layer newer than lastOpenedAt as "
+      "hasNewInk, never the viewer's own (M4.3)",
+      build: buildBloc, // viewer = ownerId
+      setUp: () => when(() => pieceRepository.watchReads()).thenAnswer(
+        (_) => Stream.value({pieceId: DateTime(2024, 1, 10)}),
+      ),
+      act: (bloc) async {
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: [
+              // The viewer's own layer — never "new", even when newer.
+              InkLayer(
+                ownerId: ownerId,
+                role: PieceRole.owner,
+                strokes: const [],
+                updatedAt: DateTime(2024, 1, 20),
+              ),
+              InkLayer(
+                ownerId: collaboratorId,
+                role: PieceRole.collaborator,
+                strokes: const [],
+                updatedAt: DateTime(2024, 1, 20),
+              ),
+            ],
+            audioNotes: const [],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        final own = bloc.state.layers.firstWhere((l) => l.ownerId == ownerId);
+        final other = bloc.state.layers.firstWhere(
+          (l) => l.ownerId == collaboratorId,
+        );
+        expect(own.hasNewInk, isFalse);
+        expect(other.hasNewInk, isTrue);
+      },
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'does not flag a layer older than lastOpenedAt, nor any layer with no '
+      'watermark (M4.3)',
+      build: buildBloc,
+      act: (bloc) async {
+        // No watermark: nothing reads as new even though the layer is recent.
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: [
+              InkLayer(
+                ownerId: collaboratorId,
+                role: PieceRole.collaborator,
+                strokes: const [],
+                updatedAt: DateTime(2024, 1, 20),
+              ),
+            ],
+            audioNotes: const [],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) =>
+          expect(bloc.state.layers.every((l) => !l.hasNewInk), isTrue),
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      "isNoteNew flags another author's note after lastOpenedAt only, and "
+      'playing it drops the flag (M4.3)',
+      build: buildBloc, // viewer = ownerId
+      setUp: () => when(() => pieceRepository.watchReads()).thenAnswer(
+        (_) => Stream.value({pieceId: DateTime(2024, 1, 10)}),
+      ),
+      act: (bloc) async {
+        bloc.add(const ScoreOpened(pieceId));
+        await Future<void>.delayed(Duration.zero);
+        annotationsController.add(
+          PieceAnnotations(
+            pieceId: pieceId,
+            layers: const [],
+            audioNotes: [
+              noteBy(collaboratorId, 'n_new', DateTime(2024, 1, 20)),
+              noteBy(collaboratorId, 'n_old', DateTime(2024)),
+              noteBy(ownerId, 'n_own', DateTime(2024, 1, 20)),
+            ],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const AudioNotePlayed('n_new'));
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        final state = bloc.state;
+        AudioNote byId(String id) => state.notes.firstWhere((n) => n.id == id);
+        // Played, so no longer new; the older and own notes were never new.
+        expect(state.isNoteNew(byId('n_new')), isFalse);
+        expect(state.seenNoteIds, contains('n_new'));
+        expect(state.isNoteNew(byId('n_old')), isFalse);
+        expect(state.isNoteNew(byId('n_own')), isFalse);
+      },
+    );
+
+    blocTest<ScoreBloc, ScoreState>(
+      'captures lastOpenedAt from watchReads BEFORE its own markOpened bumps '
+      'it, so the reader is the single watermark writer (M4.3)',
+      build: buildBloc,
+      setUp: () {
+        // A stateful stub: markOpened bumps the reads the *next* watchReads
+        // would report. The reader must read the pre-bump value because it
+        // reads watchReads before calling markOpened.
+        var reads = <String, DateTime>{pieceId: DateTime(2024, 1, 10)};
+        when(
+          () => pieceRepository.watchReads(),
+        ).thenAnswer((_) => Stream.value(reads));
+        when(() => pieceRepository.markOpened(pieceId)).thenAnswer((_) async {
+          reads = {pieceId: DateTime(2024, 6)};
+          return const Success<void>(null);
+        });
+      },
+      act: (bloc) => bloc.add(const ScoreOpened(pieceId)),
+      verify: (bloc) {
+        // The captured watermark is the pre-bump value, not the one markOpened
+        // wrote — the library-tap race that defeated newness is gone.
+        expect(bloc.state.lastOpenedAt, DateTime(2024, 1, 10));
+        verify(() => pieceRepository.markOpened(pieceId)).called(1);
+      },
     );
 
     test('initial state is loading with the given currentUserId', () {

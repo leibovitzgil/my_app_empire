@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:core_ui/core_ui.dart';
 import 'package:duet/features/score/src/bloc/score_bloc.dart';
 import 'package:duet/features/score/src/ui/widgets/sync_status_badge.dart';
@@ -28,8 +26,6 @@ class ReaderTopBar extends StatelessWidget {
     this.onPreviousPage,
     this.onNextPage,
     this.onOpenLayers,
-    this.onShare,
-    this.onImport,
     this.onPracticePage,
     this.compact = false,
     super.key,
@@ -88,12 +84,6 @@ class ReaderTopBar extends StatelessWidget {
   /// Called when the Layers button is tapped. `null` hides the button
   /// entirely (used when the Layers panel is docked inline instead).
   final VoidCallback? onOpenLayers;
-
-  /// Called when "Share my annotations" is selected. `null` hides the item.
-  final Future<void> Function()? onShare;
-
-  /// Called when "Import review bundle" is selected. `null` hides the item.
-  final Future<void> Function()? onImport;
 
   /// Called when "Practice this page" is selected. `null` hides the item.
   final VoidCallback? onPracticePage;
@@ -209,11 +199,7 @@ class ReaderTopBar extends StatelessWidget {
               ),
             ),
           ],
-          _OverflowMenu(
-            onPracticePage: onPracticePage,
-            onShare: onShare,
-            onImport: onImport,
-          ),
+          _OverflowMenu(onPracticePage: onPracticePage),
         ],
       ),
     );
@@ -333,11 +319,9 @@ class _Chevron extends StatelessWidget {
 }
 
 class _OverflowMenu extends StatelessWidget {
-  const _OverflowMenu({this.onPracticePage, this.onShare, this.onImport});
+  const _OverflowMenu({this.onPracticePage});
 
   final VoidCallback? onPracticePage;
-  final Future<void> Function()? onShare;
-  final Future<void> Function()? onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -348,16 +332,6 @@ class _OverflowMenu extends StatelessWidget {
           PopupMenuItem<void>(
             onTap: onPracticePage,
             child: const Text('Practice this page'),
-          ),
-        if (onShare != null)
-          PopupMenuItem<void>(
-            onTap: () => unawaited(onShare!()),
-            child: const Text('Share my annotations'),
-          ),
-        if (onImport != null)
-          PopupMenuItem<void>(
-            onTap: () => unawaited(onImport!()),
-            child: const Text('Import review bundle'),
           ),
       ],
     );

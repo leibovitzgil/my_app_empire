@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 ///
 /// `inkColors` is already deduped and capped by the caller (one
 /// `inkColorForId` colour per participant with at least one stroke on that
-/// page) — this widget just renders whatever it's given.
-typedef PageInkPresence = ({bool hasAudio, List<Color> inkColors});
+/// page) — this widget just renders whatever it's given. `hasNew` is set when
+/// the page carries ink or a note that's new since the viewer last looked
+/// (M4.3), driving a corner accent hint.
+typedef PageInkPresence = ({bool hasAudio, List<Color> inkColors, bool hasNew});
 
 /// The reader's left-hand page-thumbnails rail: a stylized (not real-PDF)
 /// thumbnail per page, with per-page ink/audio presence dots.
@@ -88,10 +90,13 @@ class _PageThumb extends StatelessWidget {
     final labelColor = selected ? scheme.onSurface : scheme.onSurfaceVariant;
     final inkColors = presence?.inkColors ?? const <Color>[];
     final hasAudio = presence?.hasAudio ?? false;
+    final hasNew = presence?.hasNew ?? false;
     return Semantics(
       button: true,
       selected: selected,
-      label: 'Page ${index + 1}${selected ? ', current page' : ''}',
+      label:
+          'Page ${index + 1}${selected ? ', current page' : ''}'
+          '${hasNew ? ', new annotations' : ''}',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -104,29 +109,54 @@ class _PageThumb extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 56,
-                    height: 72,
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: _paperColor,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: selected ? scheme.primary : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        for (var i = 0; i < 4; i++)
-                          Container(
-                            height: 2,
-                            width: double.infinity,
-                            color: Colors.black.withValues(alpha: 0.28),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 72,
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: _paperColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: selected
+                                ? scheme.primary
+                                : Colors.transparent,
+                            width: 2,
                           ),
-                      ],
-                    ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            for (var i = 0; i < 4; i++)
+                              Container(
+                                height: 2,
+                                width: double.infinity,
+                                color: Colors.black.withValues(alpha: 0.28),
+                              ),
+                          ],
+                        ),
+                      ),
+                      // "New on this page" corner hint (M4.3).
+                      if (hasNew)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: scheme.primary,
+                              border: Border.all(
+                                color: scheme.surface,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   ExcludeSemantics(

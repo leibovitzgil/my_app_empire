@@ -103,5 +103,55 @@ void main() {
         expect(deleted, isFalse);
       },
     );
+
+    testWidgets('a new, not-playing note announces itself as new', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AudioPinMarker(
+              note: _note('owner1'),
+              currentUserId: 'collaborator1',
+              isPlaying: false,
+              isNew: true,
+              onTap: () {},
+              onDelete: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.bySemanticsLabel('New audio note. Double tap to play.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a playing note drops the "new" announcement', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AudioPinMarker(
+              note: _note('owner1'),
+              currentUserId: 'collaborator1',
+              isPlaying: true,
+              isNew: true,
+              onTap: () {},
+              onDelete: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.bySemanticsLabel('Playing audio note. Double tap to stop.'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel('New audio note. Double tap to play.'),
+        findsNothing,
+      );
+    });
   });
 }

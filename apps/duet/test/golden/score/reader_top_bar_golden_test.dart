@@ -41,8 +41,6 @@ Widget _bar({
         onPreviousPage: () {},
         onNextPage: () {},
         onOpenLayers: () {},
-        onShare: () async {},
-        onImport: () async {},
         onPracticePage: () {},
       ),
     ),

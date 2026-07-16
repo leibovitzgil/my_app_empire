@@ -11,6 +11,7 @@ import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
+import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
 import 'package:duet/data/current_user.dart';
@@ -23,6 +24,7 @@ import 'package:duet/data/firebase_audio_object_store.dart';
 import 'package:duet/data/firebase_piece_binary_store.dart';
 import 'package:duet/data/firestore_annotation_repository.dart';
 import 'package:duet/data/firestore_piece_repository.dart';
+import 'package:duet/data/firestore_piece_sync_monitor.dart';
 import 'package:duet/data/local_piece_migrator.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
@@ -32,6 +34,7 @@ import 'package:duet/review_sync/review_sync.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
@@ -138,8 +141,8 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     );
     getIt.registerSingleton<DeviceTokenRegistry>(firestoreUserMessaging);
     getIt.registerSingleton<UserMessageGateway>(firestoreUserMessaging);
-    getIt.registerSingleton<_InboxNotificationBridge>(
-      _InboxNotificationBridge(
+    getIt.registerSingleton<InboxNotificationBridge>(
+      InboxNotificationBridge(
         userId: getIt<AuthRepository>().user,
         gateway: firestoreUserMessaging,
       ),
@@ -311,6 +314,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     );
   }
 
+  // Live reader sync signal (M4.1): the top-bar badge and Layers-panel prompt
+  // reflect real persistence state instead of a session-local flag. The
+  // default composition is always-synced (the on-device store has no remote to
+  // fall behind — and it keeps the headless gate Firebase-free, G2); under
+  // Firebase the monitor folds the piece's layers/notes snapshot metadata
+  // (pending writes + server reachability) and the M3.5 audio upload-queue
+  // depth into a `PieceSyncState`.
+  if (useFirebase) {
+    getIt.registerLazySingleton<PieceSyncMonitor>(
+      () => FirestorePieceSyncMonitor(
+        firestore: FirebaseFirestore.instance,
+        uploadQueue: getIt<AudioUploadQueue>(),
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<PieceSyncMonitor>(LocalPieceSyncMonitor.new);
+  }
+
   // Base-PDF upload on import (M3.3). The default composition keeps binaries
   // on-device (the local repositories own them), so there's nothing to push —
   // NoopPieceBinaryStore (G2: no Firebase object headless). Under Firebase the
@@ -427,6 +448,25 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     );
   });
 
+  // Nudge a piece's other participants ("<name> added notes") — a lightweight
+  // ping distinct from an access-granting invite (M4.2). The default sends the
+  // nudge `UserMessage` straight through the in-memory gateway (visible on the
+  // recipient's inbox stream in-process); under Firebase the send goes through
+  // the `sendNudge` callable, since clients can't write `userInbox` directly
+  // (M2.4). Both resolve the piece's participants and fan out the same payload.
+  getIt.registerLazySingleton<NudgeService>(() {
+    if (useFirebase) {
+      return CallableNudgeService(
+        functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+      );
+    }
+    return DefaultNudgeService(
+      pieceRepository: getIt<PieceRepository>(),
+      messageGateway: getIt<UserMessageGateway>(),
+      currentUserId: getIt<CurrentUser>().call,
+    );
+  });
+
   getIt.registerLazySingleton<DeepLinkService>(FakeDeepLinkService.new);
   // generated:register — `create_feature/create_package --wire duet` adds
   // registrations above this line. Do not remove this marker.
@@ -438,12 +478,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
 /// container, so there is no background push in v1 — see
 /// `FirestoreUserMessaging.sendToUser`'s doc). Re-subscribes to the
 /// message gateway's inbox whenever the signed-in user id changes (e.g.
-/// sign-in/out), and marks each surfaced message read so it's shown at
-/// most once. Only ever constructed under `useFirebase: true`.
-class _InboxNotificationBridge {
-  /// Creates an [_InboxNotificationBridge], subscribing to [userId]
+/// sign-in/out), showing each message at most once per session. Only ever
+/// constructed under `useFirebase: true`.
+///
+/// Surfacing a message is not the same as consuming it. A
+/// [UserMessage.requiresAction] message (an invite) stays unread until the
+/// user acts, because `read` is what the accept path checks for replay —
+/// marking it read here would burn the invite the instant it was notified.
+/// Everything else (a nudge) is done once shown, and is marked read so it
+/// leaves the inbox for good.
+///
+/// Public only so `test/inbox_notification_bridge_test.dart` can reach it:
+/// this bridge decides whether a message survives being notified, and that
+/// call is worth pinning.
+@visibleForTesting
+class InboxNotificationBridge {
+  /// Creates an [InboxNotificationBridge], subscribing to [userId]
   /// immediately.
-  _InboxNotificationBridge({
+  InboxNotificationBridge({
     required Stream<String?> userId,
     required UserMessageGateway gateway,
   }) : _gateway = gateway {
@@ -454,25 +506,40 @@ class _InboxNotificationBridge {
   late final StreamSubscription<String?> _userIdSubscription;
   StreamSubscription<List<UserMessage>>? _inboxSubscription;
 
+  /// Ids already shown this session. An action-required message stays in the
+  /// inbox until it's acted on, so it rides every subsequent snapshot —
+  /// without this it would re-notify on each one.
+  final Set<String> _shownIds = <String>{};
+
   void _onUserIdChanged(String? uid) {
     final previous = _inboxSubscription;
     _inboxSubscription = null;
     if (previous != null) unawaited(previous.cancel());
+    // A different user's inbox is a different set of ids; and re-notifying a
+    // still-pending invite on re-sign-in is correct — it *is* still pending.
+    _shownIds.clear();
     if (uid == null) return;
     _inboxSubscription = _gateway
         .inboxFor(uid)
-        .listen((messages) => unawaited(_showAndMarkRead(uid, messages)));
+        .listen((messages) => unawaited(_showUnshown(uid, messages)));
   }
 
-  /// Shows each of [messages] as a local notification and marks it read, so
-  /// a message the inbox has already surfaced isn't shown again on the next
-  /// snapshot.
-  Future<void> _showAndMarkRead(String uid, List<UserMessage> messages) async {
-    if (messages.isEmpty) return;
+  /// Shows each not-yet-shown message of [messages] as a local notification,
+  /// consuming only those that don't await an action from the user.
+  Future<void> _showUnshown(String uid, List<UserMessage> messages) async {
+    // `add` returns false for an id already present, so claiming the ids
+    // synchronously here keeps a snapshot arriving mid-await from re-showing.
+    final fresh = <UserMessage>[
+      for (final message in messages)
+        if (_shownIds.add(message.id)) message,
+    ];
+    if (fresh.isEmpty) return;
     final manager = await getIt.getAsync<NotificationsManager>();
-    for (final message in messages) {
+    for (final message in fresh) {
       await manager.showLocal(title: message.title, body: message.body);
-      await _gateway.markRead(uid, message.id);
+      if (!message.requiresAction) {
+        await _gateway.markRead(uid, message.id);
+      }
     }
   }
 

@@ -9,6 +9,12 @@ sealed class ScoreEvent extends Equatable {
 
 /// Opens the piece identified by [pieceId]: loads it and subscribes to its
 /// live annotations.
+///
+/// The bloc captures this viewer's read watermark itself while handling this
+/// event — before its own `markOpened` bumps it (M4.3, M3.7) — so the reader
+/// can flag any layer/note newer than the last open as "new since you last
+/// looked". Callers pass only the id; the watermark is not a constructor
+/// param, keeping the reader the single source of the pre-open value.
 final class ScoreOpened extends ScoreEvent {
   const ScoreOpened(this.pieceId);
 
@@ -16,6 +22,17 @@ final class ScoreOpened extends ScoreEvent {
 
   @override
   List<Object?> get props => [pieceId];
+}
+
+/// The current user played (and thereby "saw") the audio note [noteId], so its
+/// "new" marker drops for the rest of this session (M4.3).
+final class AudioNotePlayed extends ScoreEvent {
+  const AudioNotePlayed(this.noteId);
+
+  final String noteId;
+
+  @override
+  List<Object?> get props => [noteId];
 }
 
 /// Internal: fired whenever `AnnotationRepository.watch` emits a new

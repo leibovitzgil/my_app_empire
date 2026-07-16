@@ -192,7 +192,12 @@ class FileShareReviewSyncService implements ReviewSyncService {
   }) => Result.guard<ExportedBundle>(() async {
     final resolvedAuthorId = authorId ?? _currentUserId();
     final piece = await _requirePiece(pieceId);
-    final annotations = await _annotationRepository.watch(pieceId).first;
+    // Read the snapshot *including* tombstones (M4.4) so a soft-deleted note
+    // travels in the bundle and the receiver drops it too — `watch` would hide
+    // it, letting a stale copy resurrect on the far side.
+    final annotations = await _annotationRepository.snapshotWithTombstones(
+      pieceId,
+    );
     final layer = annotations.layers.firstWhere(
       (l) => l.ownerId == resolvedAuthorId,
       orElse: () => InkLayer(
@@ -208,6 +213,12 @@ class FileShareReviewSyncService implements ReviewSyncService {
     final archive = Archive();
     final audioEntries = <ManifestAudioEntry>[];
     for (final note in authorNotes) {
+      if (note.isTombstoned) {
+        // A tombstone carries only metadata + `deletedAt` — no audio bytes,
+        // no asset lookup — so the receiver's `replaceAuthorSlice` drops it.
+        audioEntries.add(ManifestAudioEntry(note: note, audioFile: null));
+        continue;
+      }
       final pathResult = await _audioAssetStore.pathFor(
         note.audioAssetId,
         pieceId: pieceId,
@@ -280,7 +291,8 @@ class FileShareReviewSyncService implements ReviewSyncService {
       manifest: ReviewBundleSummary(
         pieceTitle: piece.title,
         strokeCount: layer.strokes.length,
-        audioNoteCount: authorNotes.length,
+        // Count only live notes — a tombstone is a delete, not shared audio.
+        audioNoteCount: authorNotes.where((n) => !n.isTombstoned).length,
         exportedAt: now,
       ),
     );
@@ -298,145 +310,147 @@ class FileShareReviewSyncService implements ReviewSyncService {
       });
 
   @override
-  Future<Result<ReviewBundleSummary>> importBundle(String filePath) =>
-      Result.guard<ReviewBundleSummary>(() async {
-        final bytes = await File(filePath).readAsBytes();
-        final Archive archive;
-        try {
-          archive = ZipDecoder().decodeBytes(bytes);
-        } on Object catch (error) {
-          throw ReviewSyncException('Not a valid .duet bundle: $error');
-        }
+  Future<Result<ReviewBundleSummary>> importBundle(
+    String filePath,
+  ) => Result.guard<ReviewBundleSummary>(() async {
+    final bytes = await File(filePath).readAsBytes();
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes);
+    } on Object catch (error) {
+      throw ReviewSyncException('Not a valid .duet bundle: $error');
+    }
 
-        final manifestEntries = archive.files.where(
-          (f) => f.name == 'manifest.json',
+    final manifestEntries = archive.files.where(
+      (f) => f.name == 'manifest.json',
+    );
+    if (manifestEntries.isEmpty) {
+      throw const ReviewSyncException('Bundle is missing manifest.json');
+    }
+    final manifestJson =
+        jsonDecode(utf8.decode(manifestEntries.first.content as List<int>))
+            as Map<String, dynamic>;
+    final manifest = ReviewManifest.fromJson(manifestJson);
+
+    final piece = await _resolvePiece(manifest, archive);
+
+    final lastAppliedKey = _lastAppliedKey(
+      manifest.pieceId,
+      manifest.authorId,
+    );
+    final lastApplied = _storage.getInt(lastAppliedKey) ?? 0;
+    if (manifest.exportedAtMillis <= lastApplied) {
+      // Stale bundle (already-applied or out-of-order); per the sync
+      // model this is a silent no-op — signalled here via zero counts.
+      return ReviewBundleSummary(
+        pieceTitle: piece.title,
+        strokeCount: 0,
+        audioNoteCount: 0,
+        exportedAt: DateTime.fromMillisecondsSinceEpoch(
+          manifest.exportedAtMillis,
+        ),
+      );
+    }
+
+    final role = _roleOf(piece, manifest.authorId);
+    final tempDir = await _bundlesDirectory();
+    if (!tempDir.existsSync()) tempDir.createSync(recursive: true);
+
+    final newAudioNotes = <AudioNote>[];
+    for (final entry in manifest.audioEntries) {
+      final audioFile = entry.audioFile;
+      if (audioFile == null) {
+        // A tombstone entry (M4.4): no audio to restore. Carry the
+        // soft-delete through so `replaceAuthorSlice` drops the note on
+        // this device too — converging instead of resurrecting.
+        newAudioNotes.add(entry.note);
+        continue;
+      }
+      final zipEntries = archive.files.where(
+        (f) => f.name == 'audio/$audioFile',
+      );
+      if (zipEntries.isEmpty) {
+        throw ReviewSyncException(
+          'Missing audio file for note ${entry.note.id}',
         );
-        if (manifestEntries.isEmpty) {
-          throw const ReviewSyncException('Bundle is missing manifest.json');
-        }
-        final manifestJson =
-            jsonDecode(utf8.decode(manifestEntries.first.content as List<int>))
-                as Map<String, dynamic>;
-        final manifest = ReviewManifest.fromJson(manifestJson);
+      }
+      final audioBytes = zipEntries.first.content as List<int>;
+      final tempPath = p.join(
+        tempDir.path,
+        'import_${entry.note.id}${p.extension(audioFile)}',
+      );
+      final tempFile = File(tempPath);
+      await tempFile.writeAsBytes(audioBytes);
+      final putResult = await _audioAssetStore.put(
+        tempPath,
+        pieceId: manifest.pieceId,
+      );
+      if (tempFile.existsSync()) await tempFile.delete();
+      final assetId = switch (putResult) {
+        Success<String>(:final value) => value,
+        ResultFailure<String>(:final error) => throw ReviewSyncException(
+          'Failed to store imported audio for note ${entry.note.id}: '
+          '$error',
+        ),
+      };
+      // Substitute this device's freshly-assigned asset id; deletedAt stays
+      // null for a live note.
+      newAudioNotes.add(entry.note.copyWith(audioAssetId: assetId));
+    }
+    // Only live (non-tombstone) notes count as imported "content" for the
+    // summary and the notification — a delete converges silently.
+    final liveImported = newAudioNotes.where((n) => !n.isTombstoned).toList();
 
-        final piece = await _resolvePiece(manifest, archive);
+    // Capture the author's previous audio assets so they can be cleaned
+    // up once the replacement below has succeeded, avoiding orphaned
+    // files without risking data loss if the replace itself fails.
+    final current = await _annotationRepository.watch(manifest.pieceId).first;
+    final staleAssetIds = current.audioNotes
+        .where((n) => n.authorId == manifest.authorId)
+        .map((n) => n.audioAssetId)
+        .toSet();
 
-        final lastAppliedKey = _lastAppliedKey(
-          manifest.pieceId,
-          manifest.authorId,
-        );
-        final lastApplied = _storage.getInt(lastAppliedKey) ?? 0;
-        if (manifest.exportedAtMillis <= lastApplied) {
-          // Stale bundle (already-applied or out-of-order); per the sync
-          // model this is a silent no-op — signalled here via zero counts.
-          return ReviewBundleSummary(
-            pieceTitle: piece.title,
-            strokeCount: 0,
-            audioNoteCount: 0,
-            exportedAt: DateTime.fromMillisecondsSinceEpoch(
-              manifest.exportedAtMillis,
-            ),
-          );
-        }
+    (await _annotationRepository.replaceAuthorSlice(
+      manifest.pieceId,
+      manifest.authorId,
+      role: role,
+      strokes: manifest.strokes,
+      audioNotes: newAudioNotes,
+    )).orThrow();
 
-        final role = _roleOf(piece, manifest.authorId);
-        final tempDir = await _bundlesDirectory();
-        if (!tempDir.existsSync()) tempDir.createSync(recursive: true);
+    for (final assetId in staleAssetIds) {
+      await _audioAssetStore.delete(assetId, pieceId: manifest.pieceId);
+    }
 
-        final newAudioNotes = <AudioNote>[];
-        for (final entry in manifest.audioEntries) {
-          final zipEntries = archive.files.where(
-            (f) => f.name == 'audio/${entry.audioFile}',
-          );
-          if (zipEntries.isEmpty) {
-            throw ReviewSyncException(
-              'Missing audio file for note ${entry.note.id}',
-            );
-          }
-          final audioBytes = zipEntries.first.content as List<int>;
-          final tempPath = p.join(
-            tempDir.path,
-            'import_${entry.note.id}${p.extension(entry.audioFile)}',
-          );
-          final tempFile = File(tempPath);
-          await tempFile.writeAsBytes(audioBytes);
-          final putResult = await _audioAssetStore.put(
-            tempPath,
-            pieceId: manifest.pieceId,
-          );
-          if (tempFile.existsSync()) await tempFile.delete();
-          final assetId = switch (putResult) {
-            Success<String>(:final value) => value,
-            ResultFailure<String>(:final error) => throw ReviewSyncException(
-              'Failed to store imported audio for note ${entry.note.id}: '
-              '$error',
-            ),
-          };
-          newAudioNotes.add(
-            AudioNote(
-              id: entry.note.id,
-              authorId: entry.note.authorId,
-              audioAssetId: assetId,
-              pageIndex: entry.note.pageIndex,
-              durationMs: entry.note.durationMs,
-              region: entry.note.region,
-              createdAt: entry.note.createdAt,
-            ),
-          );
-        }
+    await _storage.setInt(lastAppliedKey, manifest.exportedAtMillis);
 
-        // Capture the author's previous audio assets so they can be cleaned
-        // up once the replacement below has succeeded, avoiding orphaned
-        // files without risking data loss if the replace itself fails.
-        final current = await _annotationRepository
-            .watch(manifest.pieceId)
-            .first;
-        final staleAssetIds = current.audioNotes
-            .where((n) => n.authorId == manifest.authorId)
-            .map((n) => n.audioAssetId)
-            .toSet();
+    final changed = manifest.strokes.isNotEmpty || liveImported.isNotEmpty;
+    final onImported = _onImported;
+    if (changed && onImported != null) {
+      // The author's display name travels with the manifest (see
+      // `exportBundle`'s `authorName`), not the receiving device's own
+      // identity — it's whoever left the feedback, not who's reading it.
+      // Older bundles (or an author who had no display name set at
+      // export time) carry `null`, so this falls back to generic copy
+      // rather than showing a blank/placeholder name.
+      final authorName = manifest.authorName;
+      await onImported(
+        title: authorName != null
+            ? 'New feedback from $authorName'
+            : 'New review feedback',
+        body:
+            '${piece.title}: ${manifest.strokes.length} strokes, '
+            '${liveImported.length} notes',
+      );
+    }
 
-        (await _annotationRepository.replaceAuthorSlice(
-          manifest.pieceId,
-          manifest.authorId,
-          role: role,
-          strokes: manifest.strokes,
-          audioNotes: newAudioNotes,
-        )).orThrow();
-
-        for (final assetId in staleAssetIds) {
-          await _audioAssetStore.delete(assetId, pieceId: manifest.pieceId);
-        }
-
-        await _storage.setInt(lastAppliedKey, manifest.exportedAtMillis);
-
-        final changed = manifest.strokes.isNotEmpty || newAudioNotes.isNotEmpty;
-        final onImported = _onImported;
-        if (changed && onImported != null) {
-          // The author's display name travels with the manifest (see
-          // `exportBundle`'s `authorName`), not the receiving device's own
-          // identity — it's whoever left the feedback, not who's reading it.
-          // Older bundles (or an author who had no display name set at
-          // export time) carry `null`, so this falls back to generic copy
-          // rather than showing a blank/placeholder name.
-          final authorName = manifest.authorName;
-          await onImported(
-            title: authorName != null
-                ? 'New feedback from $authorName'
-                : 'New review feedback',
-            body:
-                '${piece.title}: ${manifest.strokes.length} strokes, '
-                '${newAudioNotes.length} notes',
-          );
-        }
-
-        return ReviewBundleSummary(
-          pieceTitle: piece.title,
-          strokeCount: manifest.strokes.length,
-          audioNoteCount: newAudioNotes.length,
-          exportedAt: DateTime.fromMillisecondsSinceEpoch(
-            manifest.exportedAtMillis,
-          ),
-        );
-      });
+    return ReviewBundleSummary(
+      pieceTitle: piece.title,
+      strokeCount: manifest.strokes.length,
+      audioNoteCount: liveImported.length,
+      exportedAt: DateTime.fromMillisecondsSinceEpoch(
+        manifest.exportedAtMillis,
+      ),
+    );
+  });
 }

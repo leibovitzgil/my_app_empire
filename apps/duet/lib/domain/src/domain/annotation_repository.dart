@@ -42,8 +42,15 @@ class PieceAnnotations extends Equatable {
 /// re-deriving "who am I".
 abstract class AnnotationRepository {
   /// Emits the current [PieceAnnotations] for [pieceId], updating as ink
-  /// strokes and audio notes are added or removed.
+  /// strokes and audio notes are added or removed. Tombstoned (soft-deleted)
+  /// audio notes are filtered out, so blocs and UI never see a deleted note.
   Stream<PieceAnnotations> watch(String pieceId);
+
+  /// A one-shot snapshot of [pieceId]'s annotations **including** tombstoned
+  /// (soft-deleted) audio notes, which [watch] hides. Used by the review-sync
+  /// export so a soft-delete propagates through an offline bundle instead of
+  /// the receiver silently keeping the note (M4.4).
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId);
 
   /// Appends [stroke] to [pieceId]'s ink layer for its author.
   Future<Result<void>> addStroke(String pieceId, InkStroke stroke);

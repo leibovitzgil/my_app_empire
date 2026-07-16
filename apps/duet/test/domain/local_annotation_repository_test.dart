@@ -246,6 +246,54 @@ void main() {
       expect((result as ResultFailure<void>).error, isA<OwnershipViolation>());
     });
 
+    test(
+      'deleteAudioNote tombstones (M4.4): watch hides the note, but the '
+      'snapshot retains it with a deletedAt so a fresh repo never '
+      'resurrects it',
+      () async {
+        await repository.addAudioNote(piece.id, note());
+
+        final result = await repository.deleteAudioNote(piece.id, 'n1');
+        expect(result, isA<Success<void>>());
+
+        // Hidden from consumers…
+        final visible = await repository.watch(piece.id).first;
+        expect(visible.audioNotes, isEmpty);
+
+        // …but retained as a tombstone in storage.
+        final snapshot = await repository.snapshotWithTombstones(piece.id);
+        expect(snapshot.audioNotes.single.id, 'n1');
+        expect(snapshot.audioNotes.single.isTombstoned, isTrue);
+
+        // A fresh repository over the same storage keeps it deleted — the
+        // tombstone persisted, so it can't reappear on reload.
+        final fresh = LocalAnnotationRepository(
+          storage: storage,
+          currentUserId: () => currentUserId,
+          pieceRepository: _FakePieceRepository(piece),
+        );
+        expect((await fresh.watch(piece.id).first).audioNotes, isEmpty);
+        expect(
+          (await fresh.snapshotWithTombstones(
+            piece.id,
+          )).audioNotes.single.isTombstoned,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'deleteAudioNote on an already-tombstoned note reads as unknown (M4.4)',
+      () async {
+        await repository.addAudioNote(piece.id, note());
+        await repository.deleteAudioNote(piece.id, 'n1');
+
+        final again = await repository.deleteAudioNote(piece.id, 'n1');
+        expect(again, isA<ResultFailure<void>>());
+        expect((again as ResultFailure<void>).error, isA<StateError>());
+      },
+    );
+
     test('watch emits the current state immediately, then updates', () async {
       final emissions = <int>[];
       final subscription = repository

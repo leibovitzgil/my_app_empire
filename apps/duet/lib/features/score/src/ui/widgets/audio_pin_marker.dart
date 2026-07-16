@@ -24,6 +24,7 @@ class AudioPinMarker extends StatelessWidget {
     required this.onDelete,
     this.accentColor,
     this.progress,
+    this.isNew = false,
     super.key,
   });
 
@@ -49,6 +50,11 @@ class AudioPinMarker extends StatelessWidget {
   /// Called when the user confirms deletion from the long-press menu.
   final VoidCallback onDelete;
 
+  /// Whether this note was recorded since the viewer last opened the piece and
+  /// hasn't been played yet this session (M4.3) — shows a "new" badge. Only
+  /// ever set for another participant's notes; drops once played.
+  final bool isNew;
+
   bool get _ownedByCurrentUser => note.authorId == currentUserId;
 
   @override
@@ -56,45 +62,74 @@ class AudioPinMarker extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final ringColor =
         accentColor ?? (_ownedByCurrentUser ? scheme.primary : scheme.tertiary);
+    final showNew = isNew && !isPlaying;
     final label = isPlaying
         ? 'Playing audio note. Double tap to stop.'
         : _ownedByCurrentUser
         ? 'Your audio note. Double tap to play.'
+        : showNew
+        ? 'New audio note. Double tap to play.'
         : 'Audio note. Double tap to play.';
 
     final marker = SizedBox(
       width: 48,
       height: 48,
-      child: Material(
-        color: scheme.surfaceContainerHigh,
-        shape: CircleBorder(
-          side: BorderSide(color: ringColor, width: isPlaying ? 3 : 2),
-        ),
-        shadowColor: scheme.shadow,
-        elevation: 3,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Center(
-            child: isPlaying
-                ? Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 2.5,
-                          color: ringColor,
-                        ),
-                      ),
-                      Icon(Icons.stop, color: ringColor, size: 16),
-                    ],
-                  )
-                : Icon(Icons.play_arrow, color: ringColor, size: 20),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Material(
+              color: scheme.surfaceContainerHigh,
+              shape: CircleBorder(
+                side: BorderSide(color: ringColor, width: isPlaying ? 3 : 2),
+              ),
+              shadowColor: scheme.shadow,
+              elevation: 3,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: Center(
+                  child: isPlaying
+                      ? Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: CircularProgressIndicator(
+                                value: progress,
+                                strokeWidth: 2.5,
+                                color: ringColor,
+                              ),
+                            ),
+                            Icon(Icons.stop, color: ringColor, size: 16),
+                          ],
+                        )
+                      : Icon(Icons.play_arrow, color: ringColor, size: 20),
+                ),
+              ),
+            ),
           ),
-        ),
+          // "New since you last looked" badge (M4.3), pinned to the corner so
+          // it reads at a glance without changing the marker's footprint.
+          if (showNew)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                width: 13,
+                height: 13,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: scheme.primary,
+                  border: Border.all(
+                    color: scheme.surfaceContainerHigh,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
 

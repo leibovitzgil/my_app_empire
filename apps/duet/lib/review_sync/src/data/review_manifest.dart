@@ -14,8 +14,10 @@ class ManifestAudioEntry {
   final AudioNote note;
 
   /// The filename this note's audio was packaged under, under `audio/` in
-  /// the bundle archive.
-  final String audioFile;
+  /// the bundle archive, or `null` when [note] is a tombstone (M4.4) — a
+  /// soft-deleted note carries no audio bytes, only enough metadata for the
+  /// receiver to drop it too.
+  final String? audioFile;
 }
 
 /// The parsed contents of a `.duet` review bundle's `manifest.json`: one
@@ -169,17 +171,19 @@ Map<String, dynamic> _audioEntryToJson(ManifestAudioEntry entry) =>
       'durationMs': entry.note.durationMs,
       'region': _regionToJson(entry.note.region),
       'createdAtMillis': entry.note.createdAt.millisecondsSinceEpoch,
+      'deletedAtMillis': entry.note.deletedAt?.millisecondsSinceEpoch,
       'audioFile': entry.audioFile,
     };
 
 ManifestAudioEntry _audioEntryFromJson(Map<String, dynamic> json) {
+  final deletedAtMillis = json['deletedAtMillis'] as int?;
   final note = AudioNote(
     id: json['id'] as String,
     authorId: json['authorId'] as String,
     // Placeholder: asset ids are local-store-generated and never synced.
     // The importer must copy the referenced bytes into its own
     // `AudioAssetStore` and substitute the id it's assigned before this
-    // note is persisted.
+    // note is persisted (a tombstoned entry keeps this empty — no asset).
     audioAssetId: '',
     pageIndex: json['pageIndex'] as int,
     durationMs: json['durationMs'] as int,
@@ -187,9 +191,14 @@ ManifestAudioEntry _audioEntryFromJson(Map<String, dynamic> json) {
     createdAt: DateTime.fromMillisecondsSinceEpoch(
       json['createdAtMillis'] as int,
     ),
+    // A tombstone (M4.4) round-trips through the bundle so the delete
+    // converges on the receiver; absent for a live note or a legacy bundle.
+    deletedAt: deletedAtMillis == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(deletedAtMillis),
   );
   return ManifestAudioEntry(
     note: note,
-    audioFile: json['audioFile'] as String,
+    audioFile: json['audioFile'] as String?,
   );
 }

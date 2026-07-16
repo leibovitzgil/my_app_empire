@@ -18,8 +18,6 @@ Future<void> _pump(
   VoidCallback? onPreviousPage,
   VoidCallback? onNextPage,
   VoidCallback? onOpenLayers,
-  Future<void> Function()? onShare,
-  Future<void> Function()? onImport,
   VoidCallback? onPracticePage,
 }) {
   return tester.pumpWidget(
@@ -40,8 +38,6 @@ Future<void> _pump(
           onPreviousPage: onPreviousPage,
           onNextPage: onNextPage,
           onOpenLayers: onOpenLayers,
-          onShare: onShare,
-          onImport: onImport,
           onPracticePage: onPracticePage,
         ),
       ),
@@ -170,6 +166,25 @@ void main() {
       expect(find.text('Syncing…'), findsOneWidget);
     });
 
+    testWidgets('the sync badge re-renders as the status transitions', (
+      tester,
+    ) async {
+      // The badge is a pure function of syncStatus, which the app-glue layer
+      // now drives from a live `PieceSyncMonitor` (M4.1) — so a changing sync
+      // state must flip the pill without any other input changing. Starts on
+      // the `_pump` default (notSynced), then drives through the live states.
+      await _pump(tester);
+      expect(find.text('Not synced'), findsOneWidget);
+
+      await _pump(tester, syncStatus: ScoreSyncStatus.syncing);
+      expect(find.text('Not synced'), findsNothing);
+      expect(find.text('Syncing…'), findsOneWidget);
+
+      await _pump(tester, syncStatus: ScoreSyncStatus.synced);
+      expect(find.text('Syncing…'), findsNothing);
+      expect(find.text('Synced'), findsOneWidget);
+    });
+
     testWidgets('the Layers button only shows when onOpenLayers is set', (
       tester,
     ) async {
@@ -186,36 +201,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Practice this page'), findsNothing);
+      // The bundle share/import items moved to Piece Detail (M4.2); the reader
+      // overflow no longer carries them.
       expect(find.text('Share my annotations'), findsNothing);
       expect(find.text('Import review bundle'), findsNothing);
     });
 
-    testWidgets('overflow menu actions invoke their callbacks', (
-      tester,
-    ) async {
+    testWidgets('the overflow menu invokes Practice', (tester) async {
       var practiceCalled = false;
-      var shareCalled = false;
-      await _pump(
-        tester,
-        onPracticePage: () => practiceCalled = true,
-        onShare: () async => shareCalled = true,
-      );
+      await _pump(tester, onPracticePage: () => practiceCalled = true);
 
       await tester.tap(find.byIcon(Icons.more_vert));
       await tester.pumpAndSettle();
       expect(find.text('Practice this page'), findsOneWidget);
-      expect(find.text('Share my annotations'), findsOneWidget);
-      expect(find.text('Import review bundle'), findsNothing);
 
       await tester.tap(find.text('Practice this page'));
       await tester.pumpAndSettle();
       expect(practiceCalled, isTrue);
-
-      await tester.tap(find.byIcon(Icons.more_vert));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Share my annotations'));
-      await tester.pumpAndSettle();
-      expect(shareCalled, isTrue);
     });
 
     testWidgets('previous/next page chevrons are disabled when null', (

@@ -17,6 +17,7 @@ class InkLayer extends Equatable {
     required this.ownerId,
     required this.role,
     required this.strokes,
+    this.updatedAt,
   });
 
   /// The id of the participant this layer belongs to.
@@ -28,15 +29,22 @@ class InkLayer extends Equatable {
   /// The strokes this participant has drawn.
   final List<InkStroke> strokes;
 
-  /// Returns a copy with [strokes] replaced.
-  InkLayer copyWith({List<InkStroke>? strokes}) {
+  /// When this layer was last written, if known — the cloud layer document's
+  /// `updatedAt` (M3.2). Drives the reader's "new since you last looked"
+  /// markers (M4.3); `null` on backends that don't stamp it (the on-device
+  /// store), where there's no cross-participant newness to show.
+  final DateTime? updatedAt;
+
+  /// Returns a copy with [strokes] and/or [updatedAt] replaced.
+  InkLayer copyWith({List<InkStroke>? strokes, DateTime? updatedAt}) {
     return InkLayer(
       ownerId: ownerId,
       role: role,
       strokes: strokes ?? this.strokes,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   @override
-  List<Object?> get props => [ownerId, role, strokes];
+  List<Object?> get props => [ownerId, role, strokes, updatedAt];
 }

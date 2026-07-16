@@ -146,10 +146,10 @@ in the Track B backlog.
 | M3.6 | ☑ DI flip + one-time local→cloud migration | M3.1–M3.5 |
 | M3.7 | ☑ Per-user last-opened watermark + real unread signal | M3.1, M2.2 |
 | M3.8 | ☑ Delete cascade Function + purge v2 + cloud-pieces E2E | M3.6, M1.8 |
-| M4.1 | ☐ Real `ScoreSyncStatus` from repository state | M3.2 |
-| M4.2 | ☐ Demote bundles; "nudge collaborator" affordances | M4.1 |
-| M4.3 | ☐ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
-| M4.4 | ☐ Soft-delete tombstones for audio notes | M3.2 |
+| M4.1 | ☑ Real `ScoreSyncStatus` from repository state | M3.2 |
+| M4.2 | ☑ Demote bundles; "nudge collaborator" affordances | M4.1 |
+| M4.3 | ☑ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
+| M4.4 | ☑ Soft-delete tombstones for audio notes | M3.2 |
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☐ Invite tokens as expiring Firestore docs | M2.4 |
 | M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
@@ -1750,6 +1750,36 @@ plain constructor param (`ScoreViewerScreen.syncStatus`, default
 stroke shows "Syncing…" on reconnect until flushed, then "Synced"; gate +
 goldens green.
 
+**Landed.** **Domain seam.** New `PieceSyncMonitor` contract +
+`PieceSyncState {synced, syncing, offline}` in the domain kernel
+(`domain/src/domain/piece_sync_monitor.dart`), with the Firebase-free
+`LocalPieceSyncMonitor` (always `synced` — the on-device store has no remote
+to fall behind) beside the other local impls. **Firebase impl.**
+`FirestorePieceSyncMonitor` (`data/`) folds three live signals into a
+de-duplicated state stream: the piece's `layers` + `notes` snapshot metadata
+(`includeMetadataChanges: true` → `isFromCache`/`hasPendingWrites`) and the
+M3.5 audio upload-queue depth. **Precedence** (`pieceSyncStateFrom`): any
+un-acked local write ⇒ `syncing`; else a cache-only read ⇒ `offline`; else
+`synced`. Pending outranks offline so the airplane-mode demo (no pending
+writes) reads offline while an online edit reads syncing→synced without
+flashing offline. Offline is derived from Firestore's own `isFromCache` — no
+new `connectivity_*` dependency. **App glue.** `DuetScorePage` now drives the
+badge from `PieceSyncMonitor.watch(pieceId)` via a `StreamBuilder`
+(`PieceSyncState`→`ScoreSyncStatus`; `offline`→`notSynced`, the
+`cloud_off_outlined` pill — copy intent "Offline — changes saved on this
+iPad"); the session-local `_syncStatus` `setState` plumbing in
+`_share`/`_import` is gone. **G3 preserved:** `ScoreViewerScreen.syncStatus`
+stays a plain presentational param; the `score` feature never sees the
+monitor. **DI:** registered in both branches (Firestore under `useFirebase`,
+local otherwise), so the headless gate stays Firebase-free (G2). **Tests:**
+`pieceSyncStateFrom` matrix + `combinePieceSyncSignals` fake-stream
+transitions (incl. the offline→syncing→synced reader narrative), the local
+monitor, an `injection_test` binding assertion, and a `reader_top_bar`
+transition test; the three reader-bar goldens verified **unchanged** (the
+badge widget is untouched). The hand-rolled DI in
+`app_deep_link_redirect_test` gained the local monitor registration. Full
+workspace gate green.
+
 ### M4.2 — Demote bundle affordances; "nudge collaborator"
 
 **Goal:** `.duet` bundles leave the primary reader UI (kept as the
@@ -1790,6 +1820,34 @@ annotations" / "Import review bundle"
 account's inbox (emulator); bundle flow still works from piece detail
 (escape hatch preserved); gate + goldens green.
 
+**Landed.** **Nudge send path.** New `NudgeService` seam (feature_pairing)
+— a `<name> added notes` ping distinct from an access-granting invite.
+`DefaultNudgeService` resolves the piece's participants and sends a
+`nudge`-type `UserMessage` (`{type, pieceId, fromName}`) to each *other*
+participant through the in-memory gateway (the existing foreground inbox
+bridge surfaces it; push activates with M5.3, interface unchanged). Under
+Firebase the send is server-authoritative via a new **`sendNudge` Cloud
+Function** — clients can't create `userInbox` docs (M2.4), so the callable
+verifies the caller is a participant (`pieces/{id}.participantIds`), derives
+`fromName` from the caller's token (not client-trusted), and fans out with
+the Admin SDK. `CallableNudgeService` wraps it; DI binds callable under
+`useFirebase`, default otherwise (G2). **Reader UI.** The overflow menu
+drops both bundle items; `onShareRequested`/`onImportRequested` collapse to
+one `onNudgeRequested`; the Layers-panel prompt is now
+`Let <name> know you added notes` + **Nudge** (target resolved from the
+piece's other participants — one name, "your collaborators", or hidden when
+solo); the save-note snackbar action is **Nudge**. `feature_score` stays
+presentation-only (G3). **Offline sharing.** Bundle export/import move to a
+new **"Offline sharing"** section on `PieceDetailScreen`, wired from app
+glue (`ReviewSyncService` + file picker) threaded LibraryPage →
+LibraryHomeScreen → PieceDetailPage — escape hatch preserved, off the
+reader. **Tests:** `DefaultNudgeService` (fan-out / self-exclusion / solo
+no-op / failure), `sendNudge` vitest (auth, participant gate, fan-out, name
+fallback — 38 functions tests green), piece-detail Offline-sharing section,
+reader-bar menu + layers-panel nudge copy, injection bindings; layers-panel
+golden reshot for the nudge card, reader-bar goldens **unchanged**. Full
+workspace gate + functions tsc/eslint/vitest green.
+
 ### M4.3 — Attention loop: per-layer new-annotation markers + audio-pin "new"
 
 **Goal:** A collaborator opening a shared sheet sees *what changed since
@@ -1820,6 +1878,38 @@ they last looked*.
 **Done when:** two-account emulator check: B annotates while A is away; A
 reopens and sees layer dot + new pin; markers gone on next reopen; gate +
 goldens green.
+
+**Landed.** **Newness source.** `InkLayer` gained `updatedAt` (mapped from the
+cloud layer doc's `updatedAt`; `null` on the on-device store, so the mock path
+shows no cross-participant newness — G2). **The reader is the single watermark
+writer.** `ScoreBloc._onOpened` reads the viewer's `lastOpenedAt` itself from
+`watchReads().first[pieceId]` **before** its own `markOpened` bumps it (the
+one-shot read resolves immediately — the local `watchReads` yields the current
+map on subscribe; a best-effort `_readWatermark` folds any stream error to
+`null`). `ScoreOpened` carries only the id. The gallery tap
+(`LibraryBloc._onPieceViewed`) now *optimistically* clears the dot but no longer
+persists `markOpened`, and opening the Piece Detail screen doesn't mark viewed
+at all — so the reader's pre-open capture can't lose a race to the library's
+own on-tap write (the review-caught bug: the library bumped the watermark
+before the reader read it, defeating newness on the primary open path).
+`score_bloc_test` stubs `watchReads` accordingly, including a stateful stub
+proving the captured value is the pre-`markOpened` one. **Bloc
+projection.** `ScoreBloc` derives `ParticipantLayer.hasNewInk`
+(`layer.updatedAt > lastOpenedAt`, never the viewer's own, false when either is
+null) and `ScoreState.isNoteNew` (`note.createdAt > lastOpenedAt`, other author,
+not yet played). Newness is computed once per open and clears on the next
+reopen (that reopen's `markOpened` advanced the watermark); the only mid-session
+decay is the `AudioNotePlayed` event, which adds the note to a session-local
+`seenNoteIds` so playing a "new" note drops its marker. **UI.** Layers-panel
+`_LayerRow` shows a primary dot + ", new annotations" semantics;
+`AudioPinMarker` gains a corner "new" badge (hidden while playing);
+`PageInkPresence` gained `hasNew`, hinting fresh ink/notes on the page rail's
+`_PageThumb`. **Tests:** bloc projection (fixed dates) for
+hasNewInk/isNoteNew/play-drops-marker; widget tests for the layer-row dot, pin
+new-state, and page-rail accent + semantics; goldens reshot for the pin
+new-badge, page rail, and the layers-panel dot (the `clean_workspace` layers
+golden reshot too — same shared fixture). Full workspace gate + score goldens
+green.
 
 ### M4.4 — Soft-delete tombstones for audio notes
 
@@ -1852,6 +1942,33 @@ Firestore impl M3.2 mirrored it). Schema already reserves `deletedAt`
 **Done when:** convergence tests green on emulator; no resurrection after
 reconnect; gate green.
 
+**Landed.** **Domain.** `AudioNote` gained `DateTime? deletedAt` (+ `copyWith`,
+`isTombstoned`, `props`); both mappers round-trip it (local JSON: nullable
+ISO-8601; Firestore: `Timestamp?`). **Repos.** `deleteAudioNote` now sets
+`deletedAt` instead of removing the note — the local repo keeps it in storage
+(a delete on an already-tombstoned note reads as unknown, matching the cloud
+repo); the Firestore repo issues `update({deletedAt})` (the only note mutation
+the M2.2 rules permit). Both `watch`es hide tombstoned notes, so blocs/UI are
+unchanged; a new `snapshotWithTombstones` on the contract exposes the raw set
+for one caller only — the review-sync export. **Bundles.**
+`ManifestAudioEntry.audioFile` went nullable and the manifest round-trips
+`deletedAtMillis`; `exportBundle` reads `snapshotWithTombstones` and packages a
+tombstone as a metadata-only entry (no audio bytes), while `importBundle`
+applies it through `replaceAuthorSlice` so an offline peer drops the note
+instead of resurrecting it (summary/notification count only live notes).
+**GC.** `gcTombstones` (scheduled, daily) collection-group-queries `notes` for
+`deletedAt` ≤ now−30d and hard-deletes the doc + its `audio/{assetId}` Storage
+object; a type guard skips live notes (`deletedAt: null` sorts before every
+timestamp, so it can slip the `<=` filter). **Ink is out of scope** — erases
+are single-author `layers/{uid}` rewrites that converge by last-writer-wins on
+one doc, nothing to resurrect (rationale recorded in the M2.1 schema doc).
+**Tests:** local + Firestore repo tombstone (watch hides / doc survives with
+`deletedAt` / fresh repo never resurrects / snapshot retains); both mapper
+round-trips; a review-sync bundle convergence test (sender tombstones → export
+→ receiver's live copy drops on import, tombstone retained); and a `vitest`
+`gcTombstones` suite (expired swept, fresh + live kept, collection-group span).
+Full workspace gate + functions suite green.
+
 ### M4.5 — Reader E2E against the emulator in CI
 
 **Goal:** The plan-M4 exit: reader collaboration suite runs against the
@@ -1880,6 +1997,41 @@ emulator **in CI** (two physical devices on staging is the human half).
 **Done when (Track A):** the CI job is green and required; a deliberately
 broken sync assertion fails it. **(▸B):** the staging demo recording
 lands with Track B — then the plan-M4 exit is fully met.
+
+**Landed (Track A artifacts).** A single turnkey **`melos run e2e-emulator`**
+script boots Auth+Firestore+Functions+Storage via `firebase emulators:exec`
+(rebuilding the functions first so the emulator serves the current
+callables/triggers) and runs the emulator-backed flows (`auth_lifecycle`
+M1.10, `cloud_pieces_flow` M3.8, `collaborator_flow`) plus the reader
+assertions of M4.1–M4.4 from `apps/duet`. It uses `npx --yes firebase-tools`
+so it runs with or without a global CLI (matching `dev.sh`). The
+**`emulator-e2e`** CI job (ci.yaml) wires Flutter + Node + Java + cached
+emulator binaries around it, gated by a `dorny/paths-filter` `changes` job so
+it only runs on PRs touching `apps/duet/**`/`packages/**`/`melos.yaml`/
+`ci.yaml` (per-job filter — a workflow-level `on.paths` would wrongly gate
+every job).
+
+**Blocked on a platform limitation — the CI job is non-blocking for now.** The
+M4.5 review caught that two of the three suites (`cloud_pieces_flow`,
+`auth_lifecycle`) use `dart:io` (`File`/`Directory`/`HttpClient`), which the
+Flutter **web** target (`-d chrome`) lacks — so they can't run headlessly on a
+runner (they throw `UnsupportedError: _Namespace`). The repo's own test
+headers documented that `-d chrome` pattern, but it was aspirational. So the
+`emulator-e2e` job is `continue-on-error: true` (visible, not blocking) until
+the real fix: either a **native-device runner** (`flutter drive -d <device>`,
+where `dart:io` + native Firebase plugins coexist — matching the suites' "needs
+a device" headers) or **refactoring the two suites off `dart:io`** (`HttpClient`
+→ `package:http`; `File` uploads → in-memory `putData`). The turnkey script
+stays usable locally/on a device today. **CI hygiene:** the workflow's Flutter
+is pinned to `3.44.6` (this repo's dev version) because the floating `stable`
+channel had drifted the Firebase ecosystem (`firebase_core 4.12.0` /
+`cloud_firestore 6.7.0`) to versions referencing a `FirebasePlugin` the
+resolvable `firebase_core` lacks, reddening `analyze-and-test` repo-wide;
+the pin reproduces the known-good local resolution.
+
+**Remainder (human/admin):** making the check **"required"** is a repo
+branch-protection setting (admin), and the **▸B two-device staging demo** is
+Track-B/human — both on top of the platform fix above.
 
 ---
 

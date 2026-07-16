@@ -69,8 +69,7 @@ class _HarnessScorePageState extends State<_HarnessScorePage> {
         playerService: _HarnessPlayerService(),
         recordingPathBuilder: () => 'rec.m4a',
         audioAssetStore: _HarnessAudioAssetStore(),
-        onShareRequested: () async {},
-        onImportRequested: () async {},
+        onNudgeRequested: () async {},
       ),
     );
   }
@@ -207,6 +206,10 @@ class _HarnessAnnotationRepository implements AnnotationRepository {
     yield _current;
     yield* _controller.stream;
   }
+
+  @override
+  Future<PieceAnnotations> snapshotWithTombstones(String pieceId) async =>
+      _current;
 
   @override
   Future<Result<void>> addStroke(String pieceId, InkStroke stroke) async {

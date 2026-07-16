@@ -26,7 +26,7 @@ const List<ParticipantLayer> _layers = [
 /// delayed-start future (see `score_viewer_screen_golden_test.dart`'s
 /// `_theme` note for the same pattern) — a zero-duration pump alone leaves
 /// it pending, which trips the test binding's "no pending timers" invariant
-/// at teardown once the "Share" button is on screen.
+/// at teardown once the "Nudge" button is on screen.
 Future<void> _pumpAndFlush(WidgetTester tester, Widget widget) async {
   await tester.pumpWidget(widget);
   await tester.pump(const Duration(milliseconds: 1));
@@ -42,8 +42,8 @@ Future<void> _pump(
   VoidCallback? onAudioToggle,
   VoidCallback? onCleanWorkspaceToggle,
   VoidCallback? onClose,
-  VoidCallback? onShare,
-  bool annotationsShared = false,
+  VoidCallback? onNudge,
+  String? nudgeTargetName,
 }) {
   return _pumpAndFlush(
     tester,
@@ -61,8 +61,8 @@ Future<void> _pump(
             onAudioToggle: onAudioToggle ?? () {},
             onCleanWorkspaceToggle: onCleanWorkspaceToggle ?? () {},
             onClose: onClose,
-            onShare: onShare,
-            annotationsShared: annotationsShared,
+            onNudge: onNudge,
+            nudgeTargetName: nudgeTargetName,
           ),
         ),
       ),
@@ -122,6 +122,27 @@ void main() {
       expect(toggled, 'c1');
     });
 
+    testWidgets('a changed layer announces "new annotations" (M4.3)', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        layers: const [
+          ParticipantLayer(
+            ownerId: 'c1',
+            label: 'Bea',
+            colorId: 'p1',
+            visible: true,
+            isOwn: false,
+            hasNewInk: true,
+            strokes: [],
+          ),
+        ],
+      );
+
+      expect(find.bySemanticsLabel(RegExp('new annotations')), findsOneWidget);
+    });
+
     testWidgets('shows the audio pins row with the on-page count', (
       tester,
     ) async {
@@ -166,25 +187,30 @@ void main() {
     });
 
     testWidgets(
-      'the share prompt shows only when unshared and onShare is set',
+      'the nudge prompt shows only when a target and onNudge are set',
       (tester) async {
         await _pump(tester);
-        expect(find.text('Annotations not shared yet'), findsNothing);
+        expect(find.textContaining('added notes'), findsNothing);
 
-        await _pump(tester, onShare: () {});
-        expect(find.text('Annotations not shared yet'), findsOneWidget);
+        await _pump(tester, onNudge: () {}, nudgeTargetName: 'Bea');
+        expect(find.text('Let Bea know you added notes'), findsOneWidget);
 
-        await _pump(tester, onShare: () {}, annotationsShared: true);
-        expect(find.text('Annotations not shared yet'), findsNothing);
+        // A solo sheet (no target name) hides the prompt even with a callback.
+        await _pump(tester, onNudge: () {});
+        expect(find.textContaining('added notes'), findsNothing);
       },
     );
 
-    testWidgets('tapping Share invokes onShare', (tester) async {
-      var shared = false;
-      await _pump(tester, onShare: () => shared = true);
+    testWidgets('tapping Nudge invokes onNudge', (tester) async {
+      var nudged = false;
+      await _pump(
+        tester,
+        onNudge: () => nudged = true,
+        nudgeTargetName: 'Bea',
+      );
 
-      await tester.tap(find.text('Share'));
-      expect(shared, isTrue);
+      await tester.tap(find.text('Nudge'));
+      expect(nudged, isTrue);
     });
   });
 }

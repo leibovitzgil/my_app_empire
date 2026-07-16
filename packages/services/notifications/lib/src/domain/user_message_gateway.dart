@@ -22,5 +22,10 @@ abstract class UserMessageGateway {
   /// Marks the message [id] addressed to [uid] as read, removing it from
   /// the live [inboxFor] snapshot. A no-op if [id] is unknown or already
   /// read.
+  ///
+  /// Read means **consumed**, not merely displayed. For a
+  /// [UserMessage.requiresAction] message the consuming act is the action
+  /// itself (accepting an invite), so a bridge that only *shows* a message
+  /// must not call this — doing so discards the pending action.
   Future<Result<void>> markRead(String uid, String id);
 }
