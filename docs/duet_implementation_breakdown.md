@@ -156,7 +156,7 @@ in the Track B backlog.
 | M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
 | M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
 | M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
-| M6.4 | ☐ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
+| M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
 | M7.1 | ☐ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
 | M7.2 | ☐ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
 | M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
@@ -2498,6 +2498,35 @@ Separately `app_updater` reads RC directly — two independent consumers
 plumbing and the contract refactor is complete; gate green; `showcase`
 untouched or trivially updated. **(▸B):** flipping the flag in the
 staging console (after fetch interval) hides link sharing.
+
+**Landed (Track A).** `remote_config` refactored on `user_directory`'s
+contract/impl/fake split: `RemoteConfigService` (typed getters + `init()`
++ `refresh()`; deliberately not `Result`-shaped — a failed fetch is never
+a blocking error, the committed defaults just stay in effect),
+`FirebaseRemoteConfigService` (what `RemoteConfigManager` did — that
+class is gone; no other consumer existed), and a constructor-seeded
+`InMemoryRemoteConfigService`. All six keys with committed defaults live
+in `RemoteConfigKeys` (the three existing + `paywall_enabled` /
+`invite_links_enabled` kill-switches defaulting **enabled** +
+`pricing_experiment` string, default empty). Injection: **both** branches
+of `configureDependencies` bind the in-memory fake for now — the real
+service needs `Firebase.initializeApp` with real options (M0.2) and there
+is no Remote Config emulator, so binding the fake under `useFirebase` too
+keeps flag behavior defined instead of crashing (G2 holds; a
+`TODO(track-b)` marks the swap point). Proven use: `showInviteSheetFor`
+(`app.dart`) reads `inviteLinksEnabled` off the contract at open and
+threads it into `showInviteSheet` as a `linkSharingEnabled` param — the
+pairing feature never reads remote config itself (G3, same param seam as
+its other deps); flag off hides the "Share invite link instead"
+affordance + divider, email invites untouched. Tests: package unit tests
+for both impls (defaults, overrides, fetch-failure swallow), fake-driven
+widget tests of the kill-switch both ways, and an injection guardrail
+test pinning `InMemoryRemoteConfigService` + enabled defaults.
+`app_updater` still reads RC directly — untouched by design, reconciled
+in M7.6. **The ▸B remainder stays in the Track B backlog:** bind
+`FirebaseRemoteConfigService` under `useFirebase` once M0.2 lands real
+options, then flip `invite_links_enabled` in the staging console and
+watch the affordance disappear after the fetch interval.
 
 ---
 

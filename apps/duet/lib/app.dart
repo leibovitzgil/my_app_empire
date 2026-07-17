@@ -22,6 +22,7 @@ import 'package:go_router/go_router.dart';
 import 'package:monetization/monetization.dart';
 import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -224,6 +225,11 @@ void showInviteSheetFor(
       ownerId: ownerId,
       pieceId: pieceId,
       ownerName: getIt<CurrentUserName>().call(),
+      // The `invite_links_enabled` kill-switch (M6.4), read at open so a
+      // refreshed flag applies to the next sheet. The feature never reads
+      // remote config itself — the app threads the decision in, the same
+      // seam as every other dependency above.
+      linkSharingEnabled: getIt<RemoteConfigService>().inviteLinksEnabled,
     ),
   );
 }
