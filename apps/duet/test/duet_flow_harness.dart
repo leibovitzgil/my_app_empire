@@ -90,6 +90,12 @@ class FakePdfRenderService implements PdfRenderService {
   );
 
   @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) => renderPage(pageIndex);
+
+  @override
   Future<Result<String>> checksum(String path) async =>
       Success('checksum-$path');
 }

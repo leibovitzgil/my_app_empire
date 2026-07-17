@@ -299,6 +299,15 @@ class _StaffPaperRenderService implements PdfRenderService {
   Future<Result<String>> checksum(String path) async => const Success('demo');
 
   @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) =>
+      // The synthetic page is 620 points wide (see [renderPage]) — fit it
+      // into [maxWidth] pixels, exactly like the real implementation.
+      renderPage(pageIndex, scale: maxWidth / 620);
+
+  @override
   Future<Result<PdfPageImage>> renderPage(
     int pageIndex, {
     double scale = 1,

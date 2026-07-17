@@ -163,7 +163,7 @@ in the Track B backlog.
 | M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
 | M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
 | M7.6 | ☐ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
-| M8.1 | ☐ Real page thumbnails + thumbnail cache | — |
+| M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
 | M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
 | M8.3 | ☑ Audio note size caps + compression | — |
 | M8.4 | ☐ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
@@ -2790,6 +2790,34 @@ RGBA bytes.
 
 **Done when:** rail shows real pages on device; TODO comment deleted;
 goldens/tests green.
+
+**Landed.** `PdfRenderService.renderThumbnail(pageIndex, {maxWidth = 96})`
+joined the contract; `PdfrxRenderService` implements it as a low-scale
+render (scale = `min(1, maxWidth / page.width)`, sharing `renderPage`'s
+body), and every fake/impl was widened in the same PR (G3): the duet
+harness `FakePdfRenderService`, `main_screenshot.dart`'s
+`_StaffPaperRenderService`, and the four test fakes. New
+`apps/duet/lib/features/score/src/thumbnail_cache.dart`: an LRU of
+decoded `ui.Image`s keyed `(basePdfChecksum, pageIndex)`, capped at 40,
+disposing evicted images; callers receive *clones* they own, so eviction
+can never invalidate an image a widget is still drawing; in-flight
+renders dedupe; failures resolve `null` and are never cached (disk layer
+skipped — not trivial). `PageThumbnailRail` gained an optional
+`thumbnailFor` seam; the old stylized card is now the loading/unavailable
+placeholder, and `_ThumbImage` owns + disposes each image (dropping late
+arrivals for unmounted/recycled cards). `ScoreViewerScreen` owns one
+cache per screen (disposed with it) and wires the seam after `open()`
+succeeds; the `TODO(reader-redesign)` is gone. `PageInkPresence`,
+presence dots, semantics, and the 48×48 tap targets are unchanged
+(covered by new widget tests incl. a real-thumbnail tap-target check);
+`thumbnail_cache_test.dart` covers hit/miss, LRU eviction + recency,
+clone safety, dedupe, and failure retry. The rail golden now renders
+deterministic fake pages (raw-RGBA bands, decoded under
+`tester.runAsync` — no fonts/platform channels); its two PNGs were
+regenerated on a macOS host that carries the known sub-pixel font drift
+vs. the canonical Linux container, so CI should re-validate (re-update)
+just `page_thumbnail_rail*.png` there. Device check (real PDF on iPad)
+pending as the task's visual verification.
 
 ### M8.2 — Large-PDF memory strategy
 

@@ -18,6 +18,12 @@ class _FakePdfRenderService implements PdfRenderService {
   @override
   Future<Result<PdfPageImage>> renderPage(int pageIndex, {double scale = 1}) =>
       throw UnimplementedError();
+
+  @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) => throw UnimplementedError();
 }
 
 void main() {
