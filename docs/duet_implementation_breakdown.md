@@ -152,7 +152,7 @@ in the Track B backlog.
 | M4.4 | ☑ Soft-delete tombstones for audio notes | M3.2 |
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☑ Invite tokens as expiring Firestore docs | M2.4 |
-| M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
+| M5.3 | ☑ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
 | M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
 | M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
 | M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
@@ -2202,6 +2202,37 @@ contract docs). Local notifications flow through
 `deviceTokens`' "nothing reads it" doc comments updated. **(▸B):** an
 invite sent from device A shows a system notification on backgrounded
 device B (staging, human-verified).
+
+**Landed (Track A).** `functions/src/inboxPush.ts` —
+`onInboxMessageCreated` (v2 trigger on `userInbox/{uid}/messages/{id}`)
+reads `deviceTokens/{uid}` and multicasts via a new lazy `fcm()` seam in
+`firebase.ts` (`admin.messaging()`): notification title/body from the
+message, `data` = the message's own map + a `deepLink`
+(`https://duet.app/piece/<id>`, placeholder domain kept in sync with
+`inviteTokens.ts`, real domain is ▸B). Pruning: any
+`messaging/registration-token-not-registered` response `arrayRemove`s that
+token. **Foreground dedupe — strategy chosen: `pushed: true`.** After a
+successful send (successCount > 0) the function merges `pushed: true` onto
+the message doc; `InboxNotificationBridge` skips `showLocal` for
+[pushed] messages but still `markRead`s non-action ones (a pushed nudge is
+consumed without re-showing; a pushed invite stays unread for accept).
+Chosen over "bridge only when permission denied" because it needs no
+client-side permission branching, and it also kills the pre-existing
+re-notify-on-next-foreground double; a no-token recipient keeps bridge
+delivery. The foreground race (bridge fires before the function marks) is
+benign — foreground FCM isn't auto-displayed by the OS. `UserMessage`
+gained a server-owned `pushed` field (absent → false; G3: Firestore
+mapper + docs updated across the notifications package); `deviceTokens`'
+"forward-provisioning / nothing reads it" doc comments now name the
+function. Tests: `test/inbox_push.test.ts` (mocked
+`firebase-admin/messaging`, unique-id style — safe under
+`test:against-running`): fan-out happy path incl. `pushed` merge, absent
+and empty tokens, prune-keeps-live-tokens, transient-failure keeps token +
+leaves `pushed` unset; bridge tests cover pushed-invite/pushed-nudge
+skip + mixed snapshots. Functions build/lint/tests 67/67; duet +
+notifications analyze/tests green (full workspace gate runs on the
+integration branch). ▸B unchanged: APNs key, `firebase_messaging` real
+dependency, lock-screen verification.
 
 ### M5.4 — Batched annotation digest push
 

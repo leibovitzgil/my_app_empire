@@ -524,18 +524,34 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
 /// Bridges the generic message inbox for whoever is currently signed in to a
 /// foreground/warm-start local notification (FIX-5: the Firebase emulator
 /// has no FCM sender and Cloud Functions don't run headless in this
-/// container, so there is no background push in v1 — see
+/// container, so the bridge is the only delivery in local development — see
 /// `FirestoreUserMessaging.sendToUser`'s doc). Re-subscribes to the
 /// message gateway's inbox whenever the signed-in user id changes (e.g.
 /// sign-in/out), showing each message at most once per session. Only ever
 /// constructed under `useFirebase: true`.
+///
+/// Push dedupe (the M5.3 strategy, chosen over "bridge only when push
+/// permission is denied"): deployed, the `onInboxMessageCreated` Cloud
+/// Function delivers each inbox message as a real FCM push and marks the
+/// doc `pushed: true` after a successful send. This bridge skips
+/// `showLocal` for [UserMessage.pushed] messages — otherwise a message
+/// already shown on the recipient's lock screen would be shown again the
+/// moment the app foregrounds. A recipient with no usable device tokens
+/// (permission denied, token expired) never gets the `pushed` mark, so the
+/// bridge stays their delivery path with no client-side permission
+/// branching. The one race — a message landing while the app is already
+/// foregrounded may reach this listener before the function marks it — is
+/// benign: the bridge shows it locally first, and FCM notifications are not
+/// auto-displayed by the OS in foreground, so no double there either.
 ///
 /// Surfacing a message is not the same as consuming it. A
 /// [UserMessage.requiresAction] message (an invite) stays unread until the
 /// user acts, because `read` is what the accept path checks for replay —
 /// marking it read here would burn the invite the instant it was notified.
 /// Everything else (a nudge) is done once shown, and is marked read so it
-/// leaves the inbox for good.
+/// leaves the inbox for good — including a `pushed` nudge this bridge never
+/// shows: the push already delivered it, and consuming it here is what
+/// keeps it from riding every later snapshot.
 ///
 /// Public only so `test/inbox_notification_bridge_test.dart` can reach it:
 /// this bridge decides whether a message survives being notified, and that
@@ -585,7 +601,11 @@ class InboxNotificationBridge {
     if (fresh.isEmpty) return;
     final manager = await getIt.getAsync<NotificationsManager>();
     for (final message in fresh) {
-      await manager.showLocal(title: message.title, body: message.body);
+      // Already delivered to a device by FCM (`onInboxMessageCreated`) —
+      // re-showing it locally would double-notify. See the class doc.
+      if (!message.pushed) {
+        await manager.showLocal(title: message.title, body: message.body);
+      }
       if (!message.requiresAction) {
         await _gateway.markRead(uid, message.id);
       }
