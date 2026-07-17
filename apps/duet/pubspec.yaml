@@ -58,6 +58,8 @@ dev_dependencies:
   firebase_messaging: ^16.4.1
   flutter_test:
     sdk: flutter
+  flutter_driver:
+    sdk: flutter
   integration_test:
     sdk: flutter
   mocktail: ^1.0.0
