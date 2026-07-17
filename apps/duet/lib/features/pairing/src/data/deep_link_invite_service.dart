@@ -8,11 +8,18 @@ import 'package:duet/features/pairing/src/domain/invite_service.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 
-/// An [InviteService] that mints tokenized invite links (see
+/// The *mock-path* [InviteService] (M5.2): mints tokenized invite links (see
 /// [InviteDeepLinks]), persists pending/consumed invites locally via
 /// [LocalStorageService] (JSON-encoded, mirroring `LocalPieceRepository`'s
 /// own persistence style), and completes acceptance via
 /// [PieceRepository.pairCollaborator].
+///
+/// Bound only under `useFirebase: false` (the headless gate, G2) — the
+/// production path is `CallableInviteService` (`apps/duet/lib/data/`), which
+/// routes the same contract through the `createInviteToken` /
+/// `resolveInviteToken` / `acceptInviteToken` callables against single-use,
+/// expiring `/inviteTokens/{token}` docs. This impl enforces the same
+/// [tokenTtl] locally so expiry behavior matches across both paths.
 class DeepLinkInviteService implements InviteService {
   /// Creates a [DeepLinkInviteService]. [tokenGenerator] defaults to a
   /// cryptographically random 20-character token; inject a fake in tests for
@@ -28,6 +35,11 @@ class DeepLinkInviteService implements InviteService {
        _storage = storage,
        _tokenGenerator = tokenGenerator ?? _generateToken,
        _now = clock ?? DateTime.now;
+
+  /// How long a minted invite stays redeemable — mirrors the server's
+  /// `TOKEN_TTL_DAYS` (`apps/duet/functions/src/inviteTokens.ts`). Keep the
+  /// two in sync.
+  static const Duration tokenTtl = Duration(days: 14);
 
   static const String _storageKey = 'pairing.invites';
   static const String _tokenChars =
@@ -73,10 +85,24 @@ class DeepLinkInviteService implements InviteService {
     if (invite == null) {
       throw const InviteException(
         'This invite link is invalid or has expired.',
+        reason: InviteFailureReason.invalid,
       );
     }
     if (invite.consumed) {
-      throw const InviteException('This invite has already been used.');
+      throw const InviteException(
+        'This invite has already been used.',
+        reason: InviteFailureReason.consumed,
+      );
+    }
+    // Expiry is enforced, not just modeled (M5.2): a token older than
+    // [tokenTtl] is dead, matching the server path where `expiresAt` is
+    // checked at resolve/accept time (the Firestore TTL only cleans up).
+    final expiresAtMillis = invite.createdAtMillis + tokenTtl.inMilliseconds;
+    if (expiresAtMillis <= _now().millisecondsSinceEpoch) {
+      throw const InviteException(
+        'This invite link is invalid or has expired.',
+        reason: InviteFailureReason.expired,
+      );
     }
     return invite;
   }
@@ -103,6 +129,7 @@ class DeepLinkInviteService implements InviteService {
     if (CollaboratorLimits.isAtCap(piece, isPro)) {
       throw const InviteException(
         'Free plan allows 1 collaborator. Upgrade to invite more.',
+        reason: InviteFailureReason.atCap,
       );
     }
 
@@ -168,6 +195,7 @@ class DeepLinkInviteService implements InviteService {
     if (CollaboratorLimits.isAtCap(piece, isPro)) {
       throw const InviteException(
         'Free plan allows 1 collaborator. Upgrade to invite more.',
+        reason: InviteFailureReason.atCap,
       );
     }
 

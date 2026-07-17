@@ -151,7 +151,7 @@ in the Track B backlog.
 | M4.3 | ☑ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☑ Soft-delete tombstones for audio notes | M3.2 |
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
-| M5.2 | ☐ Invite tokens as expiring Firestore docs | M2.4 |
+| M5.2 | ☑ Invite tokens as expiring Firestore docs | M2.4 |
 | M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
 | M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
 | M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
@@ -2129,6 +2129,37 @@ the piece via `pairCollaborator`, which M2.2 rules forbid cross-user.
 **Done when:** an expired token shows the "invalid or expired" state
 (string already exists in `_requireValid`); consumed tokens can't be
 reused across two emulator accounts; rules tests deny direct token reads.
+
+**Landed.** Three v2 callables in `functions/src/inviteTokens.ts`:
+`createInviteToken` (owner-only, cap-checked, mints `/inviteTokens/{token}`
+with `expiresAt = now + 14d`, returns the URL), `resolveInviteToken` (kept a
+**separate read-only callable**, not a phase of accept, so opening a link
+can never mutate state), and `acceptInviteToken` (one transaction: validate
+→ join piece arrays → `consumed`/`consumedBy`; racing accepts contend on the
+token doc). Typed denials ride `HttpsError.details.reason`
+(`invalid|expired|consumed|at-cap|already-collaborator`). Deviations from
+the sketch: (1) the **cap is enforced now**, not deferred to M6.3 — the
+owner's tier reads `entitlements/{ownerId}` (absent = free, which is the
+pre-M6.3 truth; `ownerIsPro` in `collaboratorLimits.ts`); the M2.4 email
+path is untouched. (2) The schema doc's ACL row gave clients create/read on
+token docs — implemented **stricter**: `inviteTokens` is fully
+Function-only, rules deny all client access (schema doc updated; 4 new
+denial tests in `firestore_tests`). (3) `AcceptInviteCubit` is *almost*
+unchanged — same contracts (G3), but two behavior fixes were unavoidable:
+a fresh invitee's participant-gated `getPiece` denial now reads as `ready`
+(pre-M5.2 the piece was always locally readable), and a typed
+at-cap/already-collaborator denial from accept maps to its dedicated state.
+(4) A token consumed **by the caller** still resolves/reports
+`already-collaborator`, so re-opening a redeemed link is friendly; consumed
+by anyone else is a hard `consumed`. (5) `onPieceDeleted` also sweeps the
+piece's tokens by `pieceId` (TTL is only a lagging backstop). Client:
+`CallableInviteService` (`apps/duet/lib/data/`) under `useFirebase: true`;
+`DeepLinkInviteService` stays the mock path and now **enforces** the same
+14-day TTL (`tokenTtl`) it previously only modeled. **[HUMAN] open:** enable
+the Firestore TTL policy on `inviteTokens.expiresAt` (console/gcloud, per
+env) — expiry is always also checked at resolve/accept, so this is cleanup
+only. Gate green; functions 62/62, rules 49/49 (run `test:against-running`
+against the live dev emulators — `emulators:exec` couldn't bind 8080/9099).
 
 ### M5.3 — Push fan-out: `onInboxMessageCreated` → FCM + token pruning
 
