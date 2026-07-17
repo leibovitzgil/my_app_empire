@@ -9,6 +9,7 @@ export { acceptInvite } from './acceptInvite';
 export { deleteAccount } from './deleteAccount';
 export { gcTombstones } from './gcTombstones';
 export { healthcheck } from './healthcheck';
+export { onInboxMessageCreated } from './inboxPush';
 export {
   acceptInviteToken,
   createInviteToken,

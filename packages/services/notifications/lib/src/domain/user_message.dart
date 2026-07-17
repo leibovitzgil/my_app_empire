@@ -15,6 +15,7 @@ class UserMessage extends Equatable {
     required this.sentAt,
     this.data = const <String, String>{},
     this.requiresAction = false,
+    this.pushed = false,
   });
 
   /// A stable identifier for this message, unique per recipient inbox.
@@ -48,6 +49,16 @@ class UserMessage extends Equatable {
   /// path refuses an already-read message.
   final bool requiresAction;
 
+  /// Whether a server-side push (FCM) already delivered this message to at
+  /// least one of the recipient's devices.
+  ///
+  /// Server-owned: senders never set it (`false`, the default) — Duet's
+  /// `onInboxMessageCreated` Cloud Function marks it after a successful
+  /// fan-out. A foreground bridge that surfaces inbox messages as local
+  /// notifications must skip `pushed` ones, or every push would be shown a
+  /// second time when the app next comes to the foreground.
+  final bool pushed;
+
   @override
   List<Object?> get props => [
     id,
@@ -57,5 +68,6 @@ class UserMessage extends Equatable {
     data,
     sentAt,
     requiresAction,
+    pushed,
   ];
 }

@@ -6,20 +6,23 @@ import 'package:notifications/src/domain/user_message_gateway.dart';
 
 /// A [DeviceTokenRegistry] + [UserMessageGateway] backed by Cloud Firestore.
 ///
-/// Schema: `deviceTokens/{uid} -> {tokens: [String, ...]}` (forward-
-/// provisioning only — nothing yet reads this to send a real push; see
-/// `DeviceTokenSync`'s doc) and `userInbox/{uid}/messages/{id} ->
-/// {toUid, title, body, data, sentAtMillis, read}`.
+/// Schema: `deviceTokens/{uid} -> {tokens: [String, ...]}` (read by Duet's
+/// `onInboxMessageCreated` Cloud Function, M5.3, which fans an inbox write
+/// out over FCM and `arrayRemove`s tokens FCM reports unregistered) and
+/// `userInbox/{uid}/messages/{id} ->
+/// {toUid, title, body, data, sentAtMillis, read, requiresAction, pushed}`.
 ///
-/// v1 send seam (FIX-5): [sendToUser] only ever WRITES the Firestore inbox
-/// doc — the Firebase emulator has no FCM sender and Cloud Functions don't
-/// run headless in this container, so there is no background push in v1.
-/// The recipient's own live [inboxFor] listener is what actually surfaces
-/// it, via a foreground/warm-start local notification bridge wired at the
-/// app layer (see `apps/duet/lib/injection.dart`). Production later swaps
-/// this method alone for a Firestore-triggered Cloud Function that reads
-/// `deviceTokens/{uid}` and sends a real push — same [UserMessageGateway]
-/// contract, no client change.
+/// Send seam: [sendToUser] only ever WRITES the Firestore inbox doc — that
+/// write IS the send. Deployed, the `onInboxMessageCreated` trigger picks it
+/// up and multicasts a real push to the recipient's registered devices,
+/// marking the doc `pushed: true` on success (server-owned; this class only
+/// reads it back). The recipient's live [inboxFor] listener additionally
+/// surfaces messages via a foreground local-notification bridge wired at
+/// the app layer (see `InboxNotificationBridge` in
+/// `apps/duet/lib/injection.dart`), which skips `pushed` messages so a
+/// pushed message isn't shown twice. On the emulator there is no FCM sender
+/// (and no functions running headless), so the bridge is the only delivery
+/// there — same [UserMessageGateway] contract either way, no client change.
 class FirestoreUserMessaging
     implements DeviceTokenRegistry, UserMessageGateway {
   /// Creates a [FirestoreUserMessaging] persisting via [firestore].
@@ -100,5 +103,8 @@ class FirestoreUserMessaging
     // Absent on documents written before the field existed; `false` keeps
     // those behaving exactly as they did (consumed once surfaced).
     requiresAction: data['requiresAction'] as bool? ?? false,
+    // Server-owned (set by `onInboxMessageCreated` after a successful FCM
+    // fan-out); absent until — and unless — a push actually delivered.
+    pushed: data['pushed'] as bool? ?? false,
   );
 }
