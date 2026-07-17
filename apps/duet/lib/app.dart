@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:monetization/monetization.dart';
+import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 
 class App extends StatelessWidget {
@@ -248,6 +249,20 @@ class HomeScreen extends StatelessWidget {
         // signed-in account on first cloud sign-in (M3.6); renders nothing and
         // is a no-op unless the Firebase composition registered a migrator.
         const MigrationPrompt(),
+        // Pending email invites for the signed-in user (M5.6): accept joins
+        // the sheet — the gallery below live-updates via `watchPieces` — and
+        // opens it; dismiss marks the inbox message read, nothing more.
+        InviteInboxBanner(
+          collaboratorInviteService: getIt<CollaboratorInviteService>(),
+          messageGateway: getIt<UserMessageGateway>(),
+          monetizationService: getIt<MonetizationService>(),
+          currentUserId: currentUserId,
+          currentUserName: getIt<CurrentUserName>().call(),
+          currentUserEmail: getIt<CurrentUserEmail>().call(),
+          onAccepted: (pieceId) => context.push(
+            '/score/${Uri.encodeComponent(pieceId)}',
+          ),
+        ),
         Expanded(
           child: LibraryPage(
             pieceRepository: getIt<PieceRepository>(),
