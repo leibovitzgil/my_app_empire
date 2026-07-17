@@ -3,6 +3,7 @@
 // ignore_for_file: cascade_invocations
 import 'dart:async';
 
+import 'package:analytics/analytics.dart';
 import 'package:audio/audio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -21,6 +22,8 @@ import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
+import 'package:duet/data/duet_analytics.dart';
+import 'package:duet/data/duet_analytics_observer.dart';
 import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/firebase_audio_object_store.dart';
@@ -38,6 +41,7 @@ import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
@@ -517,6 +521,35 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   });
 
   getIt.registerLazySingleton<DeepLinkService>(FakeDeepLinkService.new);
+
+  // Analytics (M7.2). Funnel events ride the Duet-side typed catalogue
+  // (`DuetAnalytics`, `lib/data/duet_analytics.dart` — see its doc for the
+  // full instrumentation-seam map) over the factory's generic `AppLogger`.
+  // BOTH branches bind the Firebase-free Talker-only logger today:
+  // `FirebaseAnalytics.instance` cannot exist without a real
+  // `Firebase.initializeApp` (Track B, M0.2), and the emulator suite has no
+  // Analytics emulator to receive events anyway — the same precedent as the
+  // M6.4 remote-config and M7.1 crash-reporter bindings above (G2). The
+  // injected `CrashReporter` keeps the breadcrumb/error glue exercised
+  // end-to-end even while analytics itself is local-only.
+  // TODO(track-b): under `useFirebase`, bind
+  // `AppLogger(analytics: FirebaseAnalytics.instance, ...)` once real
+  // project options land (M0.2), then verify the five funnel events in
+  // DebugView and seed the console dashboards (M7.2 ▸B).
+  getIt.registerLazySingleton<AppLogger>(
+    () => AppLogger(crashReporter: getIt<CrashReporter>()),
+  );
+  getIt.registerLazySingleton<DuetAnalytics>(
+    () => DuetAnalytics(getIt<AppLogger>()),
+  );
+
+  // The bloc-side funnel-instrumentation seam (G3: feature code stays
+  // analytics-free): one app-level BlocObserver translates feature bloc/
+  // cubit transitions into catalogue events. Attached here — the one choke
+  // point every entry point (main, emulator, screenshot, driver) already
+  // funnels through. The router-side half (`DuetRouteObserver`) is attached
+  // to the GoRouter in `app.dart`.
+  Bloc.observer = DuetAnalyticsObserver(analytics: getIt<DuetAnalytics>());
   // generated:register — `create_feature/create_package --wire duet` adds
   // registrations above this line. Do not remove this marker.
 }

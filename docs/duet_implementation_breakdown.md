@@ -158,7 +158,7 @@ in the Track B backlog.
 | M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
 | M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
 | M7.1 | ☑ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
-| M7.2 | ☐ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
+| M7.2 | ☑ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
 | M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
 | M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
 | M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
@@ -2654,6 +2654,30 @@ params)`), wired into no app, no screen-tracking helper.
 **Done when:** DebugView on a staging device shows the five funnel events
 end-to-end; dashboards seeded (**[HUMAN]**: mark conversion events in the
 console); gate green.
+
+**Landed (Track A).** `apps/duet/lib/data/duet_analytics.dart`: the typed
+catalogue (`sheetImported{pieceId}` / `inviteSent{method}` /
+`inviteAccepted{method}` / `noteRecorded{durationMs}` / `practiceOpened` /
+`paywallShown` / `purchaseCompleted` / `signUp` / `screenViewed`), no PII
+in params. Instrumentation decided once (documented on the wrapper):
+feature code stays analytics-free (G3) — one app-level
+`DuetAnalyticsObserver` (`Bloc.observer`, set in `injection.dart`) maps
+bloc/cubit transitions to events (import success; invite sent email+link;
+BOTH accept paths — M5.6 inbox accept = email, M5.2 token accept = link;
+`AudioNoteSaved` = the `_saveAudioNote` success dispatch; the
+practice-intent region resolve; paywall gates; purchase-not-restore;
+sign-up-not-login), plus a `DuetRouteObserver` on the `GoRouter` logging
+route-template screen views and the `/paywall` route's `paywallShown`.
+`AppLogger` gained a Firebase-free default (no analytics instance =
+Talker-only); both Duet compositions bind it with the injected
+`CrashReporter` — `FirebaseAnalytics.instance` needs a real
+`initializeApp`, so the real binding is a `TODO(track-b)` in
+`injection.dart`, the M6.4/M7.1 precedent — and the injection guardrail
+pins the Firebase-free binding (G2). Fake-logger tests assert every
+funnel call site fires exactly once per action against the real blocs.
+**▸B remainder:** bind `FirebaseAnalytics.instance` under the real entry
+point (after M0.2), DebugView end-to-end check, console dashboards +
+conversion marking.
 
 ### M7.3 — Performance traces on the two hot paths
 

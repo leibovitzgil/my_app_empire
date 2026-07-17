@@ -102,4 +102,27 @@ void main() {
       ),
     ).called(1);
   });
+
+  test(
+    'with no analytics backend, logEvent is Talker-only and never throws '
+    '(the Firebase-free default, safe for headless/mock compositions)',
+    () async {
+      final localOnly = AppLogger(
+        crashReporter: mockCrashReporter,
+        talker: mockTalker,
+      );
+
+      await localOnly.logEvent('local_event', {'k': 'v'});
+
+      verify(
+        () => mockTalker.info(any<dynamic>(that: contains('local_event'))),
+      ).called(1);
+      verifyNever(
+        () => mockAnalytics.logEvent(
+          name: any<String>(named: 'name'),
+          parameters: any<Map<String, Object>?>(named: 'parameters'),
+        ),
+      );
+    },
+  );
 }

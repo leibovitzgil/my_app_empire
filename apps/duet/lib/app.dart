@@ -6,6 +6,8 @@ import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/duet_analytics.dart';
+import 'package:duet/data/duet_route_observer.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/library/library.dart';
 import 'package:duet/features/pairing/pairing.dart';
@@ -55,6 +57,12 @@ class _AppViewState extends State<AppView> {
     super.initState();
     _router = GoRouter(
       redirect: _redirect,
+      // Screen views (M7.2): logs each pushed route's template name —
+      // go_router names pages `state.name ?? state.path`, so `/score/
+      // :pieceId` is logged, never a concrete id-carrying location.
+      observers: [
+        DuetRouteObserver(analytics: getIt<DuetAnalytics>()),
+      ],
       routes: [
         // `_redirect` immediately resolves `/` to `/login` or `/home`; this
         // builder only covers the transient frame between an auth change and

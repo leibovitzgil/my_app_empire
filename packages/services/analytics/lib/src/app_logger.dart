@@ -8,23 +8,31 @@ import 'package:talker_flutter/talker_flutter.dart';
 /// A unified logger that sends events to Firebase Analytics, errors and
 /// breadcrumbs to the injected [CrashReporter], and local logs to Talker.
 ///
-/// Crash reporting rides the `crash_reporting` seam rather than a direct
-/// Crashlytics dependency: bind [CrashlyticsCrashReporter] in a real
-/// Firebase composition, and the default [NoopCrashReporter] keeps
-/// mock/emulator/headless compositions Firebase-free.
+/// Both backends are opt-in seams, so the default `AppLogger()` is entirely
+/// Firebase-free (safe for mock/emulator/headless compositions):
+///
+/// - Analytics: pass [FirebaseAnalytics.instance] in a real Firebase
+///   composition (after `Firebase.initializeApp`). With no analytics
+///   instance, events are logged locally to Talker only.
+/// - Crash reporting rides the `crash_reporting` seam rather than a direct
+///   Crashlytics dependency: bind [CrashlyticsCrashReporter] in a real
+///   Firebase composition, and the default [NoopCrashReporter] keeps the
+///   rest Firebase-free.
 class AppLogger {
   /// Creates an [AppLogger].
   ///
-  /// [crashReporter] defaults to a no-op; real compositions must inject
-  /// their bound [CrashReporter] so errors reach the crash backend.
+  /// [analytics] defaults to none (events log to Talker only); real
+  /// compositions pass [FirebaseAnalytics.instance]. [crashReporter]
+  /// defaults to a no-op; real compositions must inject their bound
+  /// [CrashReporter] so errors reach the crash backend.
   AppLogger({
     FirebaseAnalytics? analytics,
     CrashReporter crashReporter = const NoopCrashReporter(),
     Talker? talker,
-  }) : _analytics = analytics ?? FirebaseAnalytics.instance,
+  }) : _analytics = analytics,
        _crashReporter = crashReporter,
        _talker = talker ?? TalkerFlutter.init();
-  final FirebaseAnalytics _analytics;
+  final FirebaseAnalytics? _analytics;
   final CrashReporter _crashReporter;
   final Talker _talker;
 
@@ -37,8 +45,10 @@ class AppLogger {
   /// [parameters] are optional parameters for the event.
   Future<void> logEvent(String name, [Map<String, Object>? parameters]) async {
     _talker.info('Event: $name, Params: $parameters');
+    final analytics = _analytics;
+    if (analytics == null) return;
     try {
-      await _analytics.logEvent(name: name, parameters: parameters);
+      await analytics.logEvent(name: name, parameters: parameters);
     } on Object catch (e, st) {
       _talker.handle(e, st, 'Failed to log event to Firebase');
     }
