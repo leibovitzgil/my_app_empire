@@ -155,7 +155,7 @@ in the Track B backlog.
 | M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
 | M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
 | M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
-| M5.6 | ☐ In-app invite inbox UI (email-invite acceptance) | M2.4 |
+| M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
 | M6.4 | ☐ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
 | M7.1 | ☐ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
 | M7.2 | ☐ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
@@ -2275,10 +2275,9 @@ inside the app — today `watchInvites`/`acceptInvite` are **only called
 from tests**; production invitees get a one-shot local notification and
 then nothing.
 
-**Status:** step 4 landed ahead of this milestone (it was blocking the
-flow outright, not just the UI — see below); the invite now survives to
-be accepted. Steps 1–3 and 5 — the banner and its tests — are the work
-that remains.
+**Status:** done. Step 4 landed ahead of this milestone (it was blocking
+the flow outright, not just the UI — see below); steps 1–3 and 5 — the
+banner and its tests — landed after it (see **Landed.**).
 
 **Steps**
 1. Library surface: a pending-invites banner/section on `LibraryPage`
@@ -2318,6 +2317,30 @@ that remains.
 **Done when:** email invite (no link involved) is acceptable end-to-end in
 UI on the emulator: send from A → banner on B → accept → piece appears in
 B's gallery; headless flow test drives the same UI (G2).
+
+**Landed.** Steps 1–3 and 5, as `InviteInboxBanner` +
+`InviteInboxCubit` in the pairing feature
+(`apps/duet/lib/features/pairing/src/{ui/invite_inbox_banner.dart,
+bloc/invite_inbox_cubit.dart}`), composed at the app layer:
+`HomeScreen` mounts it above `LibraryPage` next to
+`EmailVerificationBanner` (the library feature can't import pairing —
+architecture test), wiring `onAccepted` to push `/score/:pieceId` (G8).
+One row per pending invite from `watchInvites(uid)`: Accept rides
+`CollaboratorInviteService.acceptInvite` (the M2.4 callable under
+Firebase); at-cap (`AtCapInviteException`) defers to the invite sheet's
+paywall-gate pattern — `PaywallScreen` in a bottom sheet; Dismiss is
+`UserMessageGateway.markRead` only. Deviations from the step-1 sketch:
+the copy is "{owner} invited you to collaborate on a sheet" — the piece
+*title* isn't knowable pre-accept (a non-participant can't read the
+piece doc under the M2.2 rules and the invite payload doesn't carry it);
+and `DefaultCollaboratorInviteService.acceptInvite` now marks the inbox
+message read on success, mirroring the callable's server-side consume,
+so the banner clears on accept in every composition. Tests:
+`invite_inbox_banner_test.dart` (all states over mocked seams),
+light/dark goldens, an accept-consumes case in the service test, and
+`duet_flow_test.dart` now drives invite→banner→accept through the real
+banner UI over an invitee-scoped library view — empty gallery →
+accept → sheet appears (the "Done when" flow, headless).
 
 ### M5.7 — Two-device staging validation + skill update
 

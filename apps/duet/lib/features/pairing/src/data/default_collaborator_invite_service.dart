@@ -149,5 +149,12 @@ class DefaultCollaboratorInviteService implements CollaboratorInviteService {
       name: accepterName,
       email: accepterEmail,
     )).orThrow();
+    // Accepting is the action that consumes a `requiresAction` invite: mark
+    // the message read so it leaves every `watchInvites` snapshot —
+    // mirroring the server-side `acceptInvite` callable, which marks its
+    // inbox document read as part of the acceptance. (If this markRead
+    // fails after the collaborator landed, a retried accept short-circuits
+    // the cap check via `isCollaborator` and simply retries the consume.)
+    (await _messageGateway.markRead(accepterId, invite.messageId)).orThrow();
   });
 }

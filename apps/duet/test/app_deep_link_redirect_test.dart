@@ -17,6 +17,7 @@ import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/app.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
@@ -32,6 +33,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_storage/local_storage.dart';
+import 'package:monetization/monetization.dart';
+import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
@@ -84,6 +87,27 @@ void main() {
 
     final currentUserName = CurrentUserName(mockAuthRepository.displayName);
     getIt.registerSingleton<CurrentUserName>(currentUserName);
+
+    // HomeScreen's invite-inbox banner (M5.6) resolves the email seam, the
+    // message gateway + invite service, and the monetization service — the
+    // in-memory/simulated set, mirroring injection.dart's default branch.
+    getIt.registerSingleton<CurrentUserEmail>(
+      CurrentUserEmail(
+        mockAuthRepository.account.map((account) => account?.email),
+      ),
+    );
+    getIt.registerLazySingleton<MonetizationService>(
+      SimulatedMonetizationService.new,
+    );
+    getIt.registerSingleton<UserMessageGateway>(InMemoryUserMessaging());
+    getIt.registerLazySingleton<CollaboratorInviteService>(
+      () => DefaultCollaboratorInviteService(
+        userDirectory: getIt<UserDirectory>(),
+        pieceRepository: getIt<PieceRepository>(),
+        monetizationService: getIt<MonetizationService>(),
+        messageGateway: getIt<UserMessageGateway>(),
+      ),
+    );
 
     getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
     getIt.registerLazySingleton<AudioRecorderService>(
