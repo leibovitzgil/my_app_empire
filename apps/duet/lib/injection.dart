@@ -40,6 +40,7 @@ import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
 import 'package:user_directory/user_directory.dart';
 
 /// The app's service locator.
@@ -98,6 +99,21 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   getIt.registerLazySingleton<MonetizationService>(
     SimulatedMonetizationService.new,
   );
+
+  // Remote-config flags (M6.4): consumers pull via the `RemoteConfigService`
+  // contract only (G3). BOTH branches currently bind the committed-defaults
+  // in-memory fake — `FirebaseRemoteConfigService` needs a real
+  // `Firebase.initializeApp` with real project options, which is Track B
+  // (M0.2); the emulator suite has no Remote Config emulator either, so
+  // binding the fake under `useFirebase` too keeps every composition's flag
+  // behavior defined (kill-switches enabled) instead of crashing on an
+  // uninitialized Firebase app.
+  // TODO(track-b): under `useFirebase`, bind `FirebaseRemoteConfigService`
+  // and `await init()` after `Firebase.initializeApp` lands real options
+  // (M0.2), then flip the staging console flag to verify (M6.4 ▸B).
+  final remoteConfigService = InMemoryRemoteConfigService();
+  await remoteConfigService.init();
+  getIt.registerSingleton<RemoteConfigService>(remoteConfigService);
 
   // Lazy-async since it awaits `SharedPreferences.getInstance()`. Now
   // consumed three ways: `NotificationPermissionGateway` below (for the

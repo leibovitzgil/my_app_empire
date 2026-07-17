@@ -15,6 +15,7 @@ import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
+import 'package:remote_config/remote_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
 
@@ -114,6 +115,21 @@ void main() {
         await configureDependencies();
 
         expect(getIt<NudgeService>(), isA<DefaultNudgeService>());
+      },
+    );
+
+    test(
+      'binds the in-memory RemoteConfigService with the committed '
+      'defaults — never FirebaseRemoteConfig (M6.4)',
+      () async {
+        await configureDependencies();
+
+        final remoteConfig = getIt<RemoteConfigService>();
+        expect(remoteConfig, isA<InMemoryRemoteConfigService>());
+        // Kill-switches default to enabled.
+        expect(remoteConfig.paywallEnabled, isTrue);
+        expect(remoteConfig.inviteLinksEnabled, isTrue);
+        expect(remoteConfig.pricingExperiment, isEmpty);
       },
     );
   });

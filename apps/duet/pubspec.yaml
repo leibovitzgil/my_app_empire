@@ -47,6 +47,8 @@ dependencies:
   path_provider: ^2.1.6
   pdf_rendering:
     path: ../../packages/services/pdf_rendering
+  remote_config:
+    path: ../../packages/services/remote_config
   share_plus: ^13.2.0
   user_directory:
     path: ../../packages/core/user_directory
