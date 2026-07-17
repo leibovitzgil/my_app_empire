@@ -71,6 +71,10 @@ class CloudAudioAssetStore implements AudioAssetStore {
   @override
   Future<Result<String>> put(String sourcePath, {required String pieceId}) =>
       Result.guard<String>(() async {
+        // Client-side mirror of the Storage rules' 5 MB audio cap — reject
+        // before caching/enqueueing so an over-cap file can never sit in the
+        // upload queue only to be bounced by the rules (M8.3).
+        ensureAudioNoteWithinCap(sourcePath);
         final dir = await _cacheDir();
         final id = _nextId();
         final destPath = p.join(dir.path, '$id${p.extension(sourcePath)}');

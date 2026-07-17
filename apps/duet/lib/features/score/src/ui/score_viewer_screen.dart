@@ -392,11 +392,21 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     );
     final assetId = switch (putResult) {
       Success<String>(:final value) => value,
+      // An over-cap recording is a hard stop (M8.3): saving the note anyway
+      // would smuggle a file past the Storage rules' 5 MB audio cap only for
+      // the upload to bounce later. Unreachable with the recorder's AAC-LC
+      // mono config — this is the honest backstop, surfaced per G4.
+      ResultFailure<String>(error: AudioNoteTooLargeException()) => null,
       // Falls back to the raw path so the note isn't silently dropped; it
       // just won't survive past this recording's temp file the way a
       // properly-stored asset would.
       ResultFailure<String>() => recordedPath,
     };
+    if (assetId == null) {
+      scoreBloc.add(const ModeChanged(ScoreMode.view));
+      if (mounted) AppSnackbar.error(context, 'Recording too large');
+      return;
+    }
     final note = AudioNote(
       id: 'note_${DateTime.now().microsecondsSinceEpoch}',
       authorId: scoreBloc.state.currentUserId,

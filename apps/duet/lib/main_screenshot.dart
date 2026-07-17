@@ -460,7 +460,11 @@ class _HarnessAudioAssetStore implements AudioAssetStore {
   Future<Result<String>> put(
     String sourcePath, {
     required String pieceId,
-  }) async => Success(sourcePath);
+  }) => Result.guard<String>(() async {
+    // Same cap behavior as the real stores (G3, M8.3).
+    ensureAudioNoteWithinCap(sourcePath);
+    return sourcePath;
+  });
 
   @override
   Future<Result<String>> pathFor(

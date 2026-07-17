@@ -107,10 +107,12 @@ class _FakeAudioAssetStore implements AudioAssetStore {
   Future<Result<String>> put(
     String sourcePath, {
     required String pieceId,
-  }) async {
+  }) => Result.guard<String>(() async {
+    // Same cap behavior as the real stores (G3, M8.3).
+    ensureAudioNoteWithinCap(sourcePath);
     putSources.add(sourcePath);
-    return Success<String>('cloud-asset-${_seq++}');
-  }
+    return 'cloud-asset-${_seq++}';
+  });
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
