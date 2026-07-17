@@ -45,6 +45,12 @@ class _UnusedPdfRenderService implements PdfRenderService {
       throw UnimplementedError();
 
   @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) => throw UnimplementedError();
+
+  @override
   Future<Result<String>> checksum(String path) => throw UnimplementedError();
 }
 

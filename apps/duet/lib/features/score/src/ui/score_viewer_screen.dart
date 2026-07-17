@@ -9,6 +9,7 @@ import 'package:duet/features/score/src/bloc/audio_playback_cubit.dart';
 import 'package:duet/features/score/src/bloc/record_audio_cubit.dart';
 import 'package:duet/features/score/src/bloc/score_bloc.dart';
 import 'package:duet/features/score/src/participant_layer.dart';
+import 'package:duet/features/score/src/thumbnail_cache.dart';
 import 'package:duet/features/score/src/ui/practice_view.dart';
 import 'package:duet/features/score/src/ui/reader_theme.dart';
 import 'package:duet/features/score/src/ui/widgets/audio_pin_marker.dart';
@@ -101,6 +102,13 @@ class ScoreViewerScreen extends StatefulWidget {
 class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   late final RecordAudioCubit _recordCubit;
   late final AudioPlaybackCubit _playbackCubit;
+
+  /// Decoded page thumbnails for the rail, LRU-capped and keyed by
+  /// (checksum, page) — one per screen so switching pieces reuses nothing
+  /// stale and closing the reader frees every image.
+  late final ThumbnailCache _thumbnailCache = ThumbnailCache(
+    renderService: widget.renderService,
+  );
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _openedPdfPath;
 
@@ -124,6 +132,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   void dispose() {
     unawaited(_recordCubit.close());
     unawaited(_playbackCubit.close());
+    _thumbnailCache.dispose();
     super.dispose();
   }
 
@@ -346,6 +355,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     return _ReaderCanvas(
       state: state,
       renderService: widget.renderService,
+      thumbnailCache: _thumbnailCache,
       audioAssetStore: widget.audioAssetStore,
       onNudgeRequested: widget.onNudgeRequested,
       recordingPathBuilder: widget.recordingPathBuilder,
@@ -634,6 +644,7 @@ class _ReaderCanvas extends StatefulWidget {
   const _ReaderCanvas({
     required this.state,
     required this.renderService,
+    required this.thumbnailCache,
     required this.audioAssetStore,
     required this.onNudgeRequested,
     required this.recordingPathBuilder,
@@ -642,6 +653,7 @@ class _ReaderCanvas extends StatefulWidget {
 
   final ScoreState state;
   final PdfRenderService renderService;
+  final ThumbnailCache thumbnailCache;
   final AudioAssetStore audioAssetStore;
   final Future<void> Function()? onNudgeRequested;
   final String Function() recordingPathBuilder;
@@ -682,18 +694,24 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
             width >= _kWideBreakpoint &&
             state.mode == ScoreMode.view &&
             !_layersPanelCollapsed;
+        // The piece PDF's content checksum keys cached thumbnail renders
+        // (see `ThumbnailCache`); the reader only mounts this canvas once
+        // the piece is ready, so it's normally present.
+        final checksum = state.piece?.basePdfChecksum;
         return Row(
           children: [
-            // TODO(reader-redesign): render real PDF thumbnails once a
-            // cheap per-page thumbnail render path exists; stylized cards
-            // are golden-safe and match the design in the meantime (see
-            // `PageThumbnailRail`'s class doc).
             if (showRail)
               PageThumbnailRail(
                 pageCount: state.pageCount,
                 currentPage: state.currentPage,
                 presence: _pagePresence(state),
                 onSelectPage: (page) => bloc.add(PageChanged(page)),
+                thumbnailFor: checksum == null
+                    ? null
+                    : (page) => widget.thumbnailCache.thumbnail(
+                        checksum: checksum,
+                        pageIndex: page,
+                      ),
                 dimmed: state.mode == ScoreMode.draw,
               ),
             Expanded(child: _canvasStack(context, state, bloc, width)),

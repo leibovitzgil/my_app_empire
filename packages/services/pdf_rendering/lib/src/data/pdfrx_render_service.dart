@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:core_utils/core_utils.dart';
@@ -48,48 +49,71 @@ class PdfrxRenderService implements PdfRenderService {
 
   @override
   Future<Result<PdfPageImage>> renderPage(int pageIndex, {double scale = 1}) =>
-      Result.guard<PdfPageImage>(() async {
-        final document = _document;
-        if (document == null) {
-          throw const PdfRenderException(
-            'renderPage was called before a document was open()ed',
-          );
-        }
-        final pages = document.pages;
-        if (pageIndex < 0 || pageIndex >= pages.length) {
-          throw PdfRenderException(
-            'Page $pageIndex is out of range (0..${pages.length - 1})',
-          );
-        }
-        try {
-          final page = pages[pageIndex];
-          // Omit width/height so the full page is rendered; fullWidth/
-          // fullHeight set the target resolution (page points × scale).
-          final rendered = await page.render(
-            fullWidth: page.width * scale,
-            fullHeight: page.height * scale,
-          );
-          if (rendered == null) {
-            throw const PdfRenderException(
-              'pdfrx returned no image for the requested page',
-            );
-          }
-          try {
-            return PdfPageImage(
-              pageIndex: pageIndex,
-              width: rendered.width,
-              height: rendered.height,
-              bytes: _bgraToRgba(rendered.pixels),
-            );
-          } finally {
-            rendered.dispose();
-          }
-        } on PdfRenderException {
-          rethrow;
-        } on Object catch (error) {
-          throw PdfRenderException('Failed to render page $pageIndex: $error');
-        }
-      });
+      Result.guard<PdfPageImage>(
+        () => _renderAt(pageIndex, (page) => scale),
+      );
+
+  @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) => Result.guard<PdfPageImage>(
+    // A thumbnail is just a low-scale render: fit the page's point width
+    // into [maxWidth] pixels (never upscale a page narrower than that).
+    () => _renderAt(
+      pageIndex,
+      (page) => math.min(1, maxWidth / page.width),
+    ),
+  );
+
+  /// Renders [pageIndex] at the scale [scaleFor] computes from the page
+  /// (so callers can derive it from the page's own dimensions).
+  Future<PdfPageImage> _renderAt(
+    int pageIndex,
+    double Function(pdfrx.PdfPage page) scaleFor,
+  ) async {
+    final document = _document;
+    if (document == null) {
+      throw const PdfRenderException(
+        'renderPage was called before a document was open()ed',
+      );
+    }
+    final pages = document.pages;
+    if (pageIndex < 0 || pageIndex >= pages.length) {
+      throw PdfRenderException(
+        'Page $pageIndex is out of range (0..${pages.length - 1})',
+      );
+    }
+    try {
+      final page = pages[pageIndex];
+      final scale = scaleFor(page);
+      // Omit width/height so the full page is rendered; fullWidth/
+      // fullHeight set the target resolution (page points × scale).
+      final rendered = await page.render(
+        fullWidth: page.width * scale,
+        fullHeight: page.height * scale,
+      );
+      if (rendered == null) {
+        throw const PdfRenderException(
+          'pdfrx returned no image for the requested page',
+        );
+      }
+      try {
+        return PdfPageImage(
+          pageIndex: pageIndex,
+          width: rendered.width,
+          height: rendered.height,
+          bytes: _bgraToRgba(rendered.pixels),
+        );
+      } finally {
+        rendered.dispose();
+      }
+    } on PdfRenderException {
+      rethrow;
+    } on Object catch (error) {
+      throw PdfRenderException('Failed to render page $pageIndex: $error');
+    }
+  }
 
   /// pdfrx emits pixels as BGRA8888, but our contract (and
   /// `ScorePageCanvas`'s `decodeImageFromPixels(..., PixelFormat.rgba8888)`)
