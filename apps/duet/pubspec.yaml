@@ -17,6 +17,8 @@ dependencies:
     path: ../../packages/core/core_ui
   core_utils:
     path: ../../packages/core/core_utils
+  crash_reporting:
+    path: ../../packages/services/crash_reporting
   deep_linking:
     path: ../../packages/services/deep_linking
   equatable: ^2.0.5
