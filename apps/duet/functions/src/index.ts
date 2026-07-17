@@ -9,6 +9,11 @@ export { acceptInvite } from './acceptInvite';
 export { deleteAccount } from './deleteAccount';
 export { gcTombstones } from './gcTombstones';
 export { healthcheck } from './healthcheck';
+export {
+  acceptInviteToken,
+  createInviteToken,
+  resolveInviteToken,
+} from './inviteTokens';
 export { leavePiece } from './leavePiece';
 export { lookupEmail } from './lookupEmail';
 export { onLayerWrite, onNoteWrite } from './pieceActivity';

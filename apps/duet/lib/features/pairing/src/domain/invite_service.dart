@@ -58,15 +58,47 @@ class InviteDetails extends Equatable {
   List<Object?> get props => [pieceId, pieceTitle, ownerId, ownerName];
 }
 
+/// Why an [InviteService] operation was denied — machine-readable alongside
+/// [InviteException.message]'s user-facing copy, so `AcceptInviteCubit` can
+/// map a denial onto the matching `AcceptInviteStatus` state (M5.2: the
+/// cloud path surfaces these as typed error codes from the callables;
+/// the mock path throws the same reasons).
+enum InviteFailureReason {
+  /// The token is unknown (or its piece no longer exists).
+  invalid,
+
+  /// The token exists but its expiry has passed.
+  expired,
+
+  /// The token was already redeemed (by someone else).
+  consumed,
+
+  /// The piece is at its collaborator cap for the owner's tier.
+  atCap,
+
+  /// The accepter already has access to the piece.
+  alreadyCollaborator,
+
+  /// Anything else (ownership violations, transport failures, ...).
+  generic,
+}
+
 /// Thrown (surfaced via a `Result` failure) by [InviteService] with a
 /// user-facing [message] — e.g. "This invite link is invalid or has
-/// expired.", "Free plan allows 1 collaborator.".
+/// expired.", "Free plan allows 1 collaborator." — and a typed [reason].
 class InviteException implements Exception {
   /// Creates an [InviteException] with a user-facing [message].
-  const InviteException(this.message);
+  const InviteException(
+    this.message, {
+    this.reason = InviteFailureReason.generic,
+  });
 
   /// The message shown to the user.
   final String message;
+
+  /// The machine-readable denial reason (defaults to
+  /// [InviteFailureReason.generic]).
+  final InviteFailureReason reason;
 
   @override
   String toString() => 'InviteException: $message';

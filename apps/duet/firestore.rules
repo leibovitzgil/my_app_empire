@@ -17,8 +17,8 @@ rules_version = '2';
 //     **No client writes these yet** — piece/annotation storage is still
 //     on-device (`local_storage`); the rules land first and are proven by
 //     the M2.3 test suite *before* the M3/M4 sync code that will write them
-//     (G6). `inviteTokens` (M5.2) and `entitlements` (M6.3) are deliberately
-//     left denied-by-default until their milestones add rules + writers.
+//     (G6). `inviteTokens` (M5.2) is explicitly Function-only below;
+//     `entitlements` (M6.3) stays denied-by-default until its milestone.
 //
 // Discovery is server-only (M2.5): a client may read only its *own*
 // `usersByEmail` entry — resolving someone else's email now goes through the
@@ -170,8 +170,19 @@ service cloud.firestore {
         request.auth.uid == resource.data.uid;
     }
 
+    // Tokenized deep-link invites (M5.2): entirely Function-owned. A client
+    // never reads or writes a token doc — minting is the `createInviteToken`
+    // callable (owner + cap checked server-side), the accept screen's
+    // preview is `resolveInviteToken`, and redemption is `acceptInviteToken`
+    // (sets `consumed`/`consumedBy` transactionally, Admin SDK). The doc id
+    // is an unguessable token, but unguessability is not an ACL — deny all,
+    // and never a list/query (which would enumerate live tokens).
+    match /inviteTokens/{token} {
+      allow read, write: if false;
+    }
+
     // Deny-by-default: any path not explicitly matched above (this is what
-    // keeps `inviteTokens`/`entitlements` closed until M5.2/M6.3).
+    // keeps `entitlements` closed until M6.3).
     match /{document=**} {
       allow read, write: if false;
     }

@@ -91,6 +91,19 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
           state.copyWith(status: AcceptInviteStatus.ready, details: details),
         );
       case ResultFailure<Piece>(:final error):
+        // Under the cloud rules a piece read is participant-gated, so a
+        // fresh invitee's `getPiece` is *expected* to be denied — that's
+        // the normal pre-acceptance state (M5.2), not a failure. The
+        // already-collaborator/at-cap pre-checks above simply can't run
+        // client-side then; the accept callable re-asserts both (plus
+        // consumed/expired) transactionally and [accept] maps its typed
+        // denials back onto these states.
+        if (error is OwnershipViolation) {
+          emit(
+            state.copyWith(status: AcceptInviteStatus.ready, details: details),
+          );
+          return;
+        }
         emit(
           state.copyWith(status: AcceptInviteStatus.failure, error: '$error'),
         );
@@ -113,10 +126,24 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
       case Success<void>():
         emit(state.copyWith(status: AcceptInviteStatus.accepted));
       case ResultFailure<void>(:final error):
+        // A typed at-cap/already-collaborator denial (the cloud path's
+        // server-authoritative re-check, M5.2) gets its dedicated screen
+        // state — `details` from [load] is preserved by `copyWith`, so the
+        // tailored body keeps the piece title. Anything else stays on
+        // `ready` with the error surfaced, retryable.
+        final reason = error is InviteException
+            ? error.reason
+            : InviteFailureReason.generic;
+        final status = switch (reason) {
+          InviteFailureReason.atCap => AcceptInviteStatus.atCap,
+          InviteFailureReason.alreadyCollaborator =>
+            AcceptInviteStatus.alreadyCollaborator,
+          _ => AcceptInviteStatus.ready,
+        };
         emit(
           state.copyWith(
-            status: AcceptInviteStatus.ready,
-            error: '$error',
+            status: status,
+            error: status == AcceptInviteStatus.ready ? '$error' : null,
           ),
         );
     }
