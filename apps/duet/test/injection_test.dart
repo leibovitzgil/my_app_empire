@@ -5,16 +5,20 @@
 // a Firebase object (there's no `Firebase.initializeApp()` anywhere in this
 // file; any accidental real-Firebase call site would throw for lack of an
 // initialized app, which this test would then fail on).
+import 'package:analytics/analytics.dart';
 import 'package:crash_reporting/crash_reporting.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/duet_analytics.dart';
+import 'package:duet/data/duet_analytics_observer.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
 import 'package:remote_config/remote_config.dart';
@@ -147,6 +151,21 @@ void main() {
           getIt<CrashReporterUserBinder>(),
           isA<CrashReporterUserBinder>(),
         );
+      },
+    );
+
+    test(
+      'binds a Talker-only AppLogger + DuetAnalytics and installs the '
+      'analytics BlocObserver — never FirebaseAnalytics (M7.2)',
+      () async {
+        await configureDependencies();
+
+        // No `Firebase.initializeApp` exists here, so logging an event can
+        // only complete cleanly if the bound AppLogger never touches
+        // `FirebaseAnalytics.instance`.
+        await getIt<AppLogger>().logEvent('m72_headless_smoke', {'ok': 1});
+        expect(getIt<DuetAnalytics>(), isA<DuetAnalytics>());
+        expect(Bloc.observer, isA<DuetAnalyticsObserver>());
       },
     );
   });

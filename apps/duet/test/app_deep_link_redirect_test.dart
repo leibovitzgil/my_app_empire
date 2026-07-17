@@ -11,6 +11,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:analytics/analytics.dart';
 import 'package:audio/audio.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
@@ -20,6 +21,7 @@ import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
+import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
@@ -76,6 +78,11 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final storage = await LocalStorageService.init();
     getIt.registerSingleton<LocalStorageService>(storage);
+    // The router's screen-view observer resolves the analytics catalogue
+    // (M7.2); a Talker-only AppLogger keeps it headless like injection.dart.
+    getIt.registerLazySingleton<DuetAnalytics>(
+      () => DuetAnalytics(AppLogger()),
+    );
     final mockAuthRepository = MockAuthRepository();
     getIt.registerSingleton<AuthRepository>(mockAuthRepository);
     // HomeScreen's verify-email banner resolves the account seam too —
