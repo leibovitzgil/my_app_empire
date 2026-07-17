@@ -226,6 +226,55 @@ describe('userInbox', () => {
   });
 });
 
+describe('inviteTokens (M5.2) — Function-only, no client access at all', () => {
+  // A live token minted by the createInviteToken callable (seeded with rules
+  // disabled, standing in for the Admin SDK writer). uid-sam is the owner.
+  const tokenDoc = {
+    pieceId: 'p1',
+    ownerId: 'uid-sam',
+    ownerName: 'Sam',
+    createdAt: 1,
+    expiresAt: 2,
+    consumed: false,
+    consumedBy: null,
+  };
+
+  it('no one may get a token doc — not the owner, an invitee, or anon '
+      + '(preview goes through the resolveInviteToken callable)', async () => {
+    await seed('inviteTokens/tok-1', tokenDoc);
+    await assertFails(getDoc(doc(sam(), 'inviteTokens/tok-1')));
+    await assertFails(getDoc(doc(mallory(), 'inviteTokens/tok-1')));
+    await assertFails(getDoc(doc(anon(), 'inviteTokens/tok-1')));
+  });
+
+  it('no one may list/query tokens (that would enumerate live invite '
+      + 'links)', async () => {
+    await seed('inviteTokens/tok-1', tokenDoc);
+    await assertFails(getDocs(collection(sam(), 'inviteTokens')));
+    await assertFails(getDocs(collection(mallory(), 'inviteTokens')));
+  });
+
+  it('not even the owner may mint a token doc directly — creation is the '
+      + 'createInviteToken callable (owner + cap checked server-side)', async () => {
+    await assertFails(setDoc(doc(sam(), 'inviteTokens/tok-1'), tokenDoc));
+  });
+
+  it('no client may redeem (update) or revoke (delete) a token — '
+      + 'consumption is the acceptInviteToken callable', async () => {
+    await seed('inviteTokens/tok-1', tokenDoc);
+    // The invitee marking it consumed themselves: denied.
+    await assertFails(
+      updateDoc(doc(mallory(), 'inviteTokens/tok-1'), {
+        consumed: true,
+        consumedBy: 'uid-mallory',
+      }),
+    );
+    // The owner revoking by hand: denied (delete rides the piece-delete
+    // cascade Function or the expiresAt TTL).
+    await assertFails(deleteDoc(doc(sam(), 'inviteTokens/tok-1')));
+  });
+});
+
 describe('deny-by-default catch-all', () => {
   it('unmatched collections are unreadable and unwritable even signed in', async () => {
     await assertFails(getDoc(doc(sam(), 'somewhereElse/doc1')));

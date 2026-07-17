@@ -438,5 +438,61 @@ void main() {
         expect((fetched as Success<Piece>).value.collaboratorCount, 2);
       },
     );
+
+    test(
+      'a token older than tokenTtl is rejected on resolve AND accept with '
+      'the standing invalid-or-expired copy (M5.2: expiry is enforced, '
+      'not just modeled)',
+      () async {
+        final mintedAt = DateTime(2024);
+        var now = mintedAt;
+        final clocked = DeepLinkInviteService(
+          pieceRepository: pieceRepository,
+          monetizationService: monetization,
+          storage: storage,
+          tokenGenerator: () => 'token-exp',
+          clock: () => now,
+        );
+        await clocked.createInvite(ownerId: ownerId, pieceId: 'p1');
+
+        // One millisecond short of the TTL: still redeemable.
+        now = mintedAt
+            .add(DeepLinkInviteService.tokenTtl)
+            .subtract(const Duration(milliseconds: 1));
+        expect(
+          await clocked.resolveInvite('token-exp'),
+          isA<Success<InviteDetails>>(),
+        );
+
+        // At the TTL boundary: dead, everywhere.
+        now = mintedAt.add(DeepLinkInviteService.tokenTtl);
+        final resolved = await clocked.resolveInvite('token-exp');
+        expect(resolved, isA<ResultFailure<InviteDetails>>());
+        expect(
+          (resolved as ResultFailure<InviteDetails>).error,
+          isA<InviteException>()
+              .having(
+                (e) => e.reason,
+                'reason',
+                InviteFailureReason.expired,
+              )
+              .having(
+                (e) => e.message,
+                'message',
+                contains('invalid or has expired'),
+              ),
+        );
+
+        final accepted = await clocked.acceptInvite(
+          'token-exp',
+          collaboratorId: collaboratorId,
+        );
+        expect(accepted, isA<ResultFailure<void>>());
+
+        // Nothing was paired.
+        final fetched = await pieceRepository.getPiece('p1');
+        expect((fetched as Success<Piece>).value.collaboratorCount, 0);
+      },
+    );
   });
 }

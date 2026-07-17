@@ -11,6 +11,7 @@ import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
+import 'package:duet/data/callable_invite_service.dart';
 import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
@@ -433,13 +434,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     ),
   );
 
-  getIt.registerLazySingleton<InviteService>(
-    () => DeepLinkInviteService(
+  // The secondary (tokenized deep-link) invite path. Under Firebase the
+  // whole lifecycle is server-authoritative (M5.2): `CallableInviteService`
+  // drives the `createInviteToken`/`resolveInviteToken`/`acceptInviteToken`
+  // callables against single-use, expiring `/inviteTokens/{token}` docs the
+  // rules deny to clients entirely. The headless gate keeps the local
+  // mock-path impl, which now enforces the same 14-day expiry (G2).
+  getIt.registerLazySingleton<InviteService>(() {
+    if (useFirebase) {
+      return CallableInviteService(
+        functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+      );
+    }
+    return DeepLinkInviteService(
       pieceRepository: getIt<PieceRepository>(),
       monetizationService: getIt<MonetizationService>(),
       storage: getIt<LocalStorageService>(),
-    ),
-  );
+    );
+  });
 
   // The primary (email-based) collaborator invite path; `InviteService`
   // above remains the secondary/fallback (tokenized deep-link) path — both

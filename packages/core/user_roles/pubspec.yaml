@@ -18,7 +18,7 @@ dependencies:
     path: ../local_storage
 
 dev_dependencies:
-  fake_cloud_firestore: ^4.0.0
+  fake_cloud_firestore: ^4.2.0
   flutter_test:
     sdk: flutter
   shared_preferences: ^2.2.2
