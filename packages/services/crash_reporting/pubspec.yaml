@@ -1,5 +1,5 @@
-name: analytics
-description: A reuseable core package for analytics and logging.
+name: crash_reporting
+description: "Crash reporting seam: CrashReporter contract with Crashlytics and no-op implementations plus global crash hooks."
 version: 0.0.1
 publish_to: 'none'
 
@@ -8,13 +8,10 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
-  crash_reporting:
-    path: ../crash_reporting
-  firebase_analytics: ^12.4.3
   firebase_core: ^4.11.0
+  firebase_crashlytics: ^5.2.4
   flutter:
     sdk: flutter
-  talker_flutter: ^5.1.17
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:audio/audio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crash_reporting/crash_reporting.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/audio_upload_queue.dart';
@@ -15,6 +16,7 @@ import 'package:duet/data/callable_invite_service.dart';
 import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
+import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
@@ -188,6 +190,25 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt.registerSingleton<DeviceTokenRegistry>(inMemoryUserMessaging);
     getIt.registerSingleton<UserMessageGateway>(inMemoryUserMessaging);
   }
+
+  // Crash reporting (M7.1). Both compositions bind the no-op today: the
+  // headless/mock path must never construct a Firebase object (G2), and the
+  // emulator suite has no Crashlytics emulator to report to. The uid binder
+  // below still runs against it, so the glue is exercised end-to-end.
+  // TODO(M7.1-B): in the real Firebase entry point (Track B, after M0.2),
+  // bind CrashlyticsCrashReporter and call installCrashHooks(reporter)
+  // there — never here, and never for mock/emulator runs.
+  getIt.registerLazySingleton<CrashReporter>(NoopCrashReporter.new);
+
+  // Eager, like CurrentUser/DirectoryPublisher below: the account
+  // subscription must exist before the user can possibly sign in. Uid only —
+  // never the email (see the class doc); cleared (null) on sign-out.
+  getIt.registerSingleton<CrashReporterUserBinder>(
+    CrashReporterUserBinder(
+      reporter: getIt<CrashReporter>(),
+      accounts: getIt<AuthAccountProvider>().account,
+    ),
+  );
 
   // Keeps this device's own directory entry current whenever the signed-in
   // identity changes, threading the locally-stored `discoverable` choice

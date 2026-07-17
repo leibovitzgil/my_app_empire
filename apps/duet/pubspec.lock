@@ -261,6 +261,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.15.1"
+  crash_reporting:
+    dependency: "direct main"
+    description:
+      path: "../../packages/services/crash_reporting"
+      relative: true
+    source: path
+    version: "0.0.1"
   cross_file:
     dependency: transitive
     description:
@@ -433,6 +440,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.9.1"
+  firebase_crashlytics:
+    dependency: transitive
+    description:
+      name: firebase_crashlytics
+      sha256: "9855d3e2286c3e4439cf7d48c740bdf282ac165f29c7551dcdaf121925c59a28"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.2.6"
+  firebase_crashlytics_platform_interface:
+    dependency: transitive
+    description:
+      name: firebase_crashlytics_platform_interface
+      sha256: aab14de92555ccf8c8616fc1b649272aef04dadb07f986e166e1d36d158f7bd1
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.8.26"
   firebase_messaging:
     dependency: "direct dev"
     description:
@@ -457,30 +480,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.2.3"
-  firebase_remote_config:
-    dependency: transitive
-    description:
-      name: firebase_remote_config
-      sha256: d642fe803397a142199d1d1f45683021d822af59f989a78ba8f050d9ebede382
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.5.5"
-  firebase_remote_config_platform_interface:
-    dependency: transitive
-    description:
-      name: firebase_remote_config_platform_interface
-      sha256: "04ccfae1e90e218096f5251da42c5aa520b1ef4858b0dcb5f0c9eec0dee58715"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.5"
-  firebase_remote_config_web:
-    dependency: transitive
-    description:
-      name: firebase_remote_config_web
-      sha256: a81e9495eabde81f3ae93fe5d132384522925d6f2cce869510ebef7fe43b1c50
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.10.12"
   firebase_storage:
     dependency: "direct main"
     description:
@@ -1162,13 +1161,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.2"
-  remote_config:
-    dependency: "direct main"
-    description:
-      path: "../../packages/services/remote_config"
-      relative: true
-    source: path
-    version: "0.0.1"
   rx:
     dependency: transitive
     description:

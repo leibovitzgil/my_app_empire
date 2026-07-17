@@ -157,7 +157,7 @@ in the Track B backlog.
 | M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
 | M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
 | M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
-| M7.1 | ☐ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
+| M7.1 | ☑ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
 | M7.2 | ☐ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
 | M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
 | M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
@@ -2570,6 +2570,26 @@ don't extend that; disentangle.
 **Done when:** a forced test crash on staging appears in the console
 dashboard; headless gate never touches Firebase (G2); package has fake-
 driven unit tests.
+
+**Landed (Track A).** `packages/services/crash_reporting`: `CrashReporter`
+contract (`recordError(error, stack, {fatal, context})` / `log` /
+`setUserId` — uid only, never email), `CrashlyticsCrashReporter`,
+`NoopCrashReporter`, and `installCrashHooks(reporter)` chaining
+`FlutterError.onError` (previous handler kept, so the console dump
+survives) + `PlatformDispatcher.instance.onError`; fake- and
+mocktail-driven unit tests for all three plus the hooks. `AppLogger`
+(`packages/services/analytics`) now takes an injected `CrashReporter`
+(defaults to the noop) and the analytics package dropped its direct
+`firebase_crashlytics` dependency. Duet binds `NoopCrashReporter` in both
+compositions (no Crashlytics emulator exists; a `TODO(M7.1-B)` in
+`injection.dart` marks the real-entry-point binding) plus an eager
+`CrashReporterUserBinder` (`lib/data/`, the `DirectoryPublisher` pattern)
+forwarding the account stream's uid and clearing it on sign-out —
+binder-tested, and the injection guardrail now pins the noop binding (G2).
+The package README documents the ▸B/[HUMAN] `flutterfire configure`
+re-run for the Crashlytics gradle plugin. **▸B remainder:** live
+Crashlytics wiring + `installCrashHooks` in the real entry points (after
+M0.2) and the forced-crash console check.
 
 ### M7.2 — Analytics: event catalogue + funnel instrumentation
 

@@ -5,7 +5,9 @@
 // a Firebase object (there's no `Firebase.initializeApp()` anywhere in this
 // file; any accidental real-Firebase call site would throw for lack of an
 // initialized app, which this test would then fail on).
+import 'package:crash_reporting/crash_reporting.dart';
 import 'package:duet/data/account_purge.dart';
+import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/mock_auth_repository.dart';
@@ -130,6 +132,21 @@ void main() {
         expect(remoteConfig.paywallEnabled, isTrue);
         expect(remoteConfig.inviteLinksEnabled, isTrue);
         expect(remoteConfig.pricingExperiment, isEmpty);
+      },
+    );
+
+    test(
+      'binds a NoopCrashReporter — never Crashlytics — and the uid binder '
+      'subscribes before sign-in',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<CrashReporter>(), isA<NoopCrashReporter>());
+        // Eagerly constructed (never throws resolving it).
+        expect(
+          getIt<CrashReporterUserBinder>(),
+          isA<CrashReporterUserBinder>(),
+        );
       },
     );
   });
