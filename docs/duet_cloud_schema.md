@@ -339,6 +339,19 @@ they didn't record). Storage transfer sits behind an `AudioObjectStore` seam so
 the queue/cache orchestration is fake-testable; the Firebase transfer itself is
 emulator-verified.
 
+**Audio format + size caps (recorded once, here, M8.3).** Recordings are
+**AAC-LC mono, 64 kbps / 44.1 kHz** in an MPEG-4 container (`.m4a`) — the
+explicit `RecordAudioRecorderService.recordConfig` (voice quality,
+≈ 0.5 MB/min, so a max-length 60 s note lands around 0.5 MB). Uploads set
+**content-type `audio/mp4`** explicitly (`FirebaseAudioObjectStore.upload`;
+the object name has no extension, so nothing could be inferred). Size is
+capped twice: the Storage rules reject audio objects ≥ 5 MB
+(`apps/duet/storage.rules`), and every `AudioAssetStore.put` applies the
+same cap client-side (`maxAudioNoteBytes` in
+`apps/duet/lib/domain/src/domain/audio_asset_store.dart`, kept in sync with
+the rule) — unreachable with the encoder settings; an honest backstop
+surfaced as "Recording too large".
+
 ---
 
 ## Region, offline, indexes

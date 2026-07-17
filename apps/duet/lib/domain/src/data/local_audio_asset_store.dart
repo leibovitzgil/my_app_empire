@@ -48,6 +48,7 @@ class LocalAudioAssetStore implements AudioAssetStore {
   @override
   Future<Result<String>> put(String sourcePath, {required String pieceId}) =>
       Result.guard<String>(() async {
+        ensureAudioNoteWithinCap(sourcePath);
         final dir = await _assetsDir();
         final id = _nextId();
         final destPath = p.join(dir.path, '$id${p.extension(sourcePath)}');

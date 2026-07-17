@@ -19,6 +19,24 @@ class RecordAudioRecorderService implements AudioRecorderService {
     : _recorder = recorder ?? PackageRecorderPort(),
       _now = now ?? (() => clock.now());
 
+  /// The explicit encoder configuration for every recording: AAC-LC mono at
+  /// 64 kbps / 44.1 kHz — voice quality at ≈ 0.5 MB/min, so even a
+  /// minute-long note stays far under upload size caps (M8.3). Explicit
+  /// because `RecordConfig()`'s defaults (128 kbps stereo) double the byte
+  /// rate twice over for no gain on a mono voice memo.
+  static const record.RecordConfig recordConfig = record.RecordConfig(
+    // Values matching upstream defaults are re-stated deliberately: this
+    // config *is* the recorded format decision (AAC-LC in an MPEG-4
+    // container), pinned against upstream default drift.
+    // ignore: avoid_redundant_argument_values
+    encoder: record.AudioEncoder.aacLc,
+    bitRate: 64000,
+    // Same rationale: deliberately pinned despite matching the default.
+    // ignore: avoid_redundant_argument_values
+    sampleRate: 44100,
+    numChannels: 1,
+  );
+
   final RecorderPort _recorder;
   final DateTime Function() _now;
   final StreamController<Duration> _elapsedController =
@@ -48,7 +66,7 @@ class RecordAudioRecorderService implements AudioRecorderService {
           throw const AudioRecordException('Microphone permission denied');
         }
         try {
-          await _recorder.start(const record.RecordConfig(), path: outputPath);
+          await _recorder.start(recordConfig, path: outputPath);
         } on Object catch (error) {
           throw AudioRecordException('Failed to start recording: $error');
         }

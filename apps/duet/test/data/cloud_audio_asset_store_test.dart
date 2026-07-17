@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/audio_object_store.dart';
 import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
+import 'package:duet/domain/domain.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -96,6 +98,25 @@ void main() {
       expect(File(path).readAsStringSync(), 'sound');
       // ...and still queued (the best-effort upload failed).
       expect(queue.pendingCount, 1);
+    });
+
+    test('put fails with "Recording too large" over the byte cap — '
+        'nothing cached, nothing enqueued', () async {
+      // The cap mirrors the Storage rules' 5 MB audio limit (M8.3): an
+      // over-cap file must never sit in the upload queue only to be
+      // bounced by the rules.
+      final oversized = File('${tempDir.path}/oversized.m4a')
+        ..writeAsBytesSync(Uint8List(maxAudioNoteBytes));
+
+      final result = await store.put(oversized.path, pieceId: 'p1');
+      await pumpEventQueue();
+
+      expect(result, isA<ResultFailure<String>>());
+      final error = (result as ResultFailure<String>).error;
+      expect(error, isA<AudioNoteTooLargeException>());
+      expect('$error', contains('Recording too large'));
+      expect(queue.pendingCount, 0);
+      expect(objectStore.uploaded, isEmpty);
     });
 
     test('put best-effort-uploads when online, draining the queue', () async {

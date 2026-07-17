@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/domain/domain.dart';
@@ -31,6 +32,34 @@ void main() {
         expect(assetId, isNotEmpty);
       },
     );
+
+    test('put fails with "Recording too large" over the byte cap', () async {
+      // The cap mirrors the Storage rules' 5 MB audio limit (M8.3).
+      final oversized = File('${tempDir.path}/oversized.m4a')
+        ..writeAsBytesSync(Uint8List(maxAudioNoteBytes));
+
+      final result = await store.put(oversized.path, pieceId: 'p1');
+
+      expect(result, isA<ResultFailure<String>>());
+      final error = (result as ResultFailure<String>).error;
+      expect(error, isA<AudioNoteTooLargeException>());
+      expect('$error', contains('Recording too large'));
+      // Nothing was stored.
+      final stored = tempDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.contains('audio_notes'));
+      expect(stored, isEmpty);
+    });
+
+    test('put succeeds just under the byte cap', () async {
+      final nearCap = File('${tempDir.path}/near_cap.m4a')
+        ..writeAsBytesSync(Uint8List(maxAudioNoteBytes - 1));
+
+      final result = await store.put(nearCap.path, pieceId: 'p1');
+
+      expect(result, isA<Success<String>>());
+    });
 
     test("pathFor resolves a stored asset's on-disk path", () async {
       final putResult = await store.put(sourceFile.path, pieceId: 'p1');

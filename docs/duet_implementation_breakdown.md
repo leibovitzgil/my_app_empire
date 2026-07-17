@@ -165,7 +165,7 @@ in the Track B backlog.
 | M7.6 | ☐ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
 | M8.1 | ☐ Real page thumbnails + thumbnail cache | — |
 | M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
-| M8.3 | ☐ Audio note size caps + compression | — |
+| M8.3 | ☑ Audio note size caps + compression | — |
 | M8.4 | ☐ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
 | M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
 | M9.1 | ☐ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
@@ -2819,6 +2819,34 @@ exceptions); no regression in reader tests.
 
 **Done when:** a max-length note lands ≈ ≤ 1 MB on the emulator; caps
 enforced client + rules side; gate green.
+
+**Landed.** **Encoder.** `RecordAudioRecorderService.recordConfig` — a
+static const `RecordConfig(encoder: aacLc, bitRate: 64000, sampleRate:
+44100, numChannels: 1)` (AAC-LC mono ≈ 0.5 MB/min; defaults-matching
+values deliberately re-stated and lint-ignored, pinning against upstream
+drift) — now passed on every `start`. **Byte cap.** `maxAudioNoteBytes`
+(5 MB) + `AudioNoteTooLargeException` + a shared `ensureAudioNoteWithinCap`
+guard live beside the `AudioAssetStore` contract
+(`apps/duet/lib/domain/src/domain/audio_asset_store.dart`), cross-referenced
+comment-to-comment with the `storage.rules` audio rule; every `put` applies
+it — `LocalAudioAssetStore`, `CloudAudioAssetStore` (rejects *before*
+caching/enqueueing so an over-cap file never sits in the upload queue), and
+the in-memory fakes (flow harness, screenshot harness, migrator +
+review-sync test fakes) for G3 parity. **Surfacing.** `_saveAudioNote` in
+`score_viewer_screen.dart` treats `AudioNoteTooLargeException` as a hard
+stop — "Recording too large" via `AppSnackbar.error`, note not saved —
+instead of the raw-path fallback (which would have smuggled the file past
+the rules cap). **Format decision** recorded in `duet_cloud_schema.md`
+(Storage section): `.m4a`/MPEG-4, content-type `audio/mp4`, now set
+explicitly by `FirebaseAudioObjectStore.upload` via `SettableMetadata` (the
+extensionless object name infers nothing). **Tests.** Recorder-config
+assertion (`record_audio_recorder_service_test.dart`); over-cap +
+just-under-cap `put` tests (local store); over-cap nothing-cached /
+nothing-enqueued test (cloud store); the 60 s-cap
+`record_audio_cubit_test.dart` untouched and green. Also fixed en route:
+three pre-existing lint findings from the `main_emulator_driver.dart` dev
+entrypoint (package import, documented `depend_on_referenced_packages`
+ignore, dev_dependency sorting).
 
 ### M8.4 — Failure-mode audit: quota, interrupted uploads, rules-denied
 

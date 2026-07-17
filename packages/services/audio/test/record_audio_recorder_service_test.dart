@@ -13,6 +13,7 @@ class _FakeRecorderPort implements RecorderPort {
   int startCalls = 0;
   int stopCalls = 0;
   int disposeCalls = 0;
+  record.RecordConfig? lastConfig;
 
   @override
   Future<bool> hasPermission() async => permission;
@@ -20,6 +21,7 @@ class _FakeRecorderPort implements RecorderPort {
   @override
   Future<void> start(record.RecordConfig config, {required String path}) async {
     startCalls++;
+    lastConfig = config;
     if (startThrows) throw Exception('boom');
   }
 
@@ -44,6 +46,22 @@ void main() {
       fakeRecorder = _FakeRecorderPort();
       service = RecordAudioRecorderService(recorder: fakeRecorder);
     });
+
+    test(
+      'start records with the explicit AAC-LC 64 kbps mono config (M8.3)',
+      () async {
+        final result = await service.start('/tmp/out.m4a');
+
+        expect(result, isA<Success<void>>());
+        final config = fakeRecorder.lastConfig;
+        expect(config, same(RecordAudioRecorderService.recordConfig));
+        expect(config?.encoder, record.AudioEncoder.aacLc);
+        expect(config?.bitRate, 64000);
+        expect(config?.sampleRate, 44100);
+        expect(config?.numChannels, 1);
+        await service.stop();
+      },
+    );
 
     test('start fails when microphone permission is denied', () async {
       fakeRecorder.permission = false;
