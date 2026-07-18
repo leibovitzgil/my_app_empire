@@ -37,6 +37,7 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
     on<ScoreOpened>(_onOpened);
     on<AudioNotePlayed>(_onAudioNotePlayed);
     on<ScoreAnnotationsUpdated>(_onAnnotationsUpdated);
+    on<ScoreAnnotationsFailed>(_onAnnotationsFailed);
     on<PageChanged>(_onPageChanged);
     on<PageCountResolved>(_onPageCountResolved);
     on<ModeChanged>(_onModeChanged);
@@ -115,6 +116,11 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
                 .watch(piece.id)
                 .listen(
                   (annotations) => add(ScoreAnnotationsUpdated(annotations)),
+                  // A live-read failure (e.g. rules `permission-denied` after
+                  // the viewer is removed from the piece mid-session) must
+                  // surface per G4, not vanish as an uncaught stream error that
+                  // silently freezes the layers.
+                  onError: (Object error) => add(ScoreAnnotationsFailed(error)),
                 );
           case ResultFailure<Piece>(:final error):
             emit(state.copyWith(status: ScoreStatus.failure, error: '$error'));
@@ -158,6 +164,17 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
   void _onAudioNotePlayed(AudioNotePlayed event, Emitter<ScoreState> emit) {
     if (state.seenNoteIds.contains(event.noteId)) return;
     emit(state.copyWith(seenNoteIds: {...state.seenNoteIds, event.noteId}));
+  }
+
+  /// Folds a live-annotations stream failure into [ScoreState.error] (a
+  /// transient, non-blocking signal) so the reader surfaces it — the piece
+  /// stays open on whatever layers were last seen rather than the error
+  /// escaping as an uncaught zone error (G4).
+  void _onAnnotationsFailed(
+    ScoreAnnotationsFailed event,
+    Emitter<ScoreState> emit,
+  ) {
+    emit(state.copyWith(error: '${event.error}'));
   }
 
   void _onAnnotationsUpdated(

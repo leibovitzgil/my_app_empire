@@ -900,5 +900,56 @@ void main() {
         },
       );
     });
+
+    // ── M8.4 failure surfacing ──────────────────────────────────────────
+    group('failure surfacing (M8.4)', () {
+      blocTest<ScoreBloc, ScoreState>(
+        'a rules-denied stroke write folds into state.error and rolls back '
+        'the optimistic undo entry (stale client after removal)',
+        build: buildBloc,
+        setUp: () =>
+            when(
+              () => annotationRepository.addStroke(any(), any()),
+            ).thenAnswer(
+              (_) async => const ResultFailure<void>(OwnershipViolation('p1')),
+            ),
+        act: (bloc) async {
+          bloc.add(const ScoreOpened(pieceId));
+          await Future<void>.delayed(Duration.zero);
+          bloc
+            ..add(const ModeChanged(ScoreMode.draw))
+            ..add(
+              const StrokeCompleted([
+                InkPoint(x: 0.1, y: 0.1),
+                InkPoint(x: 0.2, y: 0.2),
+              ]),
+            );
+          await Future<void>.delayed(Duration.zero);
+        },
+        verify: (bloc) {
+          expect(bloc.state.error, contains('OwnershipViolation'));
+          // The optimistic stroke was rolled back off the undo stack.
+          expect(bloc.state.undoStack, isEmpty);
+        },
+      );
+
+      blocTest<ScoreBloc, ScoreState>(
+        'a live-annotations read failure (mid-session permission-denied) '
+        'folds into state.error instead of a swallowed stream error',
+        build: buildBloc,
+        act: (bloc) async {
+          bloc.add(const ScoreOpened(pieceId));
+          await Future<void>.delayed(Duration.zero);
+          // The viewer was removed from the piece: the live watch errors.
+          annotationsController.addError(const OwnershipViolation('p1'));
+          await Future<void>.delayed(Duration.zero);
+        },
+        verify: (bloc) {
+          // The piece stays open (status ready), the failure is surfaced.
+          expect(bloc.state.status, ScoreStatus.ready);
+          expect(bloc.state.error, contains('OwnershipViolation'));
+        },
+      );
+    });
   });
 }

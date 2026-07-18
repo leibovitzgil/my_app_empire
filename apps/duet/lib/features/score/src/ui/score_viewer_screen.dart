@@ -153,8 +153,9 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       child: BlocConsumer<ScoreBloc, ScoreState>(
         listenWhen: (previous, current) =>
             previous.activeRegion != current.activeRegion ||
-            previous.regionIntent != current.regionIntent,
-        listener: _onRegionSelectionChanged,
+            previous.regionIntent != current.regionIntent ||
+            (current.error != null && current.error != previous.error),
+        listener: _onScoreStateChanged,
         builder: (context, state) {
           _maybeOpenPdf(state);
           return Theme(
@@ -374,7 +375,15 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   /// Region-intent changes drive navigation for practice only; the record
   /// flow renders declaratively as an in-canvas card (see `_ReaderCanvas`)
   /// so the selected passage stays spotlit behind it.
-  void _onRegionSelectionChanged(BuildContext context, ScoreState state) {
+  void _onScoreStateChanged(BuildContext context, ScoreState state) {
+    // A non-blocking write/read failure the bloc folded into `error` while the
+    // reader stays open — a denied stroke/erase/undo/audio-note write, or a
+    // mid-session live-read denial (M8.4). Surface it per G4 (blocking load
+    // failures render `ErrorRetryView` in `_buildBody`, not here).
+    final error = state.error;
+    if (error != null && state.status != ScoreStatus.failure) {
+      AppSnackbar.error(context, error);
+    }
     final region = state.activeRegion;
     final intent = state.regionIntent;
     if (region == null || intent == null) return;

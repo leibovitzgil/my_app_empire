@@ -166,7 +166,7 @@ in the Track B backlog.
 | M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
 | M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
 | M8.3 | ☑ Audio note size caps + compression | — |
-| M8.4 | ☐ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
+| M8.4 | ☑ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
 | M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
 | M9.1 | ☐ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
 
@@ -3120,6 +3120,30 @@ bullet 2).
 
 **Done when:** checklist merged with every row green/linked; no failure
 mode ends in a spinner or silence.
+
+**Landed.** Audit doc `docs/duet_failure_modes.md` enumerates all eight
+cloud failure modes, each grounded in a real code path, asserting its G4
+surface (`ErrorRetryView` / `AppSnackbar.error` / bloc failure field). Five
+rows were already honest (quota upload, interrupted-import repair, offline
+invite send, callable deadline, and — pre-empted before it can queue — the
+over-cap recording). Three real gaps found and fixed: **(A)** the reader never
+surfaced `ScoreState.error` — denied stroke/erase/undo/audio writes rolled back
+silently and the live-`watch` subscription had no `onError` (mid-session
+rules-denied read → uncaught, frozen layers); now folded via a new
+`ScoreAnnotationsFailed` event and shown through `AppSnackbar.error`
+(`score_bloc.dart`, `score_event.dart`, `score_viewer_screen.dart`). **(B)**
+`AcceptInviteCubit.accept` left an expired/consumed/invalid token on a retryable
+`ready` + snackbar (an Accept button that could only fail again) — now a
+terminal `failure` → `ErrorRetryView`, matching the resolve-time path;
+`generic`/deadline stays retryable. **(C)** `AudioUploadQueue.drain` silently
+dropped a poison entry at `maxAttempts` (data loss; the sync badge falsely
+flipped to "synced") — now retained in a persisted `failed` dead-letter set
+exposed via a `failed` count stream + `failedTasks`, with `skip` (discard) and
+`retryFailed` affordances. Regression tests per gap: `score_bloc_test.dart`
+(group `failure surfacing (M8.4)`), `accept_invite_cubit_test.dart`
+(terminal-denial cases, parameterised), `audio_upload_queue_test.dart` (poison
+/ failed-stream / skip / retry / restart). Gate (trimmed): `flutter analyze`
+clean + `flutter test --exclude-tags golden` 646 passing on `apps/duet`.
 
 ### M8.5 — Device-matrix QA, accessibility pass, localization decision
 

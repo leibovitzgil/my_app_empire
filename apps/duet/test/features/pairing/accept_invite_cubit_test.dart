@@ -385,5 +385,64 @@ void main() {
         ),
       ],
     );
+
+    // M8.4: an expired/consumed/invalid token surfaced *during accept* (the
+    // token died between resolve and accept, or the server re-asserted it) is
+    // terminal — retrying accept is futile — so it renders the blocking
+    // `failure` dead-end, not a retryable `ready` + snackbar.
+    for (final reason in const [
+      InviteFailureReason.expired,
+      InviteFailureReason.consumed,
+      InviteFailureReason.invalid,
+    ]) {
+      blocTest<AcceptInviteCubit, AcceptInviteState>(
+        'a typed $reason denial from accept is terminal (failure), not '
+        'a retryable ready state',
+        build: () {
+          when(
+            () => inviteService.resolveInvite(token),
+          ).thenAnswer((_) async => const Success(details));
+          when(
+            () => pieceRepository.getPiece('p1'),
+          ).thenAnswer((_) async => Success(piece()));
+          when(() => monetization.isProUser()).thenAnswer((_) async => false);
+          when(
+            () => inviteService.acceptInvite(
+              token,
+              collaboratorId: collaboratorId,
+              collaboratorName: any(named: 'collaboratorName'),
+              collaboratorEmail: collaboratorEmail,
+            ),
+          ).thenAnswer(
+            (_) async => ResultFailure<void>(
+              InviteException(
+                'This invite link is invalid or has expired.',
+                reason: reason,
+              ),
+            ),
+          );
+          return buildCubit();
+        },
+        act: (cubit) async {
+          await cubit.load();
+          await cubit.accept();
+        },
+        skip: 2,
+        expect: () => [
+          isA<AcceptInviteState>().having(
+            (s) => s.status,
+            'status',
+            AcceptInviteStatus.accepting,
+          ),
+          isA<AcceptInviteState>()
+              .having((s) => s.status, 'status', AcceptInviteStatus.failure)
+              .having(
+                (s) => s.error,
+                'error',
+                contains('invalid or has expired'),
+              ),
+        ],
+      );
+    }
   });
 }
