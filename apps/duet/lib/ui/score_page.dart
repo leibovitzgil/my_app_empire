@@ -12,7 +12,54 @@ import 'package:duet/features/score/score.dart';
 import 'package:duet/injection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+
+/// Resolves [pieceId] against the [PieceRepository] before mounting the
+/// reader (M5.5): the `/score/:pieceId` route is now a deep-link/push
+/// destination, so any id can arrive here — an unknown or denied one lands
+/// back on `/home` with a snackbar (G4) instead of stranding the user on a
+/// dead score screen. In-app navigation (library taps) passes ids that are
+/// known to exist, so the extra resolve is a cheap repository hit there.
+class DuetScoreRouteGuard extends StatefulWidget {
+  /// Creates a [DuetScoreRouteGuard] for [pieceId].
+  const DuetScoreRouteGuard({required this.pieceId, super.key});
+
+  /// The piece to resolve and open.
+  final String pieceId;
+
+  @override
+  State<DuetScoreRouteGuard> createState() => _DuetScoreRouteGuardState();
+}
+
+class _DuetScoreRouteGuardState extends State<DuetScoreRouteGuard> {
+  bool _resolved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resolve());
+  }
+
+  Future<void> _resolve() async {
+    final result = await getIt<PieceRepository>().getPiece(widget.pieceId);
+    if (!mounted) return;
+    switch (result) {
+      case Success<Piece>():
+        setState(() => _resolved = true);
+      case ResultFailure<Piece>():
+        // Shown once `/home`'s library scaffold mounts — the messenger
+        // queues it across the navigation.
+        AppSnackbar.error(context, 'That sheet is no longer available');
+        context.go('/home');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _resolved
+      ? DuetScorePage(pieceId: widget.pieceId)
+      : const Scaffold(body: LoadingView());
+}
 
 /// Hosts `feature_score`'s Score Viewer for [pieceId]: builds the
 /// [ScoreBloc] from the shared repositories, and wires the app-glue

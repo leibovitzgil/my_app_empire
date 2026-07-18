@@ -89,8 +89,11 @@ class _AppViewState extends State<AppView> {
         ),
         GoRoute(
           path: '/score/:pieceId',
+          // Guarded (M5.5): this route is a push/deep-link destination, so
+          // the id is resolved first — unknown/denied ones bounce to
+          // `/home` with a snackbar (G4).
           builder: (context, state) =>
-              DuetScorePage(pieceId: state.pathParameters['pieceId']!),
+              DuetScoreRouteGuard(pieceId: state.pathParameters['pieceId']!),
         ),
         GoRoute(
           path: '/collaborators/:pieceId',

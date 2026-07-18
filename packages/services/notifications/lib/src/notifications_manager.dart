@@ -141,18 +141,24 @@ class NotificationsManager {
   /// network: it's for surfacing something that already happened locally
   /// (e.g. an imported review-sync bundle) rather than a remote push.
   ///
+  /// [payload] is an opaque string attached to the notification and echoed
+  /// back on [onLocalNotificationTap] when the user taps it — apps put a
+  /// deep-link URI here so a tap routes to the exact content (M5.5).
+  ///
   /// Never throws: plugin failures are mapped to a
   /// [LocalNotificationException] inside a [ResultFailure], the same
   /// pattern `services/networking` uses for `DioException`.
   Future<Result<void>> showLocal({
     required String title,
     required String body,
+    String? payload,
   }) => Result.guard<void>(() async {
     try {
       await _localNotifications.show(
         id: _nextNotificationId(),
         title: title,
         body: body,
+        payload: payload,
       );
     } on Object catch (error) {
       throw LocalNotificationException(
@@ -160,6 +166,11 @@ class NotificationsManager {
       );
     }
   });
+
+  /// Payloads of local notifications the user tapped while the app was
+  /// running (see [LocalNotificationPort.onTap]). Taps on notifications
+  /// shown without a payload are not emitted.
+  Stream<String> get onLocalNotificationTap => _localNotifications.onTap;
 
   // A distinct id per call so successive local notifications (e.g. two
   // review-sync imports in a row) each stay visible instead of the plugin

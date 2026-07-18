@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_utils/core_utils.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,19 +24,27 @@ class _FakeLocalNotificationPort implements LocalNotificationPort {
   int? lastId;
   String? lastTitle;
   String? lastBody;
+  String? lastPayload;
+
+  final StreamController<String> taps = StreamController<String>.broadcast();
 
   @override
   Future<void> show({
     required int id,
     required String title,
     required String body,
+    String? payload,
   }) async {
     showCalls++;
     lastId = id;
     lastTitle = title;
     lastBody = body;
+    lastPayload = payload;
     if (showThrows) throw Exception('boom');
   }
+
+  @override
+  Stream<String> get onTap => taps.stream;
 }
 
 void main() {
@@ -187,6 +197,42 @@ void main() {
           (result as ResultFailure<void>).error,
           isA<LocalNotificationException>(),
         );
+      });
+
+      test('threads the payload through to the port (M5.5)', () async {
+        await manager.showLocal(
+          title: 'Jane invited you',
+          body: 'Join a shared piece',
+          payload: 'https://duet.app/piece/p1',
+        );
+
+        expect(fakePort.lastPayload, 'https://duet.app/piece/p1');
+      });
+
+      test('omitting the payload passes none to the port', () async {
+        await manager.showLocal(title: 'a', body: 'b');
+
+        expect(fakePort.lastPayload, isNull);
+      });
+    });
+
+    group('onLocalNotificationTap', () {
+      test('surfaces the port tap-payload stream (M5.5)', () async {
+        final fakePort = _FakeLocalNotificationPort();
+        final manager = NotificationsManager(
+          mockFirebaseMessaging,
+          mockSharedPreferences,
+          localNotifications: fakePort,
+        );
+
+        final taps = <String>[];
+        final subscription = manager.onLocalNotificationTap.listen(taps.add);
+        addTearDown(subscription.cancel);
+
+        fakePort.taps.add('https://duet.app/piece/p1');
+        await pumpEventQueue();
+
+        expect(taps, ['https://duet.app/piece/p1']);
       });
     });
   });

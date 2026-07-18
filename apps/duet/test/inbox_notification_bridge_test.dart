@@ -47,6 +47,7 @@ void main() {
       () => notifications.showLocal(
         title: any(named: 'title'),
         body: any(named: 'body'),
+        payload: any(named: 'payload'),
       ),
     ).thenAnswer((_) async => const Success<void>(null));
 
@@ -81,6 +82,8 @@ void main() {
         () => notifications.showLocal(
           title: 'Jane invited you to collaborate',
           body: 'Join a shared piece on Duet.',
+          // M5.5: tapping the notification routes to the exact piece.
+          payload: 'https://duet.app/piece/p1',
         ),
       ).called(1);
       // Still pending: `markRead` would have dropped it from the inbox.
@@ -101,6 +104,7 @@ void main() {
       () => notifications.showLocal(
         title: 'Jane added notes',
         body: 'Open the sheet to see what changed.',
+        payload: 'https://duet.app/piece/p1',
       ),
     ).called(1);
     final inbox = await gateway.inboxFor('sam-uid').first;
@@ -124,6 +128,7 @@ void main() {
       () => notifications.showLocal(
         title: 'Jane invited you to collaborate',
         body: any(named: 'body'),
+        payload: any(named: 'payload'),
       ),
     ).called(1);
   });
@@ -144,6 +149,7 @@ void main() {
       () => notifications.showLocal(
         title: any(named: 'title'),
         body: any(named: 'body'),
+        payload: any(named: 'payload'),
       ),
     );
     // Still pending: the push only *displayed* it; accepting consumes it.
@@ -163,12 +169,39 @@ void main() {
       () => notifications.showLocal(
         title: any(named: 'title'),
         body: any(named: 'body'),
+        payload: any(named: 'payload'),
       ),
     );
     // The push already delivered it; marking it read here is what keeps it
     // from riding every later snapshot.
     final inbox = await gateway.inboxFor('sam-uid').first;
     expect(inbox, isEmpty);
+  });
+
+  test('a message about no particular piece carries no tap payload', () async {
+    await gateway.sendToUser(
+      UserMessage(
+        id: 'm1',
+        toUid: 'sam-uid',
+        title: 'Welcome to Duet',
+        body: 'Import your first sheet to get started.',
+        sentAt: DateTime(2024),
+      ),
+    );
+    final bridge = bridgeUnderTest();
+    addTearDown(bridge.dispose);
+
+    userId.add('sam-uid');
+    await pumpEventQueue();
+
+    verify(
+      () => notifications.showLocal(
+        title: 'Welcome to Duet',
+        body: any(named: 'body'),
+        // No piece → no deep-link payload. Omitting `payload` here matches
+        // only calls made with its default (null), which is the assertion.
+      ),
+    ).called(1);
   });
 
   test('an unpushed message still shows even alongside pushed ones', () async {
@@ -184,12 +217,14 @@ void main() {
       () => notifications.showLocal(
         title: 'Jane added notes',
         body: 'Open the sheet to see what changed.',
+        payload: 'https://duet.app/piece/p1',
       ),
     ).called(1);
     verifyNever(
       () => notifications.showLocal(
         title: 'Jane invited you to collaborate',
         body: any(named: 'body'),
+        payload: any(named: 'payload'),
       ),
     );
   });

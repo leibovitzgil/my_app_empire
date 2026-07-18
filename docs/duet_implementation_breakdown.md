@@ -154,7 +154,7 @@ in the Track B backlog.
 | M5.2 | ☑ Invite tokens as expiring Firestore docs | M2.4 |
 | M5.3 | ☑ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
 | M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
-| M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
+| M5.5 | ☑ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
 | M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
 | M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
 | M7.1 | ☑ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
@@ -2298,6 +2298,43 @@ called from tests, and `duetDeepLinkParser` doesn't map piece URIs yet.
 **Done when:** staging: invite push → tap → accept screen; nudge/digest
 push → tap → the exact sheet opens — the **plan-M5 exit** path, minus the
 two-device demo recorded in M5.7.
+
+**Landed (Track A).** **Routing.** `duetDeepLinkParser` now maps
+`https://duet.app/piece/<id>` (exactly the shape M5.3's
+`onInboxMessageCreated` emits as `data.deepLink`) onto the existing
+`/score/:pieceId` route, re-encoding the id into the location the same way
+the invite path does; two-segment `/piece/<id>` only (empty id or trailing
+segments fall through to `UnrecognizedLinkException`). That route is now a
+push/deep-link destination, so it's guarded (`DuetScoreRouteGuard` in
+`ui/score_page.dart`): the id is resolved against `PieceRepository` first,
+and an unknown/denied one bounces to `/home` with an `AppSnackbar` (G4)
+instead of stranding the user on a dead reader. **Contract widening (G3).**
+`LocalNotificationPort.show` gained a `payload` param + an `onTap` payload
+stream; `PluginLocalNotificationPort` passes
+`onDidReceiveNotificationResponse` and re-emits non-empty payloads.
+`NotificationsManager.showLocal` threads `payload` through and exposes
+`onLocalNotificationTap`; every fake/mock/test updated (the package's
+`_FakeLocalNotificationPort`, duet's mocktail `showLocal` stubs). **Glue.**
+The inbox bridge sets each message's piece deep link as the notification
+payload (`InboxNotificationBridge.pieceDeepLinkFor`, kept in sync with the
+function's `DEEP_LINK_DOMAIN`); a new `NotificationTapRouter` (registered
+under `useFirebase` only, so the headless gate never resolves
+`NotificationsManager` — FIX-3/G2) `ingest`s tap payloads into
+`DeepLinkService`, and `AppView`'s existing `onIntent → _dispatchIntent`
+does the rest (signed-in → straight to the piece; signed-out → held until
+login). **Tests.** parser `/piece/<id>` valid/re-encoded/garbage;
+`notification_tap_router_test.dart` (ingest + drop-unparseable +
+parser-decides); three redirect tests mirroring
+`app_deep_link_redirect_test.dart` (signed-in opens the exact score,
+signed-out held-until-login, unknown-id → `/home` + snackbar); notifications
+package payload-threading + tap-stream tests; bridge tests pin the piece
+payload (and its absence for a piece-less message). duet analyze +
+589 tests green, notifications analyze + 30 tests green (trimmed gate; full
+workspace gate runs on the integration branch). **▸B remainder:** FCM
+`onMessageOpenedApp`/`getInitialMessage` wiring in the Firebase entry
+points → `data.deepLink` → `ingest` — needs M5.1/M0.2 (real
+`firebase_messaging` dependency + initialized app), no FCM emulator to
+verify against.
 
 ### M5.6 — In-app invite inbox UI (email-invite acceptance)
 
