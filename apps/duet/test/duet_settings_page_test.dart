@@ -196,9 +196,12 @@ void main() {
     await registerFakes();
     await pumpSettings(tester);
 
-    final about = find.text('About');
-    await tester.scrollUntilVisible(about, 200);
-    expect(about, findsOneWidget);
+    // Scroll to the last About row (Version) so the whole group — the header
+    // and both link buttons above it — is laid out; scrolling only until the
+    // 'About' header appears leaves the buttons below it still off-screen
+    // (more so since M7.5 added the Privacy 'Download my data' row above).
+    await tester.scrollUntilVisible(find.text('Version'), 200);
+    expect(find.text('About'), findsOneWidget);
     expect(find.byType(PrivacyPolicyButton), findsOneWidget);
     expect(find.byType(TermsOfServiceButton), findsOneWidget);
     expect(find.text('Version'), findsOneWidget);
