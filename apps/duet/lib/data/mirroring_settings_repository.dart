@@ -29,9 +29,9 @@ class MirroringSettingsRepository implements SettingsRepository {
     required SettingsRepository delegate,
     required DeviceTokenRegistry registry,
     required String Function() currentUserId,
-  })  : _delegate = delegate,
-        _registry = registry,
-        _currentUserId = currentUserId;
+  }) : _delegate = delegate,
+       _registry = registry,
+       _currentUserId = currentUserId;
 
   final SettingsRepository _delegate;
   final DeviceTokenRegistry _registry;

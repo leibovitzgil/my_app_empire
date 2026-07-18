@@ -287,7 +287,7 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       currentUserId: getIt<CurrentUser>().call,
       tokenGetter: useFirebase
           ? () async =>
-              (await getIt.getAsync<NotificationsManager>()).getToken()
+                (await getIt.getAsync<NotificationsManager>()).getToken()
           : () async => null,
       onTokenRefresh: useFirebase
           ? Stream.fromFuture(

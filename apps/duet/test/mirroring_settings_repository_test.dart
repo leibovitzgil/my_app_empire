@@ -33,10 +33,10 @@ void main() {
     late MirroringSettingsRepository repository;
 
     MirroringSettingsRepository build() => MirroringSettingsRepository(
-          delegate: delegate,
-          registry: registry,
-          currentUserId: () => uid,
-        );
+      delegate: delegate,
+      registry: registry,
+      currentUserId: () => uid,
+    );
 
     setUp(() {
       delegate = _FakeSettingsRepository();
@@ -45,8 +45,7 @@ void main() {
       repository = build();
     });
 
-    test(
-        'writePushEnabled(true) persists locally and mirrors to the '
+    test('writePushEnabled(true) persists locally and mirrors to the '
         'registry', () async {
       final result = await repository.writePushEnabled(true);
 

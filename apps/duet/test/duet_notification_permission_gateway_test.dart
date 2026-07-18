@@ -33,9 +33,10 @@ class _FakeDeviceTokenRegistry implements DeviceTokenRegistry {
       const Success(null);
 
   @override
-  Future<Result<void>> setPushEnabled(String uid,
-          {required bool enabled}) async =>
-      const Success(null);
+  Future<Result<void>> setPushEnabled(
+    String uid, {
+    required bool enabled,
+  }) async => const Success(null);
 }
 
 void main() {

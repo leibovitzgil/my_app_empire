@@ -29,7 +29,7 @@ class FirestoreUserMessaging
     implements DeviceTokenRegistry, UserMessageGateway {
   /// Creates a [FirestoreUserMessaging] persisting via [firestore].
   FirestoreUserMessaging({required FirebaseFirestore firestore})
-      : _firestore = firestore;
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -79,7 +79,10 @@ class FirestoreUserMessaging
 
   @override
   Stream<List<UserMessage>> inboxFor(String uid) {
-    return _inbox(uid).where('read', isEqualTo: false).snapshots().map(
+    return _inbox(uid)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map(
           (snapshot) => [
             for (final doc in snapshot.docs) _toMessage(doc.id, doc.data()),
           ],
@@ -95,22 +98,23 @@ class FirestoreUserMessaging
       });
 
   UserMessage _toMessage(String id, Map<String, dynamic> data) => UserMessage(
-        id: id,
-        toUid: data['toUid'] as String,
-        title: data['title'] as String,
-        body: data['body'] as String,
-        sentAt: DateTime.fromMillisecondsSinceEpoch(
-          data['sentAtMillis'] as int,
-        ),
-        data: (data['data'] as Map<dynamic, dynamic>?)?.map(
-              (key, value) => MapEntry(key as String, value as String),
-            ) ??
-            const <String, String>{},
-        // Absent on documents written before the field existed; `false` keeps
-        // those behaving exactly as they did (consumed once surfaced).
-        requiresAction: data['requiresAction'] as bool? ?? false,
-        // Server-owned (set by `onInboxMessageCreated` after a successful FCM
-        // fan-out); absent until — and unless — a push actually delivered.
-        pushed: data['pushed'] as bool? ?? false,
-      );
+    id: id,
+    toUid: data['toUid'] as String,
+    title: data['title'] as String,
+    body: data['body'] as String,
+    sentAt: DateTime.fromMillisecondsSinceEpoch(
+      data['sentAtMillis'] as int,
+    ),
+    data:
+        (data['data'] as Map<dynamic, dynamic>?)?.map(
+          (key, value) => MapEntry(key as String, value as String),
+        ) ??
+        const <String, String>{},
+    // Absent on documents written before the field existed; `false` keeps
+    // those behaving exactly as they did (consumed once surfaced).
+    requiresAction: data['requiresAction'] as bool? ?? false,
+    // Server-owned (set by `onInboxMessageCreated` after a successful FCM
+    // fan-out); absent until — and unless — a push actually delivered.
+    pushed: data['pushed'] as bool? ?? false,
+  );
 }
