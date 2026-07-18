@@ -168,7 +168,7 @@ in the Track B backlog.
 | M8.3 | ☑ Audio note size caps + compression | — |
 | M8.4 | ☑ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
 | M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
-| M9.1 | ☐ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
+| M9.1 | ☑ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
 
 ### Track B — name-gated (unblocks when the product name is decided)
 
@@ -3318,6 +3318,42 @@ include its PR-side functions build/test job here.
 
 **Done when:** a PR touching `apps/duet` runs the full gate; required
 checks block merge; wall-clock recorded in the workflow file header.
+
+**Landed.** `.github/workflows/ci.yaml` now carries the whole gate. Most
+jobs pre-existed from prior tasks — `analyze-and-test`,
+`rules-tests` (M1.7/M2.3), the `changes` path-filter, and `emulator-e2e`
+(M4.5, blocking, `flutter drive -d web-server` via
+`apps/duet/tool/e2e_web_drive.sh`) — so M9.1 was wiring + hardening, not
+new pipelines. **Added:** a `functions-tests` job (the M0.5 PR-side half:
+`npm ci && lint && tsc build && vitest` in `apps/duet/functions`, Node +
+Java only, no melos), and a `gate` aggregator job (`if: always()`,
+`needs` the four required jobs) that is green when each either passed or
+was path-filter-skipped and red on any failure — the single check to mark
+required, sidestepping the "skipped required check blocks merge" gotcha.
+Path filters extended: `changes` now emits `rules` and `functions`
+outputs so `rules-tests`/`functions-tests` skip on unrelated PRs (as
+`emulator-e2e` already did via `duet`). Caches: pub (flutter-action
+`cache: true`), npm (`setup-node` per lockfile), and the Firebase
+emulator binaries (`~/.cache/firebase/emulators`) on every emulator job;
+concurrency cancels superseded PR runs but never a `master` push. Header
+records the < ~15 min wall-clock target.
+
+**Goldens decision — kept NON-BLOCKING** (`continue-on-error: true`, out
+of `gate`), still run on every PR with actual+diff artifacts uploaded.
+Reason: although CI is Linux (`ubuntu-latest`), that image floats — a
+runner bump can shift fallback-font/Skia rendering and redline every
+golden at once — and nothing enforces that committed PNGs were generated
+on the CI runner (`melos run update-goldens` is run by devs on macOS,
+where the same goldens already drift). Making it required demands verified
+single-environment stability that can't be established from a dev machine.
+Promotion path is documented in the job comment: pin the runner image
+(`ubuntu-24.04`) and make that pinned runner the only place goldens are
+regenerated, then move the job into `gate`.
+
+**Remainder — [HUMAN].** Branch protection on `master` (repo settings):
+mark the `gate` check (recommended single required check) — or the four
+individual jobs — as required. Not automatable from here; noted in the
+workflow header.
 
 ### M9.H — [HUMAN] Signing + store presence
 
