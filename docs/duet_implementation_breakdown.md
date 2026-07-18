@@ -150,7 +150,7 @@ in the Track B backlog.
 | M4.2 | ☑ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☑ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☑ Soft-delete tombstones for audio notes | M3.2 |
-| M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
+| M4.5 | ☑ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☑ Invite tokens as expiring Firestore docs | M2.4 |
 | M5.3 | ☑ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
 | M5.4 | ☑ ▸B Batched annotation digest push | M5.3, M3.2 |
@@ -2001,37 +2001,45 @@ lands with Track B — then the plan-M4 exit is fully met.
 **Landed (Track A artifacts).** A single turnkey **`melos run e2e-emulator`**
 script boots Auth+Firestore+Functions+Storage via `firebase emulators:exec`
 (rebuilding the functions first so the emulator serves the current
-callables/triggers) and runs the emulator-backed flows (`auth_lifecycle`
-M1.10, `cloud_pieces_flow` M3.8, `collaborator_flow`) plus the reader
-assertions of M4.1–M4.4 from `apps/duet`. It uses `npx --yes firebase-tools`
-so it runs with or without a global CLI (matching `dev.sh`). The
-**`emulator-e2e`** CI job (ci.yaml) wires Flutter + Node + Java + cached
-emulator binaries around it, gated by a `dorny/paths-filter` `changes` job so
-it only runs on PRs touching `apps/duet/**`/`packages/**`/`melos.yaml`/
-`ci.yaml` (per-job filter — a workflow-level `on.paths` would wrongly gate
-every job).
+callables/triggers) and runs the emulator-backed flows from `apps/duet`. It
+uses `npx --yes firebase-tools` so it runs with or without a global CLI
+(matching `dev.sh`). The **`emulator-e2e`** CI job (ci.yaml) wires
+Flutter + Node + Java + Chrome/chromedriver + cached emulator binaries around
+it, gated by a `dorny/paths-filter` `changes` job so it only runs on PRs
+touching `apps/duet/**`/`packages/**`/`melos.yaml`/`ci.yaml` (per-job filter —
+a workflow-level `on.paths` would wrongly gate every job).
 
-**Blocked on a platform limitation — the CI job is non-blocking for now.** The
-M4.5 review caught that two of the three suites (`cloud_pieces_flow`,
-`auth_lifecycle`) use `dart:io` (`File`/`Directory`/`HttpClient`), which the
-Flutter **web** target (`-d chrome`) lacks — so they can't run headlessly on a
-runner (they throw `UnsupportedError: _Namespace`). The repo's own test
-headers documented that `-d chrome` pattern, but it was aspirational. So the
-`emulator-e2e` job is `continue-on-error: true` (visible, not blocking) until
-the real fix: either a **native-device runner** (`flutter drive -d <device>`,
-where `dart:io` + native Firebase plugins coexist — matching the suites' "needs
-a device" headers) or **refactoring the two suites off `dart:io`** (`HttpClient`
-→ `package:http`; `File` uploads → in-memory `putData`). The turnkey script
-stays usable locally/on a device today. **CI hygiene:** the workflow's Flutter
-is pinned to `3.44.6` (this repo's dev version) because the floating `stable`
-channel had drifted the Firebase ecosystem (`firebase_core 4.12.0` /
-`cloud_firestore 6.7.0`) to versions referencing a `FirebasePlugin` the
-resolvable `firebase_core` lacks, reddening `analyze-and-test` repo-wide;
-the pin reproduces the known-good local resolution.
+**dart:io removed — the CI job is now blocking.** The M4.5 review had caught
+that two suites (`cloud_pieces_flow`, `auth_lifecycle`) used `dart:io`
+(`File`/`Directory`/`HttpClient`), which the Flutter **web** target lacks, so
+they couldn't compile/run on a headless runner (`UnsupportedError:
+_Namespace`). Both are now `dart:io`-free: `auth_lifecycle` hits the emulator's
+Auth/Firestore REST surfaces via **`package:http`** (browser client on web),
+and `cloud_pieces_flow` uploads the base PDF + audio objects with in-memory
+**`putData(Uint8List)`** instead of `File`/`putFile` and writes the owner's
+piece document straight to Firestore via `pieceToFirestore` (the same doc
+`importPiece` produces, minus the device-only file staging). Both now
+**compile and run on the web engine** (verified: they launch and execute the
+full loop headlessly in Chrome). A second, separate limitation surfaced doing
+this: `flutter test` refuses web devices for integration tests ("Web devices
+are not supported for integration tests yet") regardless of `dart:io`, so the
+runner uses **`flutter drive -d web-server` + chromedriver**
+(`apps/duet/tool/e2e_web_drive.sh`) — the M4.5-spec-sanctioned fallback — not
+`flutter test -d chrome`. A `test_driver/integration_test.dart` was added for
+it. With that, `emulator-e2e` drops `continue-on-error` and is **blocking**;
+a broken sync assertion in `cloud_pieces_flow` fails it. The two device-only
+suites (`collaborator_flow`, `app_flow`) still stage binaries via `dart:io`
+(`importPiece`/`runDuetImportFlow`) and stay on the on-device `melos run e2e`
+path. **CI hygiene:** the workflow's Flutter is pinned to `3.44.6` (this repo's
+dev version) because the floating `stable` channel had drifted the Firebase
+ecosystem (`firebase_core 4.12.0` / `cloud_firestore 6.7.0`) to versions
+referencing a `FirebasePlugin` the resolvable `firebase_core` lacks, reddening
+`analyze-and-test` repo-wide; the pin reproduces the known-good local
+resolution.
 
 **Remainder (human/admin):** making the check **"required"** is a repo
 branch-protection setting (admin), and the **▸B two-device staging demo** is
-Track-B/human — both on top of the platform fix above.
+Track-B/human.
 
 ---
 

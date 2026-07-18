@@ -150,22 +150,20 @@ jobs:
 
   emulator-e2e:
     name: Reader/cloud E2E (Firebase emulator)
-    # The plan-M4 exit (M4.5): drives the integration_test flows
-    # (auth_lifecycle, cloud_pieces_flow, collaborator_flow + reader
+    # The plan-M4 exit (M4.5): drives the two `dart:io`-free integration_test
+    # flows (auth_lifecycle M1.10, cloud_pieces_flow M3.8 + M4.1-M4.4 reader
     # assertions) against the REAL Auth+Firestore+Functions+Storage emulator,
     # proving `useFirebase: true` server-authoritative end-to-end — the
     # standard gate only exercises the in-memory fakes. Skipped on PRs that
     # touch no Duet/package code (see the `changes` job).
     #
-    # NON-BLOCKING for now: two of the three suites (cloud_pieces_flow,
-    # auth_lifecycle) use `dart:io` (File/Directory/HttpClient), which the
-    # Flutter web target (`-d chrome`) lacks, so they can't run headlessly on a
-    # runner. Making this a required green check needs either a native-device
-    # runner (`flutter drive`) or those two suites refactored off `dart:io`
-    # (HttpClient -> package:http, File uploads -> in-memory putData). Tracked
-    # as the M4.5 follow-up; the `melos e2e-emulator` script stays usable
-    # locally/on a device today.
-    continue-on-error: true
+    # BLOCKING: those two suites were refactored off `dart:io` (HttpClient ->
+    # package:http, File uploads -> in-memory putData), so the web engine
+    # compiles and runs them headlessly. `flutter test` refuses web devices for
+    # integration tests, so the runner uses `flutter drive -d web-server` +
+    # chromedriver (see `apps/duet/tool/e2e_web_drive.sh`). The device-only
+    # suites (`collaborator_flow`, `app_flow`) still stage binaries via
+    # `dart:io` and stay on the `melos run e2e` device path.
     needs: changes
     if: needs.changes.outputs.duet == 'true'
     runs-on: ubuntu-latest
@@ -197,6 +195,14 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # Chrome + a matching chromedriver: the suites run headlessly under
+      # `flutter drive -d web-server`, which drives a served app through a
+      # WebDriver server.
+      - name: Set up Chrome + chromedriver
+        uses: browser-actions/setup-chrome@v1
+        with:
+          install-chromedriver: true
+
       - name: Cache Firebase emulator binaries
         uses: actions/cache@v4
         with:
@@ -209,11 +215,9 @@ jobs:
       - name: Bootstrap
         run: melos bootstrap
 
-      # Runs the emulator suite around `flutter test integration_test -d
-      # chrome`; the functions are rebuilt inside the script so the Functions
-      # emulator serves the current callables. Expected to fail until the
-      # dart:io suites are made web-runnable or moved to `flutter drive` on a
-      # native device (hence continue-on-error above) — `web-server` is still
-      # the web platform, so it wouldn't help.
+      # Boots the emulators and drives the two `dart:io`-free suites headlessly
+      # via `flutter drive -d web-server` + chromedriver
+      # (apps/duet/tool/e2e_web_drive.sh); the functions are rebuilt inside the
+      # script so the Functions emulator serves the current callables.
       - name: Reader/cloud E2E against the emulator
         run: melos run e2e-emulator

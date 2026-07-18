@@ -8,15 +8,18 @@
 // server-side in isolation — this proves the client stack drives it end to
 // end.
 //
-// Like `collaborator_flow_test.dart`, it needs BOTH a device/engine AND the
-// emulators already running, so it can't run in this sandbox; it's opt-in
-// via `melos run e2e` (excluded from the standard headless gate) on a
-// machine with the Firebase CLI + a device. It additionally needs the
-// **Functions** emulator up (the deletion callable, M1.8) — start the
-// backend with `apps/duet/dev.sh --emulators-only`, which boots Functions
-// too.
+// Like `collaborator_flow_test.dart`, it needs the emulators already running;
+// it's opt-in via `melos run e2e-emulator` (excluded from the standard
+// headless gate). It additionally needs the **Functions** emulator up (the
+// deletion callable, M1.8) — start the backend with
+// `apps/duet/dev.sh --emulators-only`, which boots Functions too.
+//
+// This suite is `dart:io`-free (M4.5): the emulator's REST surfaces are hit
+// via `package:http` (which has a browser client on web), so it runs
+// headlessly on the web engine (CI drives it with `flutter drive -d
+// web-server` + chromedriver; `flutter test` refuses web devices for
+// integration tests) as well as on a device/desktop.
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:core_utils/core_utils.dart';
@@ -29,6 +32,7 @@ import 'package:feature_auth/feature_auth.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 import 'package:user_directory/user_directory.dart';
 
@@ -230,46 +234,32 @@ Future<int> _adminCollectionCount(String path) async {
 }
 
 Future<Map<String, dynamic>> _getJson(Uri uri, {bool admin = false}) async {
-  final client = HttpClient();
-  try {
-    final request = await client.getUrl(uri);
-    if (admin) request.headers.set('Authorization', 'Bearer owner');
-    final response = await request.close();
-    if (response.statusCode != 200) return <String, dynamic>{};
-    final text = await response.transform(utf8.decoder).join();
-    if (text.isEmpty) return <String, dynamic>{};
-    return jsonDecode(text) as Map<String, dynamic>;
-  } finally {
-    client.close();
-  }
+  final response = await http.get(
+    uri,
+    headers: admin ? const {'Authorization': 'Bearer owner'} : null,
+  );
+  if (response.statusCode != 200) return <String, dynamic>{};
+  if (response.body.isEmpty) return <String, dynamic>{};
+  return jsonDecode(response.body) as Map<String, dynamic>;
 }
 
 Future<int> _statusOf(Uri uri) async {
-  final client = HttpClient();
-  try {
-    final request = await client.getUrl(uri);
-    request.headers.set('Authorization', 'Bearer owner');
-    final response = await request.close();
-    await response.drain<void>();
-    return response.statusCode;
-  } finally {
-    client.close();
-  }
+  final response = await http.get(
+    uri,
+    headers: const {'Authorization': 'Bearer owner'},
+  );
+  return response.statusCode;
 }
 
 Future<List<dynamic>> _postJsonList(Uri uri, Map<String, dynamic> body) async {
-  final client = HttpClient();
-  try {
-    final request = await client.postUrl(uri);
-    request.headers
-      ..set('Authorization', 'Bearer owner')
-      ..contentType = ContentType.json;
-    request.add(utf8.encode(jsonEncode(body)));
-    final response = await request.close();
-    if (response.statusCode != 200) return const [];
-    final text = await response.transform(utf8.decoder).join();
-    return jsonDecode(text) as List<dynamic>;
-  } finally {
-    client.close();
-  }
+  final response = await http.post(
+    uri,
+    headers: const {
+      'Authorization': 'Bearer owner',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode(body),
+  );
+  if (response.statusCode != 200) return const [];
+  return jsonDecode(response.body) as List<dynamic>;
 }
