@@ -51,6 +51,66 @@ void main() {
       },
     );
 
+    // M5.5: the piece links carried by push notifications
+    // (`https://duet.app/piece/<id>`, the shape `onInboxMessageCreated`
+    // emits as `data.deepLink`) route onto the existing `/score/:pieceId`
+    // destination.
+    group('piece links', () {
+      test('maps /piece/<id> onto the /score/:pieceId route', () {
+        final result = duetDeepLinkParser(
+          Uri.parse('https://duet.app/piece/some-piece-id'),
+        );
+
+        expect(
+          result,
+          isA<Success<DeepLinkIntent>>().having(
+            (s) => s.value,
+            'value',
+            const DeepLinkIntent(location: '/score/some-piece-id'),
+          ),
+        );
+      });
+
+      test('re-encodes an id that needs escaping in the location', () {
+        final result = duetDeepLinkParser(
+          Uri.parse('https://duet.app/piece/a%2Fb'),
+        );
+
+        expect(
+          result,
+          isA<Success<DeepLinkIntent>>().having(
+            (s) => s.value,
+            'value',
+            const DeepLinkIntent(location: '/score/a%2Fb'),
+          ),
+        );
+      });
+
+      test('rejects /piece/ with no id', () {
+        final result = duetDeepLinkParser(
+          Uri.parse('https://duet.app/piece/'),
+        );
+
+        expect(result, isA<ResultFailure<DeepLinkIntent>>());
+        expect(
+          (result as ResultFailure<DeepLinkIntent>).error,
+          isA<UnrecognizedLinkException>(),
+        );
+      });
+
+      test('rejects a piece link with trailing garbage segments', () {
+        final result = duetDeepLinkParser(
+          Uri.parse('https://duet.app/piece/p1/extra'),
+        );
+
+        expect(result, isA<ResultFailure<DeepLinkIntent>>());
+        expect(
+          (result as ResultFailure<DeepLinkIntent>).error,
+          isA<UnrecognizedLinkException>(),
+        );
+      });
+    });
+
     test('fails for an unrecognized link', () {
       final result = duetDeepLinkParser(Uri.parse('https://example.com/nope'));
 

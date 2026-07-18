@@ -550,8 +550,62 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   // funnels through. The router-side half (`DuetRouteObserver`) is attached
   // to the GoRouter in `app.dart`.
   Bloc.observer = DuetAnalyticsObserver(analytics: getIt<DuetAnalytics>());
+
+  // Local-notification taps → the deep-link seam (M5.5): tapping a
+  // foreground-bridge notification ingests its payload URI into
+  // `DeepLinkService`, and `AppView`'s existing `onIntent → _dispatchIntent`
+  // machinery routes it (signed-in: straight to the piece; signed-out: held
+  // until login). Only under `useFirebase` — constructing the router
+  // resolves `NotificationsManager` (FirebaseMessaging + a platform
+  // channel), which the headless gate must never touch (FIX-3, G2); the
+  // bridge whose notifications carry the payload only exists there anyway.
+  if (useFirebase) {
+    getIt.registerSingleton<NotificationTapRouter>(
+      NotificationTapRouter(
+        // Same deferred-resolution pattern as `DeviceTokenSync`'s
+        // `onTokenRefresh` above: the manager is lazy-async, so the tap
+        // stream materializes once it's built.
+        taps: Stream.fromFuture(
+          getIt.getAsync<NotificationsManager>(),
+        ).asyncExpand((manager) => manager.onLocalNotificationTap),
+        deepLinks: getIt<DeepLinkService>(),
+      ),
+    );
+  }
   // generated:register — `create_feature/create_package --wire duet` adds
   // registrations above this line. Do not remove this marker.
+}
+
+/// Routes local-notification tap payloads into the app's deep-link seam
+/// (M5.5): each payload that parses as a URI is [DeepLinkService.ingest]ed,
+/// after which the normal intent machinery (`AppView`) owns navigation —
+/// this class never touches the router. Unparseable payloads are dropped;
+/// whether a *parsed* link is recognized is the deep-link parser's call.
+///
+/// Public only so `test/notification_tap_router_test.dart` can drive it with
+/// a fake tap stream + `FakeDeepLinkService`.
+@visibleForTesting
+class NotificationTapRouter {
+  /// Creates a [NotificationTapRouter], subscribing to [taps] immediately.
+  NotificationTapRouter({
+    required Stream<String> taps,
+    required DeepLinkService deepLinks,
+  }) : _deepLinks = deepLinks {
+    _subscription = taps.listen(_onTap);
+  }
+
+  final DeepLinkService _deepLinks;
+  late final StreamSubscription<String> _subscription;
+
+  void _onTap(String payload) {
+    final uri = Uri.tryParse(payload);
+    if (uri == null) return;
+    _deepLinks.ingest(uri);
+  }
+
+  /// Cancels the tap subscription. Call when the owning scope (e.g. the
+  /// app's DI container) is torn down.
+  Future<void> dispose() => _subscription.cancel();
 }
 
 /// Bridges the generic message inbox for whoever is currently signed in to a
@@ -637,12 +691,30 @@ class InboxNotificationBridge {
       // Already delivered to a device by FCM (`onInboxMessageCreated`) —
       // re-showing it locally would double-notify. See the class doc.
       if (!message.pushed) {
-        await manager.showLocal(title: message.title, body: message.body);
+        await manager.showLocal(
+          title: message.title,
+          body: message.body,
+          // Tapping the notification routes to the exact piece (M5.5) —
+          // `NotificationTapRouter` ingests this into `DeepLinkService`.
+          payload: pieceDeepLinkFor(message),
+        );
       }
       if (!message.requiresAction) {
         await _gateway.markRead(uid, message.id);
       }
     }
+  }
+
+  /// The `https://duet.app/piece/<pieceId>` deep link for [message]'s piece,
+  /// or null when the message isn't about one — the same URI shape M5.3's
+  /// `onInboxMessageCreated` function emits as FCM `data.deepLink` (keep the
+  /// two in sync; the domain is that function's `DEEP_LINK_DOMAIN`
+  /// placeholder until the product one lands, Track B).
+  @visibleForTesting
+  static String? pieceDeepLinkFor(UserMessage message) {
+    final pieceId = message.data['pieceId'];
+    if (pieceId == null || pieceId.isEmpty) return null;
+    return 'https://duet.app/piece/${Uri.encodeComponent(pieceId)}';
   }
 
   /// Cancels both subscriptions. Call when the owning scope (e.g. the app's
