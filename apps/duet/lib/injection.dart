@@ -14,6 +14,7 @@ import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
+import 'package:duet/data/callable_data_export.dart';
 import 'package:duet/data/callable_invite_service.dart';
 import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
@@ -22,6 +23,7 @@ import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/data_export.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/duet_analytics_observer.dart';
@@ -276,6 +278,23 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     );
   } else {
     getIt.registerLazySingleton<AccountPurge>(MockAccountPurge.new);
+  }
+
+  // Self-service GDPR data export (M7.5): the Firebase branch calls the
+  // `exportMyData` callable and shares the returned 24 h download link; the
+  // default branch simulates success (the mock identity has only in-memory
+  // data, so there's no persisted bundle to produce). Lazy — only Settings'
+  // "Download my data" row ever resolves it.
+  if (useFirebase) {
+    getIt.registerLazySingleton<DataExport>(
+      () => CallableDataExport(
+        functions: FirebaseFunctions.instanceFor(
+          region: duetFunctionsRegion,
+        ),
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<DataExport>(MockDataExport.new);
   }
 
   // `DeviceTokenSync`'s token source is always injected (FIX-3): the default

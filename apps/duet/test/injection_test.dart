@@ -12,6 +12,7 @@ import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/data_export.dart';
 import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/duet_analytics_observer.dart';
 import 'package:duet/data/mock_auth_repository.dart';
@@ -108,6 +109,15 @@ void main() {
         await configureDependencies();
 
         expect(getIt<AccountPurge>(), isA<MockAccountPurge>());
+      },
+    );
+
+    test(
+      'binds a MockDataExport — never the callable (no Firebase)',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<DataExport>(), isA<MockDataExport>());
       },
     );
 

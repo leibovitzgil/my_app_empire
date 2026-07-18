@@ -161,7 +161,7 @@ in the Track B backlog.
 | M7.2 | ☑ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
 | M7.3 | ☑ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
 | M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
-| M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
+| M7.5 | ☑ ▸B GDPR self-service data export | M1.8 |
 | M7.6 | ☑ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
 | M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
 | M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
@@ -2866,6 +2866,52 @@ data-map doc merged and store forms drafted.
 
 **Done when:** emulator export for user A contains A's notes and none of
 B's; Settings flow works on staging.
+
+**Landed (Track A).** Callable `exportMyData`
+(`functions/src/exportMyData.ts`, exported from the barrel) gathers everything
+Duet holds about the caller — auth profile (`adminAuth().getUser`), every
+`usersByEmail where uid ==` entry (the doc id is an email key, never derived
+from the token, so an old address still surfaces), `entitlements/{uid}`,
+device tokens, inbox, and every `pieces where participantIds array-contains
+uid` with **only the caller's own slice** (piece metadata + their `layers/{uid}`
+doc + `notes where authorId == uid` + each own note's audio path signed to a
+24 h URL). The gather is factored into an exported `gatherExport(uid)` helper
+(the isolation surface the two-user test asserts directly, the way
+`deleteAccount`'s purge logic is), then the callable writes the JSON bundle to
+a private `exports/{uid}/{ts}.json` Storage object and returns a 24 h signed
+URL. Storage is best-effort — `bucket()` is wrapped like `deleteAccount`'s, so
+the auth+firestore-only test emulator (no bucket) yields a null `downloadUrl`
+while the whole Firestore gather still runs; the **live staging export is the
+▸B tail** (`exports/` is already deny-by-default in `storage.rules`, and the
+client reads via the signed URL, so no rules change — G6 clean). Rate-limited
+to once per day per uid by reusing M2.5's fixed-window transaction on a
+**distinct key** (`rateLimits/{uid}__export`, 24 h window, budget 1) so it
+never collides with `lookupEmail`'s per-minute counter. App Check gate is
+env-driven and off on the emulator, matching `lookupEmail` (▸B flip). Client:
+a `DataExport` seam (`data/data_export.dart`) with `CallableDataExport` bound
+under `useFirebase` (calls the callable, hands the URL to `share_plus` — kept
+behind the seam, with an injectable `shareInvoker`, so the headless gate never
+touches a platform channel, G2) and `MockDataExport` under the default branch
+(simulated success — the mock identity's data is in-memory only). A
+non-destructive "Download my data" row sits in Settings' **Privacy** section
+(beside the discoverable switch, above the danger zone) → progress spinner →
+success snackbar on delivery; the once-a-day rejection surfaces its own
+retry-less message. Tests: functions emulator test seeds users A and B with a
+shared piece plus a solo piece each and asserts A's export carries A's
+profile/directory/entitlement/pieces and only A's layer/notes/audio while none
+of B's private data (directory entry, notes, audio, tokens, solo piece) leaks
+— B's legitimate co-membership in A's shared-piece metadata is the sole place
+`uid-b` appears; plus auth-rejection, honest-counts, and once-a-day-limit
+cases (5 tests, all 88 functions tests green). Dart: the injection guardrail
+pins `MockDataExport` under the default branch (never the callable), two
+widget tests drive the row → seam-called sequence with a recording fake (ready
+snackbar; daily-limit message with no Retry), and a `mapExportError` table
+test pins the code translation. Gate: functions `build`+`lint`+`test` green;
+`apps/duet` `flutter analyze` + `flutter test` (636) green, touched files
+`dart format`-clean. **The ▸B remainder stays in the Track B backlog:** the
+live staging export run once a real project/bucket is bound under `useFirebase`
+(M0.2) — a signed bundle URL downloads for real, the audio links resolve, and
+the Settings flow shares on a staging device (iPad).
 
 ### M7.6 — `review_prompter` + `app_updater` wiring
 
