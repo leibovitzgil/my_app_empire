@@ -19,6 +19,7 @@ import 'package:duet/data/callable_invite_service.dart';
 import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
+import 'package:duet/data/consent_recorder.dart';
 import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
@@ -34,11 +35,13 @@ import 'package:duet/data/firebase_piece_binary_store.dart';
 import 'package:duet/data/firestore_annotation_repository.dart';
 import 'package:duet/data/firestore_piece_repository.dart';
 import 'package:duet/data/firestore_piece_sync_monitor.dart';
+import 'package:duet/data/in_memory_consent_recorder.dart';
 import 'package:duet/data/local_piece_migrator.dart';
 import 'package:duet/data/mirroring_settings_repository.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
+import 'package:duet/data/sign_up_consent_binder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/review_sync/review_sync.dart';
@@ -260,6 +263,30 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       directory: getIt<UserDirectory>(),
       storage: getIt<LocalStorageService>(),
       accounts: getIt<AuthAccountProvider>().account,
+    ),
+  );
+
+  // Sign-up consent record (M7.4): the minimal in-house consent record — a
+  // timestamped acceptance of the ToS/Privacy Policy, stored with the
+  // account. BOTH branches bind the in-memory recorder for now: the
+  // Firestore-backed `FirestoreConsentRecorder` writes `consent/{uid}`, whose
+  // security rules + rules-tests haven't landed yet (G6 — rules before client
+  // writes), so it stays unbound until Track B, exactly like the deferred
+  // remote-config/crash/analytics/perf bindings above.
+  // TODO(track-b): under `useFirebase`, once the `consent/{uid}` rules ship,
+  // bind `FirestoreConsentRecorder(firestore: FirebaseFirestore.instance)` and
+  // verify an acceptance lands server-side on sign-up (M7.4 ▸B).
+  getIt.registerSingleton<ConsentRecorder>(InMemoryConsentRecorder());
+
+  // Eager, like `DirectoryPublisher`/`CrashReporterUserBinder` above: it must
+  // be subscribed to the account stream before the user can sign up, so it
+  // catches the first authenticated emission after a consent-checked sign-up
+  // and records the acceptance against the new uid. `LoginScreen`'s consent
+  // seam (app.dart) calls `markPending` when the box is ticked.
+  getIt.registerSingleton<SignUpConsentBinder>(
+    SignUpConsentBinder(
+      accounts: getIt<AuthAccountProvider>().account,
+      recorder: getIt<ConsentRecorder>(),
     ),
   );
 

@@ -9,10 +9,12 @@ import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/duet_route_observer.dart';
+import 'package:duet/data/sign_up_consent_binder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/library/library.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/legal.dart';
 import 'package:duet/ui/migration_prompt.dart';
 import 'package:duet/ui/score_page.dart';
 import 'package:duet/ui/settings_page.dart';
@@ -74,9 +76,22 @@ class _AppViewState extends State<AppView> {
         ),
         GoRoute(
           path: '/login',
-          builder: (context, state) => const LoginScreen(
+          builder: (context, state) => LoginScreen(
             title: 'Duet',
-            logo: AppLogoMark(icon: Icons.music_note),
+            logo: const AppLogoMark(icon: Icons.music_note),
+            // Sign-up consent gate (M7.4): a required acceptance checkbox on
+            // the sign-up view. Ticking it records the acceptance against the
+            // new account via `SignUpConsentBinder` (injection.dart), which
+            // fires once the account authenticates. The documents themselves
+            // are also reachable from Settings ▸ About.
+            // TODO(track-b): make the Terms/Privacy words tappable links to
+            // `kTermsOfServiceUrl`/`kPrivacyPolicyUrl` once those are hosted
+            // (M7.4 ▸B) — needs a url-launcher seam in the label.
+            consentLabel: const Text(
+              'I agree to the Terms of Service and Privacy Policy.',
+            ),
+            onConsentAccepted: () =>
+                getIt<SignUpConsentBinder>().markPending(kLegalDocumentVersion),
           ),
         ),
         GoRoute(

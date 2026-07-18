@@ -13,6 +13,7 @@ import 'package:duet/data/data_export.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/legal.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_paywall/feature_paywall.dart';
@@ -21,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:legal_compliance/legal_compliance.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -186,6 +188,21 @@ void main() {
     }
 
     expect(find.byType(PaywallScreen), findsOneWidget);
+  });
+
+  testWidgets('the About group shows policy/ToS links and the version', (
+    tester,
+  ) async {
+    await registerFakes();
+    await pumpSettings(tester);
+
+    final about = find.text('About');
+    await tester.scrollUntilVisible(about, 200);
+    expect(about, findsOneWidget);
+    expect(find.byType(PrivacyPolicyButton), findsOneWidget);
+    expect(find.byType(TermsOfServiceButton), findsOneWidget);
+    expect(find.text('Version'), findsOneWidget);
+    expect(find.text(kAppVersion), findsOneWidget);
   });
 
   testWidgets('the profile group shows the signed-in name and email', (

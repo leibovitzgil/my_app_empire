@@ -23,6 +23,8 @@ class SignUpView extends StatefulWidget {
     this.errorText,
     this.isBusy = false,
     this.submitLabel = 'Create account',
+    this.consentLabel,
+    this.onConsentAccepted,
     super.key,
   });
 
@@ -30,6 +32,21 @@ class SignUpView extends StatefulWidget {
   /// left blank) when the primary button is tapped.
   final void Function(String email, String password, String? displayName)
   onSignUp;
+
+  /// When non-null, renders a required legal-acceptance checkbox above the
+  /// submit button, labelled with this widget (typically a `RichText` linking
+  /// the Terms of Service and Privacy Policy). The submit button stays
+  /// disabled until the box is ticked, so an account can't be created without
+  /// acceptance. When null, no checkbox is shown and sign-up is ungated —
+  /// keeping this view reusable by apps that record consent elsewhere (or not
+  /// at all).
+  final Widget? consentLabel;
+
+  /// Called at submit-time, immediately before [onSignUp], when a
+  /// [consentLabel] is shown and its box is ticked. Apps wire this to their
+  /// consent-recording seam; the tick is guaranteed because the button is
+  /// otherwise disabled. Ignored when [consentLabel] is null.
+  final VoidCallback? onConsentAccepted;
 
   /// When non-null, renders an "I already have an account" footer link that
   /// invokes it — the way back to the sign-in view.
@@ -58,6 +75,11 @@ class _SignUpViewState extends State<SignUpView> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  var _consentChecked = false;
+
+  /// Whether the consent gate (if any) is satisfied. Always true when no
+  /// [SignUpView.consentLabel] is shown.
+  bool get _consentSatisfied => widget.consentLabel == null || _consentChecked;
 
   @override
   void dispose() {
@@ -69,6 +91,9 @@ class _SignUpViewState extends State<SignUpView> {
 
   void _submit() {
     final name = _nameController.text.trim();
+    // The button is disabled unless consent is satisfied, so reaching here
+    // with a consent label means the box is ticked.
+    if (widget.consentLabel != null) widget.onConsentAccepted?.call();
     widget.onSignUp(
       _emailController.text,
       _passwordController.text,
@@ -123,10 +148,27 @@ class _SignUpViewState extends State<SignUpView> {
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
                   ],
+                  if (widget.consentLabel != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    CheckboxListTile(
+                      key: const Key('signUpConsentCheckbox'),
+                      value: _consentChecked,
+                      onChanged: widget.isBusy
+                          ? null
+                          : (checked) => setState(
+                              () => _consentChecked = checked ?? false,
+                            ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      title: widget.consentLabel,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   PrimaryButton(
                     label: widget.submitLabel,
-                    onPressed: widget.isBusy ? null : _submit,
+                    onPressed: widget.isBusy || !_consentSatisfied
+                        ? null
+                        : _submit,
                     isLoading: widget.isBusy,
                   ),
                   if (widget.onSignIn != null) ...[
