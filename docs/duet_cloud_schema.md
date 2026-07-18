@@ -294,6 +294,53 @@ entitlement is trivially cheatable).
 | `updatedAt` | `Timestamp` | Last change. |
 | `source` | `string` | Where the grant came from (RevenueCat webhook, promo, manual). |
 
+### `/pushDigests/{digestId}`
+
+One document per burst of annotation activity, enqueued by the
+`onLayerAnnotationsChanged` / `onNoteAnnotationsChanged` triggers and drained
+by the `drainPushDigests` scheduled Function every 10 minutes (M5.4). The
+queue is what turns "one push per stroke" into "Maya added 3 notes to Clair
+de Lune" — a batched digest, not a per-write notification. **Entirely
+Function-owned**: clients never read or write it (deny-all in
+`firestore.rules`, and it's covered by deny-by-default regardless).
+
+```jsonc
+{
+  "pieceId": "piece_1",
+  "authorId": "uid_def",              // who made the edits (never notified about them)
+  "recipientIds": ["uid_abc"],        // the piece's OTHER participants at enqueue time
+  "kind": "strokes",                  // "strokes" | "notes"
+  "count": 3,                         // strokes added (delta) or notes created (1)
+  "createdAt": <Timestamp>            // enqueue instant — the "batch time"
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `pieceId` | `string` | The piece the activity happened on. |
+| `authorId` | `string` | The editing participant. Excluded from `recipientIds` at enqueue and again at grouping — an author is never notified of their own edits. |
+| `recipientIds` | `string[]` | The piece's `participantIds` minus the author, snapshotted at enqueue. A solo piece enqueues nothing. |
+| `kind` | `string` | `strokes` (ink layer delta) or `notes` (audio note). Both surface to the recipient as the musician-facing word "notes" in the composed copy. |
+| `count` | `int` | Ink: the net strokes *added* (`after.strokes − before.strokes`; an erase-only rewrite enqueues nothing). Audio: `1` per created note. |
+| `createdAt` | `Timestamp` | Enqueue instant. The drain compares each recipient's newest group `createdAt` against their `reads/{uid}.lastOpenedAt` and skips recipients who already opened the sheet. |
+
+**Drain semantics.** `drainPushDigests` reads the whole queue, groups by
+`(recipient, piece, author)`, sums `count`, composes one line per group
+(`<author> added <n> notes to <title>`, author name resolved from the piece's
+`ownerName`/`collaborators`), and sends over M5.3's shared `sendPushAndPrune`
+FCM path (same dead-token pruning). A group is **skipped** (its queue docs
+deleted regardless — a skip is a decision, not a retry) when: the piece is
+gone; the recipient's `deviceTokens/{uid}.pushEnabled` is `false` (the muted
+Settings toggle); the recipient has no registered tokens; or the recipient's
+`reads/{uid}.lastOpenedAt` is at/after the group's newest `createdAt` (they
+already saw it). Every snapshotted doc is then deleted (chunked under the
+500-write batch limit); docs enqueued *after* the snapshot survive to the
+next run.
+
+**Track A scope.** Triggers + drain with mocked-messaging tests
+(`test/annotation_digests.test.ts`). Real FCM delivery rides M5.3's ▸B
+backlog — there is no FCM emulator.
+
 ### Live identity collections (M1 — governed by `firestore.rules` today)
 
 Defined by the current rules file; listed here so this doc is the complete map.
@@ -303,6 +350,18 @@ inbox invites ride over). Their ACLs are already in
 `apps/duet/firestore.rules`; the [ACL matrix](#acl-matrix) restates them for
 completeness and marks the one M2.4 change (inbox `create` moves behind a
 Function).
+
+**`deviceTokens/{uid}` shape.** `{tokens: [String, ...], pushEnabled?: bool}`.
+`tokens` is the FCM registration list (`DeviceTokenSync` / `FirestoreUser
+Messaging`, arrayUnion/arrayRemove; the push senders `arrayRemove` any token
+FCM reports unregistered). `pushEnabled` (**new, M5.4**) mirrors the client's
+Settings push toggle (`SettingsRepository.readPushEnabled`, which is
+otherwise client-side only) so a server-side sender can honor it — the
+`drainPushDigests` drain skips a recipient whose `pushEnabled == false`.
+Written client-side by Duet's `MirroringSettingsRepository` glue (a
+`DeviceTokenRegistry.setPushEnabled` field-merge that leaves `tokens`
+untouched); absent = treated as enabled (opt-out, not opt-in). Self-owned
+like the rest of the doc (the `self` ACL below covers it).
 
 ---
 
@@ -434,6 +493,7 @@ get(pieces/{id}).data.participantIds`); `self` = the doc id equals
 | `pieces/{id}/reads/{uid}` | `self` **and** `P` | `self` | `self` **and** `P` | `self` |
 | `inviteTokens/{token}` | **Function only** (`createInviteToken`: owner + cap checked server-side) | **Function only** (`resolveInviteToken` serves the preview — landed stricter than the original client-`get` sketch); grants **no** read on the piece, whose content stays `P`-gated | **Function only** (`acceptInviteToken` redemption sets `consumed`/`consumedBy`) | **Function/TTL only** (piece-delete cascade sweeps by `pieceId`; `expiresAt` TTL backstops) |
 | `entitlements/{uid}` | **Function only** | `self` | **Function only** | **Function only** |
+| `pushDigests/{id}` *(M5.4)* | **Function only** (annotation triggers enqueue) | **Function only** | — | **Function only** (the drain deletes) — clients denied all access |
 | `usersByEmail/{email}` *(M1, live)* | self (`auth.uid == resource.uid`) | `get` if `discoverable` or self; **no `list`** | self (owner of existing doc + new doc) | self |
 | `deviceTokens/{uid}` *(M1, live)* | `self` | `self` | `self` | `self` |
 | `userInbox/{uid}/messages/{id}` *(M1, live)* | v1: any signed-in sender w/ matching `toUid`; **M2.4 → Function only** | recipient (`self`) | recipient | **never** |

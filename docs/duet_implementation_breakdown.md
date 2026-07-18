@@ -153,7 +153,7 @@ in the Track B backlog.
 | M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
 | M5.2 | ☑ Invite tokens as expiring Firestore docs | M2.4 |
 | M5.3 | ☑ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
-| M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
+| M5.4 | ☑ ▸B Batched annotation digest push | M5.3, M3.2 |
 | M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
 | M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
 | M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
@@ -2258,6 +2258,55 @@ per stroke.
 **Done when:** burst of 5 strokes + 2 notes → exactly one digest per
 recipient and muted users receive none (asserted in emulator/unit tests —
 Track A); real delivery rides M5.3's ▸B backlog item; gate green.
+
+**Landed (Track A).** `functions/src/annotationDigests.ts` — an
+enqueue+drain pair. **Enqueue:** `onLayerAnnotationsChanged` /
+`onNoteAnnotationsChanged` (v2 `onDocumentWritten` on
+`pieces/{id}/layers/{uid}` and `.../notes/{noteId}`, together the plan's
+`onAnnotationsChanged`, mirroring `pieceActivity.ts`'s one-pattern-each
+split) write a `pushDigests/{id}` doc `{pieceId, authorId, recipientIds,
+kind, count, createdAt}` instead of pushing. `recipientIds` =
+`participantIds` minus the author (solo piece → nothing enqueued); ink
+counts the *net strokes added* (an erase-only rewrite enqueues nothing),
+audio counts 1 per created note (tombstone updates ignored). **Drain:**
+`drainPushDigests` (`onSchedule`, every 10 min; core split into
+`drainPushDigestsOnce()` so tests invoke it directly, the
+`sweepTombstonesBefore` pattern) groups by (recipient, piece, author),
+sums `count`, composes `<author> added <n> note(s) to <title>` (author
+name resolved from the piece's `ownerName`/`collaborators`, `sendNudge`'s
+'Someone' fallback), and sends over M5.3's FCM path. That send+prune was
+**extracted** to `functions/src/pushSender.ts` (`sendPushAndPrune` +
+`DEEP_LINK_DOMAIN`); `inboxPush.ts` now calls it too (behavior
+unchanged). A group is **skipped** — queue docs deleted regardless, a skip
+is a decision not a retry — when the piece is gone, the recipient's
+`deviceTokens/{uid}.pushEnabled == false` (muted), they have no tokens, or
+their `reads/{uid}.lastOpenedAt` is at/after the group's newest
+`createdAt` (already opened the sheet). Snapshotted docs are then deleted
+(chunked under the 500-write batch limit); docs enqueued after the
+snapshot survive to the next run. **Author never notified** (excluded at
+enqueue and again in `groupDigests`). **Settings toggle honored:** the
+`DeviceTokenRegistry` contract gained `setPushEnabled(uid, enabled:)`
+(both impls + fakes updated, G3); a new Duet glue
+`MirroringSettingsRepository` (`apps/duet/lib/data/`) decorates
+`LocalSettingsRepository` and mirrors the toggle onto
+`deviceTokens/{uid}.pushEnabled` on write (best-effort over the
+authoritative local write; signed-out uid skipped) — `feature_settings`
+stays backend-agnostic. `pushDigests` is Function-only (explicit deny in
+`firestore.rules`, already covered by deny-by-default). Schema doc: new
+`pushDigests` collection + `deviceTokens.pushEnabled` field + ACL-matrix
+row. Tests: `functions/test/annotation_digests.test.ts` (mocked
+`firebase-admin/messaging`, unique-ids, safe under `test:against-running`)
+— `composeDigestCopy`/`groupDigests` units, enqueue deltas/tombstone/solo,
+and the drain (burst 5 strokes+2 notes = one 7-count digest per recipient,
+muted skip, opened-after skip, opened-before still sends, 'Someone'
+fallback, dead-token prune); `apps/duet/test/mirroring_settings_repository_test.dart`
+covers the mirror (persist+mirror, muted, delegate read, failed local
+write skips mirror, signed-out skips mirror). Functions build+lint clean,
+`test:against-running` 83/83 (ports 8080/9099 held by the live suite);
+duet + notifications analyze clean and their touched tests green (full
+workspace gate runs on the integration branch). ▸B unchanged: real FCM
+delivery (APNs key, `firebase_messaging` real dependency, lock-screen
+verification) rides M5.3's backlog item — no FCM emulator.
 
 ### M5.5 — Notification tap-through → the exact piece
 
