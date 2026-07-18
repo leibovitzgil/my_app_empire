@@ -69,19 +69,108 @@ void main() {
       expect(queue.pendingCount, 0);
     });
 
-    test('a task is dropped after maxAttempts failed drains', () async {
-      final queue = AudioUploadQueue(storage: storage, maxAttempts: 2);
+    test(
+      'a task poisons to the failed set (not silently dropped) after '
+      'maxAttempts failed drains',
+      () async {
+        final queue = AudioUploadQueue(storage: storage, maxAttempts: 2);
+        addTearDown(queue.close);
+        await queue.enqueue(task('a'));
+
+        Future<Result<void>> fail(AudioUploadTask t) async =>
+            ResultFailure<void>(StateError('offline'));
+
+        await queue.drain(fail); // attempts: 1
+        expect(queue.pendingCount, 1);
+        expect(queue.failedCount, 0);
+
+        await queue.drain(fail); // attempts: 2 -> reaches cap
+        // Off the active queue, but retained + surfaced (M8.4), never lost.
+        expect(queue.pendingCount, 0);
+        expect(queue.failedCount, 1);
+        expect(queue.failedTasks.single.assetId, 'a');
+      },
+    );
+
+    test(
+      'the failed stream emits the poison count when a task gives up',
+      () async {
+        final queue = AudioUploadQueue(storage: storage, maxAttempts: 1);
+        addTearDown(queue.close);
+
+        final failedCounts = <int>[];
+        final sub = queue.failed.listen(failedCounts.add);
+        addTearDown(sub.cancel);
+        await pumpEventQueue();
+
+        await queue.enqueue(task('a'));
+        await queue.drain(
+          (t) async => ResultFailure<void>(StateError('offline')),
+        );
+        await pumpEventQueue();
+
+        expect(failedCounts, [0, 1]); // initial 0, then 1 after poisoning.
+      },
+    );
+
+    test('skip permanently discards a failed (poison) entry', () async {
+      final queue = AudioUploadQueue(storage: storage, maxAttempts: 1);
       addTearDown(queue.close);
       await queue.enqueue(task('a'));
+      await queue.drain(
+        (t) async => ResultFailure<void>(StateError('offline')),
+      );
+      expect(queue.failedCount, 1);
 
-      Future<Result<void>> fail(AudioUploadTask t) async =>
-          ResultFailure<void>(StateError('offline'));
-
-      await queue.drain(fail); // attempts: 1
-      expect(queue.pendingCount, 1);
-      await queue.drain(fail); // attempts: 2 -> reaches cap, dropped
-      expect(queue.pendingCount, 0);
+      await queue.skip('a');
+      expect(queue.failedCount, 0);
+      await queue.skip('a'); // idempotent no-op.
+      expect(queue.failedCount, 0);
     });
+
+    test(
+      'retryFailed re-queues poison entries with a fresh attempt count',
+      () async {
+        final queue = AudioUploadQueue(storage: storage, maxAttempts: 1);
+        addTearDown(queue.close);
+        await queue.enqueue(task('a'));
+        await queue.drain(
+          (t) async => ResultFailure<void>(StateError('offline')),
+        );
+        expect(queue.failedCount, 1);
+        expect(queue.pendingCount, 0);
+
+        await queue.retryFailed();
+        expect(queue.failedCount, 0);
+        expect(queue.pendingCount, 1);
+
+        // The re-queued task drains cleanly once uploads succeed again.
+        var calls = 0;
+        await queue.drain((t) async {
+          calls++;
+          return const Success<void>(null);
+        });
+        expect(calls, 1);
+        expect(queue.pendingCount, 0);
+      },
+    );
+
+    test(
+      'poison entries survive a restart (fresh instance, same store)',
+      () async {
+        final queue = AudioUploadQueue(storage: storage, maxAttempts: 1);
+        await queue.enqueue(task('a'));
+        await queue.drain(
+          (t) async => ResultFailure<void>(StateError('offline')),
+        );
+        await queue.close();
+
+        final restarted = AudioUploadQueue(storage: storage);
+        addTearDown(restarted.close);
+        expect(restarted.failedCount, 1);
+        expect(restarted.failedTasks.single.assetId, 'a');
+      },
+    );
 
     test(
       'queued uploads survive a restart (fresh instance, same store)',

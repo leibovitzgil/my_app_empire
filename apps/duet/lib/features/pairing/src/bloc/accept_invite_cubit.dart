@@ -129,8 +129,12 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
         // A typed at-cap/already-collaborator denial (the cloud path's
         // server-authoritative re-check, M5.2) gets its dedicated screen
         // state — `details` from [load] is preserved by `copyWith`, so the
-        // tailored body keeps the piece title. Anything else stays on
-        // `ready` with the error surfaced, retryable.
+        // tailored body keeps the piece title. An invalid/expired/consumed
+        // token is a *terminal* denial (M8.4): retrying accept is futile, so
+        // it renders the blocking `failure` dead-end (ErrorRetryView) rather
+        // than leaving a retryable Accept button that can only fail again.
+        // Anything else (transport/deadline, ...) stays on `ready` with the
+        // error surfaced as a retryable snackbar.
         final reason = error is InviteException
             ? error.reason
             : InviteFailureReason.generic;
@@ -138,12 +142,18 @@ class AcceptInviteCubit extends Cubit<AcceptInviteState> {
           InviteFailureReason.atCap => AcceptInviteStatus.atCap,
           InviteFailureReason.alreadyCollaborator =>
             AcceptInviteStatus.alreadyCollaborator,
-          _ => AcceptInviteStatus.ready,
+          InviteFailureReason.invalid ||
+          InviteFailureReason.expired ||
+          InviteFailureReason.consumed => AcceptInviteStatus.failure,
+          InviteFailureReason.generic => AcceptInviteStatus.ready,
         };
+        final surfacesError =
+            status == AcceptInviteStatus.ready ||
+            status == AcceptInviteStatus.failure;
         emit(
           state.copyWith(
             status: status,
-            error: status == AcceptInviteStatus.ready ? '$error' : null,
+            error: surfacesError ? '$error' : null,
           ),
         );
     }
