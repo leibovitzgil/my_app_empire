@@ -7,6 +7,20 @@ class ReviewPrompter {
     InAppReview? inAppReview,
   }) : _inAppReview = inAppReview ?? InAppReview.instance,
        _prefs = prefs;
+
+  /// Creates a [ReviewPrompter] over the device's [SharedPreferences].
+  ///
+  /// A composition-root convenience: construction touches the
+  /// SharedPreferences platform channel, so apps register this lazily
+  /// (e.g. get_it's `registerLazySingletonAsync`) and only resolve it from
+  /// real entry points — never on a headless test path.
+  static Future<ReviewPrompter> create({InAppReview? inAppReview}) async {
+    return ReviewPrompter(
+      prefs: await SharedPreferences.getInstance(),
+      inAppReview: inAppReview,
+    );
+  }
+
   static const String _kAppOpenCountKey = 'review_prompter_app_open_count';
   static const String _kCoreActionCompletedKey =
       'review_prompter_core_action_completed';

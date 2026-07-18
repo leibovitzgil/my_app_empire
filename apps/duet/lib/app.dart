@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_updater/app_updater.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
@@ -204,6 +205,16 @@ class _AppViewState extends State<AppView> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       routerConfig: _router,
+      // The force-update gate (M7.6) wraps every routed destination: below
+      // the remotely-configured minimum version the whole app is replaced
+      // by the update screen. It sits in the router's `builder` so it's
+      // under `MaterialApp` (theme/directionality) yet above every screen.
+      // The gate fails open — the headless/mock composition's committed
+      // default (`min_supported_version: 0.0.0`) can never block (G2).
+      builder: (context, child) => ForceUpdateWidget(
+        appUpdateService: getIt<AppUpdateService>(),
+        child: child!,
+      ),
     );
   }
 }

@@ -34,6 +34,9 @@ class InMemoryRemoteConfigService implements RemoteConfigService {
       _values[RemoteConfigKeys.minSupportedVersion]! as String;
 
   @override
+  String get storeUrl => _values[RemoteConfigKeys.storeUrl]! as String;
+
+  @override
   bool get paywallEnabled => _values[RemoteConfigKeys.paywallEnabled]! as bool;
 
   @override

@@ -13,6 +13,7 @@ import 'package:duet/injection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:review_prompter/review_prompter.dart';
 
 /// Hosts `feature_score`'s Score Viewer for [pieceId]: builds the
 /// [ScoreBloc] from the shared repositories, and wires the app-glue
@@ -90,6 +91,7 @@ class _DuetScorePageState extends State<DuetScorePage> {
           audioAssetStore: getIt<AudioAssetStore>(),
           syncStatus: _syncStatusFor(snapshot.data),
           onNudgeRequested: _nudge,
+          onNoteSaved: _logNoteSaved,
         ),
       ),
     );
@@ -107,6 +109,19 @@ class _DuetScorePageState extends State<DuetScorePage> {
     PieceSyncState.offline => ScoreSyncStatus.notSynced,
     null => ScoreSyncStatus.syncing,
   };
+
+  /// Signals the M7.6 review prompter that the user's core action — saving
+  /// an audio note — just happened. Resolved lazily/async (see
+  /// `injection.dart`: construction touches the SharedPreferences platform
+  /// channel) and fire-and-forget: review bookkeeping must never block or
+  /// fail the save flow it piggybacks on.
+  void _logNoteSaved() {
+    unawaited(
+      getIt.getAsync<ReviewPrompter>().then(
+        (prompter) => prompter.logCoreActionCompleted(),
+      ),
+    );
+  }
 
   /// Pings the piece's other participants that the current user added notes —
   /// the reader's "Nudge" affordance (Layers panel + save-note snackbar). The

@@ -9,6 +9,7 @@ void main() {
       expect(service.showPaywallOnOnboarding, isFalse);
       expect(service.maintenanceMode, isFalse);
       expect(service.minSupportedVersion, '0.0.0');
+      expect(service.storeUrl, isEmpty);
       // Kill-switches default to enabled: flipping one off in the console
       // is the emergency action, so the committed default is the healthy
       // state.

@@ -5,6 +5,7 @@
 // a Firebase object (there's no `Firebase.initializeApp()` anywhere in this
 // file; any accidental real-Firebase call site would throw for lack of an
 // initialized app, which this test would then fail on).
+import 'package:app_updater/app_updater.dart';
 import 'package:crash_reporting/crash_reporting.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/crash_reporter_user_binder.dart';
@@ -18,6 +19,7 @@ import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
 import 'package:remote_config/remote_config.dart';
+import 'package:review_prompter/review_prompter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
 
@@ -132,6 +134,28 @@ void main() {
         expect(remoteConfig.paywallEnabled, isTrue);
         expect(remoteConfig.inviteLinksEnabled, isTrue);
         expect(remoteConfig.pricingExperiment, isEmpty);
+      },
+    );
+
+    test(
+      'binds AppUpdateService over the in-memory remote config — the '
+      'headless composition can never force-block (M7.6)',
+      () async {
+        await configureDependencies();
+
+        // The committed default (`min_supported_version: 0.0.0`) plus the
+        // fail-open current-version read mean the gate never blocks here.
+        expect(await getIt<AppUpdateService>().isUpdateRequired(), isFalse);
+      },
+    );
+
+    test(
+      'registers ReviewPrompter lazily — never constructed (and no '
+      'platform channel touched) unless an entry point resolves it (M7.6)',
+      () async {
+        await configureDependencies();
+
+        expect(getIt.isRegistered<ReviewPrompter>(), isTrue);
       },
     );
 

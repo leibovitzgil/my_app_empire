@@ -57,6 +57,7 @@ class ScoreViewerScreen extends StatefulWidget {
     required this.audioAssetStore,
     this.syncStatus = ScoreSyncStatus.notSynced,
     this.onNudgeRequested,
+    this.onNoteSaved,
     super.key,
   });
 
@@ -94,6 +95,12 @@ class ScoreViewerScreen extends StatefulWidget {
   /// glue owns the actual send (`NudgeService`); bundle export/import moved to
   /// Piece Detail (M4.2).
   final Future<void> Function()? onNudgeRequested;
+
+  /// Invoked after an audio note is successfully saved — the reader's
+  /// "core action" happy moment. A callback for the same cross-cutting
+  /// reason as [onNudgeRequested]: app glue hooks side effects here (the
+  /// M7.6 review-prompt signal) without this feature ever importing them.
+  final VoidCallback? onNoteSaved;
 
   @override
   State<ScoreViewerScreen> createState() => _ScoreViewerScreenState();
@@ -429,6 +436,9 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     scoreBloc
       ..add(AudioNoteSaved(note, recordedPath))
       ..add(const ModeChanged(ScoreMode.view));
+    // The save succeeded — signal the core-action moment regardless of
+    // whether this screen is still mounted to show the snackbar below.
+    widget.onNoteSaved?.call();
     if (!mounted) return;
     final onNudge = widget.onNudgeRequested;
     // Only offer "Nudge" when there's actually a collaborator to nudge —

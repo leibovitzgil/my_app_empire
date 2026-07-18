@@ -11,6 +11,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:app_updater/app_updater.dart';
 import 'package:audio/audio.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
@@ -36,6 +37,7 @@ import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
 
@@ -159,6 +161,22 @@ void main() {
     );
     getIt.registerLazySingleton<UserDirectory>(InMemoryUserDirectory.new);
     getIt.registerLazySingleton<AccountPurge>(MockAccountPurge.new);
+    // The force-update gate wraps every routed screen (app.dart); the
+    // in-memory remote config's default `min_supported_version: 0.0.0`
+    // means it never blocks these navigation tests.
+    getIt.registerSingleton<RemoteConfigService>(
+      InMemoryRemoteConfigService(),
+    );
+    getIt.registerLazySingleton<AppUpdateService>(
+      () => AppUpdateService(
+        remoteConfig: getIt<RemoteConfigService>(),
+        // Fixed so the gate never reaches for the `package_info_plus`
+        // platform channel (unanswered under the widget-test binding, which
+        // would leave `ForceUpdateWidget`'s spinner animating and hang
+        // pumpAndSettle). Above the 0.0.0 default → never blocks.
+        currentVersion: () async => '1.0.0',
+      ),
+    );
     getIt.registerSingleton<DirectoryPublisher>(
       DirectoryPublisher(
         directory: getIt<UserDirectory>(),
