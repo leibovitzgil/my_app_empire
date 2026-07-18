@@ -5,6 +5,7 @@ import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
@@ -103,9 +104,18 @@ class _DuetScorePageState extends State<DuetScorePage> {
   // it's loaded here, once, the first time this screen actually needs it.
   RecordingPathBuilder? _recordingPathBuilder;
 
+  // Manual screen trace (M7.3): the composite "reader open → first canvas"
+  // user moment. Started in `initState` and stopped on the first frame the
+  // reader is actually mounted (see `_stopReaderTraceOnFirstFrame`). A no-op
+  // whenever the injected tracer has no real Performance backend — the
+  // mock/emulator path binds `NoopPerfTracer`, whose `start` returns null
+  // (G2), so this whole trace collapses to nothing there.
+  PerfTrace? _readerTrace;
+
   @override
   void initState() {
     super.initState();
+    _readerTrace = getIt<PerfTracer>().start('reader_open_to_first_canvas');
     unawaited(_loadRecordingPathBuilder());
   }
 
@@ -116,8 +126,22 @@ class _DuetScorePageState extends State<DuetScorePage> {
 
   @override
   void dispose() {
+    // If the reader was never reached (backed out during load), the trace is
+    // simply dropped, never stopped — an unstopped Firebase trace is
+    // discarded, so no truncated/aborted duration pollutes the data.
+    _readerTrace = null;
     unawaited(_scoreBloc.close());
     super.dispose();
+  }
+
+  /// Stops the reader-open trace exactly once, on the first frame the reader
+  /// is actually mounted. Nulls the handle first so it fires at most once,
+  /// and is a no-op when tracing is disabled (a null [PerfTrace]).
+  void _stopReaderTraceOnFirstFrame() {
+    final trace = _readerTrace;
+    if (trace == null) return;
+    _readerTrace = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) => trace.stop());
   }
 
   @override
@@ -126,6 +150,9 @@ class _DuetScorePageState extends State<DuetScorePage> {
     if (recordingPathBuilder == null) {
       return const Scaffold(body: LoadingView());
     }
+    // The reader is about to mount for the first time — close the
+    // open→first-canvas trace after this frame paints.
+    _stopReaderTraceOnFirstFrame();
     return BlocProvider<ScoreBloc>.value(
       value: _scoreBloc,
       child: StreamBuilder<PieceSyncState>(

@@ -25,6 +25,7 @@ import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
@@ -140,6 +141,7 @@ void main() {
       ),
     );
 
+    getIt.registerLazySingleton<PerfTracer>(NoopPerfTracer.new);
     getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
     getIt.registerLazySingleton<AudioRecorderService>(
       RecordAudioRecorderService.new,
