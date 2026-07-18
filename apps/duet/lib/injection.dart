@@ -3,21 +3,31 @@
 // ignore_for_file: cascade_invocations
 import 'dart:async';
 
+import 'package:analytics/analytics.dart';
+import 'package:app_updater/app_updater.dart';
 import 'package:audio/audio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crash_reporting/crash_reporting.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/audio_upload_queue.dart';
 import 'package:duet/data/callable_account_purge.dart';
 import 'package:duet/data/callable_collaborator_invite_service.dart';
+import 'package:duet/data/callable_data_export.dart';
+import 'package:duet/data/callable_invite_service.dart';
 import 'package:duet/data/callable_nudge_service.dart';
 import 'package:duet/data/callable_user_directory.dart';
 import 'package:duet/data/cloud_audio_asset_store.dart';
+import 'package:duet/data/consent_recorder.dart';
+import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/data_export.dart';
 import 'package:duet/data/directory_publisher.dart';
+import 'package:duet/data/duet_analytics.dart';
+import 'package:duet/data/duet_analytics_observer.dart';
 import 'package:duet/data/duet_notification_permission_gateway.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/firebase_audio_object_store.dart';
@@ -25,9 +35,13 @@ import 'package:duet/data/firebase_piece_binary_store.dart';
 import 'package:duet/data/firestore_annotation_repository.dart';
 import 'package:duet/data/firestore_piece_repository.dart';
 import 'package:duet/data/firestore_piece_sync_monitor.dart';
+import 'package:duet/data/in_memory_consent_recorder.dart';
 import 'package:duet/data/local_piece_migrator.dart';
+import 'package:duet/data/mirroring_settings_repository.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
+import 'package:duet/data/sign_up_consent_binder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/review_sync/review_sync.dart';
@@ -35,11 +49,14 @@ import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
+import 'package:review_prompter/review_prompter.dart';
 import 'package:user_directory/user_directory.dart';
 
 /// The app's service locator.
@@ -99,6 +116,40 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     SimulatedMonetizationService.new,
   );
 
+  // Remote-config flags (M6.4): consumers pull via the `RemoteConfigService`
+  // contract only (G3). BOTH branches currently bind the committed-defaults
+  // in-memory fake — `FirebaseRemoteConfigService` needs a real
+  // `Firebase.initializeApp` with real project options, which is Track B
+  // (M0.2); the emulator suite has no Remote Config emulator either, so
+  // binding the fake under `useFirebase` too keeps every composition's flag
+  // behavior defined (kill-switches enabled) instead of crashing on an
+  // uninitialized Firebase app.
+  // TODO(track-b): under `useFirebase`, bind `FirebaseRemoteConfigService`
+  // and `await init()` after `Firebase.initializeApp` lands real options
+  // (M0.2), then flip the staging console flag to verify (M6.4 ▸B).
+  final remoteConfigService = InMemoryRemoteConfigService();
+  await remoteConfigService.init();
+  getIt.registerSingleton<RemoteConfigService>(remoteConfigService);
+
+  // Force-update gate (M7.6): `ForceUpdateWidget` (app.dart) asks this
+  // service whether the running version is below the remote minimum. It
+  // consumes the `RemoteConfigService` contract bound above — one config
+  // pipeline, no Firebase object of its own — so with the in-memory
+  // defaults (`min_supported_version: 0.0.0`) it can never block, keeping
+  // the headless gate green (G2). Track B changes behavior by binding the
+  // real config service above, not by touching this registration.
+  getIt.registerLazySingleton<AppUpdateService>(
+    () => AppUpdateService(remoteConfig: getIt<RemoteConfigService>()),
+  );
+
+  // Review prompting (M7.6): opens are counted in the real entry points
+  // (`main.dart` / `main_emulator.dart`), and the "saved a note" happy
+  // moment logs the core action (see `DuetScorePage`). Lazy-async like
+  // `NotificationsManager`: construction touches the SharedPreferences
+  // platform channel, so nothing on the headless gate ever resolves it
+  // (G2 — the M7.1 keep-platform-channels-behind-a-seam precedent).
+  getIt.registerLazySingletonAsync<ReviewPrompter>(ReviewPrompter.create);
+
   // Lazy-async since it awaits `SharedPreferences.getInstance()`. Now
   // consumed three ways: `NotificationPermissionGateway` below (for the
   // Settings screen's push toggle), `ReviewSyncService`'s `onImported` hook
@@ -109,8 +160,18 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     NotificationsManager.create,
   );
 
+  // The push preference is stored locally (`LocalSettingsRepository`) AND
+  // mirrored onto `deviceTokens/{uid}.pushEnabled` so the digest-drain
+  // Function (M5.4) can skip a muted recipient. The mirror is Duet glue
+  // (`MirroringSettingsRepository`), not `feature_settings` — that package
+  // stays backend-agnostic (G3). Lazy, so the `DeviceTokenRegistry`/
+  // `CurrentUser` it reads are bound by first runtime resolution.
   getIt.registerLazySingleton<SettingsRepository>(
-    () => LocalSettingsRepository(getIt<LocalStorageService>()),
+    () => MirroringSettingsRepository(
+      delegate: LocalSettingsRepository(getIt<LocalStorageService>()),
+      registry: getIt<DeviceTokenRegistry>(),
+      currentUserId: getIt<CurrentUser>().call,
+    ),
   );
 
   // `UserDirectory` (email -> account resolution) and `DeviceTokenRegistry`/
@@ -172,6 +233,25 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     getIt.registerSingleton<UserMessageGateway>(inMemoryUserMessaging);
   }
 
+  // Crash reporting (M7.1). Both compositions bind the no-op today: the
+  // headless/mock path must never construct a Firebase object (G2), and the
+  // emulator suite has no Crashlytics emulator to report to. The uid binder
+  // below still runs against it, so the glue is exercised end-to-end.
+  // TODO(M7.1-B): in the real Firebase entry point (Track B, after M0.2),
+  // bind CrashlyticsCrashReporter and call installCrashHooks(reporter)
+  // there — never here, and never for mock/emulator runs.
+  getIt.registerLazySingleton<CrashReporter>(NoopCrashReporter.new);
+
+  // Eager, like CurrentUser/DirectoryPublisher below: the account
+  // subscription must exist before the user can possibly sign in. Uid only —
+  // never the email (see the class doc); cleared (null) on sign-out.
+  getIt.registerSingleton<CrashReporterUserBinder>(
+    CrashReporterUserBinder(
+      reporter: getIt<CrashReporter>(),
+      accounts: getIt<AuthAccountProvider>().account,
+    ),
+  );
+
   // Keeps this device's own directory entry current whenever the signed-in
   // identity changes, threading the locally-stored `discoverable` choice
   // into every upsert (M1.6's clobber fix — see the class doc). Eager, like
@@ -183,6 +263,30 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       directory: getIt<UserDirectory>(),
       storage: getIt<LocalStorageService>(),
       accounts: getIt<AuthAccountProvider>().account,
+    ),
+  );
+
+  // Sign-up consent record (M7.4): the minimal in-house consent record — a
+  // timestamped acceptance of the ToS/Privacy Policy, stored with the
+  // account. BOTH branches bind the in-memory recorder for now: the
+  // Firestore-backed `FirestoreConsentRecorder` writes `consent/{uid}`, whose
+  // security rules + rules-tests haven't landed yet (G6 — rules before client
+  // writes), so it stays unbound until Track B, exactly like the deferred
+  // remote-config/crash/analytics/perf bindings above.
+  // TODO(track-b): under `useFirebase`, once the `consent/{uid}` rules ship,
+  // bind `FirestoreConsentRecorder(firestore: FirebaseFirestore.instance)` and
+  // verify an acceptance lands server-side on sign-up (M7.4 ▸B).
+  getIt.registerSingleton<ConsentRecorder>(InMemoryConsentRecorder());
+
+  // Eager, like `DirectoryPublisher`/`CrashReporterUserBinder` above: it must
+  // be subscribed to the account stream before the user can sign up, so it
+  // catches the first authenticated emission after a consent-checked sign-up
+  // and records the acceptance against the new uid. `LoginScreen`'s consent
+  // seam (app.dart) calls `markPending` when the box is ticked.
+  getIt.registerSingleton<SignUpConsentBinder>(
+    SignUpConsentBinder(
+      accounts: getIt<AuthAccountProvider>().account,
+      recorder: getIt<ConsentRecorder>(),
     ),
   );
 
@@ -201,6 +305,23 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     );
   } else {
     getIt.registerLazySingleton<AccountPurge>(MockAccountPurge.new);
+  }
+
+  // Self-service GDPR data export (M7.5): the Firebase branch calls the
+  // `exportMyData` callable and shares the returned 24 h download link; the
+  // default branch simulates success (the mock identity has only in-memory
+  // data, so there's no persisted bundle to produce). Lazy — only Settings'
+  // "Download my data" row ever resolves it.
+  if (useFirebase) {
+    getIt.registerLazySingleton<DataExport>(
+      () => CallableDataExport(
+        functions: FirebaseFunctions.instanceFor(
+          region: duetFunctionsRegion,
+        ),
+      ),
+    );
+  } else {
+    getIt.registerLazySingleton<DataExport>(MockDataExport.new);
   }
 
   // `DeviceTokenSync`'s token source is always injected (FIX-3): the default
@@ -234,6 +355,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     ),
   );
 
+  // PDF performance traces (M7.3). Both compositions bind the bare
+  // `PdfrxRenderService` and a `NoopPerfTracer` today: `FirebasePerformance`
+  // needs a real `Firebase.initializeApp` and has NO emulator backend, so —
+  // exactly like the M6.4 remote-config and M7.1/M7.2 crash/analytics
+  // bindings — the Firebase-free path is bound in BOTH branches now and the
+  // live wiring is deferred to the real entry point (G2). The decorator
+  // (`TracedPdfRenderService`) and the real seam
+  // (`FirebasePerfTracer`, `firebase_perf_tracer.dart`) are written and
+  // unit-tested; flipping them on is a Track-B one-liner, and until then
+  // `DuetScorePage`'s reader-open trace is a no-op against the noop tracer.
+  // TODO(track-b): under `useFirebase` (which becomes the real Firebase entry
+  // point after M0.2), bind
+  //   PerfTracer      -> FirebasePerfTracer(FirebasePerformance.instance)
+  //   PdfRenderService -> TracedPdfRenderService(
+  //       delegate: PdfrxRenderService(), tracer: getIt<PerfTracer>())
+  // then confirm `pdf_open` + `pdf_render_page` land on the staging
+  // Performance dashboard (M7.3 ▸B; needs M0.2).
+  getIt.registerLazySingleton<PerfTracer>(NoopPerfTracer.new);
   getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
   getIt.registerLazySingleton<AudioRecorderService>(
     RecordAudioRecorderService.new,
@@ -417,13 +556,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     ),
   );
 
-  getIt.registerLazySingleton<InviteService>(
-    () => DeepLinkInviteService(
+  // The secondary (tokenized deep-link) invite path. Under Firebase the
+  // whole lifecycle is server-authoritative (M5.2): `CallableInviteService`
+  // drives the `createInviteToken`/`resolveInviteToken`/`acceptInviteToken`
+  // callables against single-use, expiring `/inviteTokens/{token}` docs the
+  // rules deny to clients entirely. The headless gate keeps the local
+  // mock-path impl, which now enforces the same 14-day expiry (G2).
+  getIt.registerLazySingleton<InviteService>(() {
+    if (useFirebase) {
+      return CallableInviteService(
+        functions: FirebaseFunctions.instanceFor(region: duetFunctionsRegion),
+      );
+    }
+    return DeepLinkInviteService(
       pieceRepository: getIt<PieceRepository>(),
       monetizationService: getIt<MonetizationService>(),
       storage: getIt<LocalStorageService>(),
-    ),
-  );
+    );
+  });
 
   // The primary (email-based) collaborator invite path; `InviteService`
   // above remains the secondary/fallback (tokenized deep-link) path — both
@@ -468,25 +618,124 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   });
 
   getIt.registerLazySingleton<DeepLinkService>(FakeDeepLinkService.new);
+
+  // Analytics (M7.2). Funnel events ride the Duet-side typed catalogue
+  // (`DuetAnalytics`, `lib/data/duet_analytics.dart` — see its doc for the
+  // full instrumentation-seam map) over the factory's generic `AppLogger`.
+  // BOTH branches bind the Firebase-free Talker-only logger today:
+  // `FirebaseAnalytics.instance` cannot exist without a real
+  // `Firebase.initializeApp` (Track B, M0.2), and the emulator suite has no
+  // Analytics emulator to receive events anyway — the same precedent as the
+  // M6.4 remote-config and M7.1 crash-reporter bindings above (G2). The
+  // injected `CrashReporter` keeps the breadcrumb/error glue exercised
+  // end-to-end even while analytics itself is local-only.
+  // TODO(track-b): under `useFirebase`, bind
+  // `AppLogger(analytics: FirebaseAnalytics.instance, ...)` once real
+  // project options land (M0.2), then verify the five funnel events in
+  // DebugView and seed the console dashboards (M7.2 ▸B).
+  getIt.registerLazySingleton<AppLogger>(
+    () => AppLogger(crashReporter: getIt<CrashReporter>()),
+  );
+  getIt.registerLazySingleton<DuetAnalytics>(
+    () => DuetAnalytics(getIt<AppLogger>()),
+  );
+
+  // The bloc-side funnel-instrumentation seam (G3: feature code stays
+  // analytics-free): one app-level BlocObserver translates feature bloc/
+  // cubit transitions into catalogue events. Attached here — the one choke
+  // point every entry point (main, emulator, screenshot, driver) already
+  // funnels through. The router-side half (`DuetRouteObserver`) is attached
+  // to the GoRouter in `app.dart`.
+  Bloc.observer = DuetAnalyticsObserver(analytics: getIt<DuetAnalytics>());
+
+  // Local-notification taps → the deep-link seam (M5.5): tapping a
+  // foreground-bridge notification ingests its payload URI into
+  // `DeepLinkService`, and `AppView`'s existing `onIntent → _dispatchIntent`
+  // machinery routes it (signed-in: straight to the piece; signed-out: held
+  // until login). Only under `useFirebase` — constructing the router
+  // resolves `NotificationsManager` (FirebaseMessaging + a platform
+  // channel), which the headless gate must never touch (FIX-3, G2); the
+  // bridge whose notifications carry the payload only exists there anyway.
+  if (useFirebase) {
+    getIt.registerSingleton<NotificationTapRouter>(
+      NotificationTapRouter(
+        // Same deferred-resolution pattern as `DeviceTokenSync`'s
+        // `onTokenRefresh` above: the manager is lazy-async, so the tap
+        // stream materializes once it's built.
+        taps: Stream.fromFuture(
+          getIt.getAsync<NotificationsManager>(),
+        ).asyncExpand((manager) => manager.onLocalNotificationTap),
+        deepLinks: getIt<DeepLinkService>(),
+      ),
+    );
+  }
   // generated:register — `create_feature/create_package --wire duet` adds
   // registrations above this line. Do not remove this marker.
+}
+
+/// Routes local-notification tap payloads into the app's deep-link seam
+/// (M5.5): each payload that parses as a URI is [DeepLinkService.ingest]ed,
+/// after which the normal intent machinery (`AppView`) owns navigation —
+/// this class never touches the router. Unparseable payloads are dropped;
+/// whether a *parsed* link is recognized is the deep-link parser's call.
+///
+/// Public only so `test/notification_tap_router_test.dart` can drive it with
+/// a fake tap stream + `FakeDeepLinkService`.
+@visibleForTesting
+class NotificationTapRouter {
+  /// Creates a [NotificationTapRouter], subscribing to [taps] immediately.
+  NotificationTapRouter({
+    required Stream<String> taps,
+    required DeepLinkService deepLinks,
+  }) : _deepLinks = deepLinks {
+    _subscription = taps.listen(_onTap);
+  }
+
+  final DeepLinkService _deepLinks;
+  late final StreamSubscription<String> _subscription;
+
+  void _onTap(String payload) {
+    final uri = Uri.tryParse(payload);
+    if (uri == null) return;
+    _deepLinks.ingest(uri);
+  }
+
+  /// Cancels the tap subscription. Call when the owning scope (e.g. the
+  /// app's DI container) is torn down.
+  Future<void> dispose() => _subscription.cancel();
 }
 
 /// Bridges the generic message inbox for whoever is currently signed in to a
 /// foreground/warm-start local notification (FIX-5: the Firebase emulator
 /// has no FCM sender and Cloud Functions don't run headless in this
-/// container, so there is no background push in v1 — see
+/// container, so the bridge is the only delivery in local development — see
 /// `FirestoreUserMessaging.sendToUser`'s doc). Re-subscribes to the
 /// message gateway's inbox whenever the signed-in user id changes (e.g.
 /// sign-in/out), showing each message at most once per session. Only ever
 /// constructed under `useFirebase: true`.
+///
+/// Push dedupe (the M5.3 strategy, chosen over "bridge only when push
+/// permission is denied"): deployed, the `onInboxMessageCreated` Cloud
+/// Function delivers each inbox message as a real FCM push and marks the
+/// doc `pushed: true` after a successful send. This bridge skips
+/// `showLocal` for [UserMessage.pushed] messages — otherwise a message
+/// already shown on the recipient's lock screen would be shown again the
+/// moment the app foregrounds. A recipient with no usable device tokens
+/// (permission denied, token expired) never gets the `pushed` mark, so the
+/// bridge stays their delivery path with no client-side permission
+/// branching. The one race — a message landing while the app is already
+/// foregrounded may reach this listener before the function marks it — is
+/// benign: the bridge shows it locally first, and FCM notifications are not
+/// auto-displayed by the OS in foreground, so no double there either.
 ///
 /// Surfacing a message is not the same as consuming it. A
 /// [UserMessage.requiresAction] message (an invite) stays unread until the
 /// user acts, because `read` is what the accept path checks for replay —
 /// marking it read here would burn the invite the instant it was notified.
 /// Everything else (a nudge) is done once shown, and is marked read so it
-/// leaves the inbox for good.
+/// leaves the inbox for good — including a `pushed` nudge this bridge never
+/// shows: the push already delivered it, and consuming it here is what
+/// keeps it from riding every later snapshot.
 ///
 /// Public only so `test/inbox_notification_bridge_test.dart` can reach it:
 /// this bridge decides whether a message survives being notified, and that
@@ -536,11 +785,33 @@ class InboxNotificationBridge {
     if (fresh.isEmpty) return;
     final manager = await getIt.getAsync<NotificationsManager>();
     for (final message in fresh) {
-      await manager.showLocal(title: message.title, body: message.body);
+      // Already delivered to a device by FCM (`onInboxMessageCreated`) —
+      // re-showing it locally would double-notify. See the class doc.
+      if (!message.pushed) {
+        await manager.showLocal(
+          title: message.title,
+          body: message.body,
+          // Tapping the notification routes to the exact piece (M5.5) —
+          // `NotificationTapRouter` ingests this into `DeepLinkService`.
+          payload: pieceDeepLinkFor(message),
+        );
+      }
       if (!message.requiresAction) {
         await _gateway.markRead(uid, message.id);
       }
     }
+  }
+
+  /// The `https://duet.app/piece/<pieceId>` deep link for [message]'s piece,
+  /// or null when the message isn't about one — the same URI shape M5.3's
+  /// `onInboxMessageCreated` function emits as FCM `data.deepLink` (keep the
+  /// two in sync; the domain is that function's `DEEP_LINK_DOMAIN`
+  /// placeholder until the product one lands, Track B).
+  @visibleForTesting
+  static String? pieceDeepLinkFor(UserMessage message) {
+    final pieceId = message.data['pieceId'];
+    if (pieceId == null || pieceId.isEmpty) return null;
+    return 'https://duet.app/piece/${Uri.encodeComponent(pieceId)}';
   }
 
   /// Cancels both subscriptions. Call when the owning scope (e.g. the app's

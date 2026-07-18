@@ -9,10 +9,12 @@ import 'package:notifications/src/domain/user_message.dart';
 abstract class UserMessageGateway {
   /// Sends [message] to `message.toUid`'s inbox.
   ///
-  /// v1 delivery note: this is a foreground/warm-start-only bridge, not a
-  /// background push — see each implementation's doc for detail (the
-  /// Firebase emulator used for local development has no FCM sender, and
-  /// Cloud Functions don't run headless in this container).
+  /// Delivery note: the inbox write is the whole send. Deployed, a
+  /// server-side trigger (Duet's `onInboxMessageCreated`, M5.3) turns it
+  /// into a real FCM push, marking the message [UserMessage.pushed]; on the
+  /// emulator (no FCM sender, no headless functions) and in the in-memory
+  /// gate, delivery is a foreground local-notification bridge over
+  /// [inboxFor] — see each implementation's doc for detail.
   Future<Result<void>> sendToUser(UserMessage message);
 
   /// Streams the current *unread* messages addressed to [uid], updating as

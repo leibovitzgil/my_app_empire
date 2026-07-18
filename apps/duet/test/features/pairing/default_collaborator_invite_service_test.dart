@@ -372,6 +372,30 @@ void main() {
     });
 
     test(
+      'acceptInvite consumes the inbox message: the invite leaves every '
+      'watchInvites snapshot (mirroring the server-side callable)',
+      () async {
+        await service.sendInvite(
+          pieceId: 'p1',
+          ownerId: ownerId,
+          ownerName: 'Jane',
+          email: recipientEmail,
+        );
+        final invites = await service.watchInvites('sam-uid').first;
+        expect(invites, hasLength(1));
+
+        final result = await service.acceptInvite(
+          invites.single,
+          accepterId: 'sam-uid',
+          accepterEmail: recipientEmail,
+        );
+
+        expect(result, isA<Success<void>>());
+        expect(await service.watchInvites('sam-uid').first, isEmpty);
+      },
+    );
+
+    test(
       'acceptInvite re-checks the cap and fails if it filled since send',
       () async {
         await pieceRepository.addCollaborator(

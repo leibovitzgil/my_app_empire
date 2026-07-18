@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage } from 'firebase-admin/storage';
 
 /**
@@ -18,6 +19,15 @@ export const db = () => getFirestore(app());
 
 /** The Admin Auth client, initializing the app on first use. */
 export const adminAuth = () => getAuth(app());
+
+/**
+ * The FCM Messaging client, initializing the app on first use.
+ *
+ * There is no FCM emulator: tests mock `firebase-admin/messaging` at the
+ * module level (see `test/inbox_push.test.ts`); real delivery verification
+ * is Track B.
+ */
+export const fcm = () => getMessaging(app());
 
 /**
  * The default Cloud Storage bucket, initializing the app on first use.

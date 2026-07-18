@@ -102,6 +102,55 @@ void main() {
     );
 
     blocTest<AcceptInviteCubit, AcceptInviteState>(
+      'load surfaces the expired copy for a token past its TTL (M5.2)',
+      build: () {
+        when(() => inviteService.resolveInvite(token)).thenAnswer(
+          (_) async => const ResultFailure<InviteDetails>(
+            InviteException(
+              'This invite link is invalid or has expired.',
+              reason: InviteFailureReason.expired,
+            ),
+          ),
+        );
+        return buildCubit();
+      },
+      act: (cubit) => cubit.load(),
+      skip: 1,
+      expect: () => [
+        isA<AcceptInviteState>()
+            .having((s) => s.status, 'status', AcceptInviteStatus.failure)
+            .having(
+              (s) => s.error,
+              'error',
+              contains('invalid or has expired'),
+            ),
+      ],
+    );
+
+    blocTest<AcceptInviteCubit, AcceptInviteState>(
+      'load is ready when the piece read is denied — a fresh invitee '
+      'cannot read a participant-gated piece under the cloud rules '
+      '(M5.2); the accept callable re-asserts access instead',
+      build: () {
+        when(
+          () => inviteService.resolveInvite(token),
+        ).thenAnswer((_) async => const Success(details));
+        when(() => pieceRepository.getPiece('p1')).thenAnswer(
+          (_) async => const ResultFailure<Piece>(OwnershipViolation('p1')),
+        );
+        return buildCubit();
+      },
+      act: (cubit) => cubit.load(),
+      skip: 1,
+      expect: () => [
+        isA<AcceptInviteState>()
+            .having((s) => s.status, 'status', AcceptInviteStatus.ready)
+            .having((s) => s.details, 'details', details)
+            .having((s) => s.error, 'error', isNull),
+      ],
+    );
+
+    blocTest<AcceptInviteCubit, AcceptInviteState>(
       'load surfaces alreadyCollaborator when the accepter already has '
       'access',
       build: () {
@@ -245,5 +294,155 @@ void main() {
             ),
       ],
     );
+
+    blocTest<AcceptInviteCubit, AcceptInviteState>(
+      'a typed at-cap denial from accept maps to the atCap state, keeping '
+      'the resolved details (M5.2: the cloud path re-asserts the cap '
+      'server-side, where a fresh invitee could not pre-check it)',
+      build: () {
+        when(
+          () => inviteService.resolveInvite(token),
+        ).thenAnswer((_) async => const Success(details));
+        when(() => pieceRepository.getPiece('p1')).thenAnswer(
+          (_) async => const ResultFailure<Piece>(OwnershipViolation('p1')),
+        );
+        when(
+          () => inviteService.acceptInvite(
+            token,
+            collaboratorId: collaboratorId,
+            collaboratorName: any(named: 'collaboratorName'),
+            collaboratorEmail: collaboratorEmail,
+          ),
+        ).thenAnswer(
+          (_) async => const ResultFailure<void>(
+            InviteException(
+              'Free plan allows 1 collaborator. Upgrade to invite more.',
+              reason: InviteFailureReason.atCap,
+            ),
+          ),
+        );
+        return buildCubit();
+      },
+      act: (cubit) async {
+        await cubit.load();
+        await cubit.accept();
+      },
+      skip: 2,
+      expect: () => [
+        isA<AcceptInviteState>().having(
+          (s) => s.status,
+          'status',
+          AcceptInviteStatus.accepting,
+        ),
+        isA<AcceptInviteState>()
+            .having((s) => s.status, 'status', AcceptInviteStatus.atCap)
+            .having((s) => s.details, 'details', details),
+      ],
+    );
+
+    blocTest<AcceptInviteCubit, AcceptInviteState>(
+      'a typed already-collaborator denial from accept maps to the '
+      'alreadyCollaborator state (M5.2)',
+      build: () {
+        when(
+          () => inviteService.resolveInvite(token),
+        ).thenAnswer((_) async => const Success(details));
+        when(() => pieceRepository.getPiece('p1')).thenAnswer(
+          (_) async => const ResultFailure<Piece>(OwnershipViolation('p1')),
+        );
+        when(
+          () => inviteService.acceptInvite(
+            token,
+            collaboratorId: collaboratorId,
+            collaboratorName: any(named: 'collaboratorName'),
+            collaboratorEmail: collaboratorEmail,
+          ),
+        ).thenAnswer(
+          (_) async => const ResultFailure<void>(
+            InviteException(
+              'You already have access to this piece.',
+              reason: InviteFailureReason.alreadyCollaborator,
+            ),
+          ),
+        );
+        return buildCubit();
+      },
+      act: (cubit) async {
+        await cubit.load();
+        await cubit.accept();
+      },
+      skip: 2,
+      expect: () => [
+        isA<AcceptInviteState>().having(
+          (s) => s.status,
+          'status',
+          AcceptInviteStatus.accepting,
+        ),
+        isA<AcceptInviteState>().having(
+          (s) => s.status,
+          'status',
+          AcceptInviteStatus.alreadyCollaborator,
+        ),
+      ],
+    );
+
+    // M8.4: an expired/consumed/invalid token surfaced *during accept* (the
+    // token died between resolve and accept, or the server re-asserted it) is
+    // terminal — retrying accept is futile — so it renders the blocking
+    // `failure` dead-end, not a retryable `ready` + snackbar.
+    for (final reason in const [
+      InviteFailureReason.expired,
+      InviteFailureReason.consumed,
+      InviteFailureReason.invalid,
+    ]) {
+      blocTest<AcceptInviteCubit, AcceptInviteState>(
+        'a typed $reason denial from accept is terminal (failure), not '
+        'a retryable ready state',
+        build: () {
+          when(
+            () => inviteService.resolveInvite(token),
+          ).thenAnswer((_) async => const Success(details));
+          when(
+            () => pieceRepository.getPiece('p1'),
+          ).thenAnswer((_) async => Success(piece()));
+          when(() => monetization.isProUser()).thenAnswer((_) async => false);
+          when(
+            () => inviteService.acceptInvite(
+              token,
+              collaboratorId: collaboratorId,
+              collaboratorName: any(named: 'collaboratorName'),
+              collaboratorEmail: collaboratorEmail,
+            ),
+          ).thenAnswer(
+            (_) async => ResultFailure<void>(
+              InviteException(
+                'This invite link is invalid or has expired.',
+                reason: reason,
+              ),
+            ),
+          );
+          return buildCubit();
+        },
+        act: (cubit) async {
+          await cubit.load();
+          await cubit.accept();
+        },
+        skip: 2,
+        expect: () => [
+          isA<AcceptInviteState>().having(
+            (s) => s.status,
+            'status',
+            AcceptInviteStatus.accepting,
+          ),
+          isA<AcceptInviteState>()
+              .having((s) => s.status, 'status', AcceptInviteStatus.failure)
+              .having(
+                (s) => s.error,
+                'error',
+                contains('invalid or has expired'),
+              ),
+        ],
+      );
+    }
   });
 }

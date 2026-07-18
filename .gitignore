@@ -52,3 +52,4 @@ apps/duet/windows/
 # Scaffold metadata `flutter create` regenerates alongside the platform dirs.
 apps/duet/.metadata
 apps/duet/.gitignore
+.claude/worktrees/

@@ -5,6 +5,7 @@ import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
@@ -12,7 +13,55 @@ import 'package:duet/features/score/score.dart';
 import 'package:duet/injection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:review_prompter/review_prompter.dart';
+
+/// Resolves [pieceId] against the [PieceRepository] before mounting the
+/// reader (M5.5): the `/score/:pieceId` route is now a deep-link/push
+/// destination, so any id can arrive here — an unknown or denied one lands
+/// back on `/home` with a snackbar (G4) instead of stranding the user on a
+/// dead score screen. In-app navigation (library taps) passes ids that are
+/// known to exist, so the extra resolve is a cheap repository hit there.
+class DuetScoreRouteGuard extends StatefulWidget {
+  /// Creates a [DuetScoreRouteGuard] for [pieceId].
+  const DuetScoreRouteGuard({required this.pieceId, super.key});
+
+  /// The piece to resolve and open.
+  final String pieceId;
+
+  @override
+  State<DuetScoreRouteGuard> createState() => _DuetScoreRouteGuardState();
+}
+
+class _DuetScoreRouteGuardState extends State<DuetScoreRouteGuard> {
+  bool _resolved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resolve());
+  }
+
+  Future<void> _resolve() async {
+    final result = await getIt<PieceRepository>().getPiece(widget.pieceId);
+    if (!mounted) return;
+    switch (result) {
+      case Success<Piece>():
+        setState(() => _resolved = true);
+      case ResultFailure<Piece>():
+        // Shown once `/home`'s library scaffold mounts — the messenger
+        // queues it across the navigation.
+        AppSnackbar.error(context, 'That sheet is no longer available');
+        context.go('/home');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _resolved
+      ? DuetScorePage(pieceId: widget.pieceId)
+      : const Scaffold(body: LoadingView());
+}
 
 /// Hosts `feature_score`'s Score Viewer for [pieceId]: builds the
 /// [ScoreBloc] from the shared repositories, and wires the app-glue
@@ -55,9 +104,18 @@ class _DuetScorePageState extends State<DuetScorePage> {
   // it's loaded here, once, the first time this screen actually needs it.
   RecordingPathBuilder? _recordingPathBuilder;
 
+  // Manual screen trace (M7.3): the composite "reader open → first canvas"
+  // user moment. Started in `initState` and stopped on the first frame the
+  // reader is actually mounted (see `_stopReaderTraceOnFirstFrame`). A no-op
+  // whenever the injected tracer has no real Performance backend — the
+  // mock/emulator path binds `NoopPerfTracer`, whose `start` returns null
+  // (G2), so this whole trace collapses to nothing there.
+  PerfTrace? _readerTrace;
+
   @override
   void initState() {
     super.initState();
+    _readerTrace = getIt<PerfTracer>().start('reader_open_to_first_canvas');
     unawaited(_loadRecordingPathBuilder());
   }
 
@@ -68,8 +126,22 @@ class _DuetScorePageState extends State<DuetScorePage> {
 
   @override
   void dispose() {
+    // If the reader was never reached (backed out during load), the trace is
+    // simply dropped, never stopped — an unstopped Firebase trace is
+    // discarded, so no truncated/aborted duration pollutes the data.
+    _readerTrace = null;
     unawaited(_scoreBloc.close());
     super.dispose();
+  }
+
+  /// Stops the reader-open trace exactly once, on the first frame the reader
+  /// is actually mounted. Nulls the handle first so it fires at most once,
+  /// and is a no-op when tracing is disabled (a null [PerfTrace]).
+  void _stopReaderTraceOnFirstFrame() {
+    final trace = _readerTrace;
+    if (trace == null) return;
+    _readerTrace = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) => trace.stop());
   }
 
   @override
@@ -78,6 +150,9 @@ class _DuetScorePageState extends State<DuetScorePage> {
     if (recordingPathBuilder == null) {
       return const Scaffold(body: LoadingView());
     }
+    // The reader is about to mount for the first time — close the
+    // open→first-canvas trace after this frame paints.
+    _stopReaderTraceOnFirstFrame();
     return BlocProvider<ScoreBloc>.value(
       value: _scoreBloc,
       child: StreamBuilder<PieceSyncState>(
@@ -90,6 +165,7 @@ class _DuetScorePageState extends State<DuetScorePage> {
           audioAssetStore: getIt<AudioAssetStore>(),
           syncStatus: _syncStatusFor(snapshot.data),
           onNudgeRequested: _nudge,
+          onNoteSaved: _logNoteSaved,
         ),
       ),
     );
@@ -107,6 +183,19 @@ class _DuetScorePageState extends State<DuetScorePage> {
     PieceSyncState.offline => ScoreSyncStatus.notSynced,
     null => ScoreSyncStatus.syncing,
   };
+
+  /// Signals the M7.6 review prompter that the user's core action — saving
+  /// an audio note — just happened. Resolved lazily/async (see
+  /// `injection.dart`: construction touches the SharedPreferences platform
+  /// channel) and fire-and-forget: review bookkeeping must never block or
+  /// fail the save flow it piggybacks on.
+  void _logNoteSaved() {
+    unawaited(
+      getIt.getAsync<ReviewPrompter>().then(
+        (prompter) => prompter.logCoreActionCompleted(),
+      ),
+    );
+  }
 
   /// Pings the piece's other participants that the current user added notes —
   /// the reader's "Nudge" affordance (Layers panel + save-note snackbar). The

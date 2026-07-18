@@ -9,6 +9,7 @@ import 'package:duet/features/score/src/bloc/audio_playback_cubit.dart';
 import 'package:duet/features/score/src/bloc/record_audio_cubit.dart';
 import 'package:duet/features/score/src/bloc/score_bloc.dart';
 import 'package:duet/features/score/src/participant_layer.dart';
+import 'package:duet/features/score/src/thumbnail_cache.dart';
 import 'package:duet/features/score/src/ui/practice_view.dart';
 import 'package:duet/features/score/src/ui/reader_theme.dart';
 import 'package:duet/features/score/src/ui/widgets/audio_pin_marker.dart';
@@ -56,6 +57,7 @@ class ScoreViewerScreen extends StatefulWidget {
     required this.audioAssetStore,
     this.syncStatus = ScoreSyncStatus.notSynced,
     this.onNudgeRequested,
+    this.onNoteSaved,
     super.key,
   });
 
@@ -94,6 +96,12 @@ class ScoreViewerScreen extends StatefulWidget {
   /// Piece Detail (M4.2).
   final Future<void> Function()? onNudgeRequested;
 
+  /// Invoked after an audio note is successfully saved — the reader's
+  /// "core action" happy moment. A callback for the same cross-cutting
+  /// reason as [onNudgeRequested]: app glue hooks side effects here (the
+  /// M7.6 review-prompt signal) without this feature ever importing them.
+  final VoidCallback? onNoteSaved;
+
   @override
   State<ScoreViewerScreen> createState() => _ScoreViewerScreenState();
 }
@@ -101,6 +109,13 @@ class ScoreViewerScreen extends StatefulWidget {
 class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   late final RecordAudioCubit _recordCubit;
   late final AudioPlaybackCubit _playbackCubit;
+
+  /// Decoded page thumbnails for the rail, LRU-capped and keyed by
+  /// (checksum, page) — one per screen so switching pieces reuses nothing
+  /// stale and closing the reader frees every image.
+  late final ThumbnailCache _thumbnailCache = ThumbnailCache(
+    renderService: widget.renderService,
+  );
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _openedPdfPath;
 
@@ -124,6 +139,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   void dispose() {
     unawaited(_recordCubit.close());
     unawaited(_playbackCubit.close());
+    _thumbnailCache.dispose();
     super.dispose();
   }
 
@@ -137,8 +153,9 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
       child: BlocConsumer<ScoreBloc, ScoreState>(
         listenWhen: (previous, current) =>
             previous.activeRegion != current.activeRegion ||
-            previous.regionIntent != current.regionIntent,
-        listener: _onRegionSelectionChanged,
+            previous.regionIntent != current.regionIntent ||
+            (current.error != null && current.error != previous.error),
+        listener: _onScoreStateChanged,
         builder: (context, state) {
           _maybeOpenPdf(state);
           return Theme(
@@ -346,6 +363,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     return _ReaderCanvas(
       state: state,
       renderService: widget.renderService,
+      thumbnailCache: _thumbnailCache,
       audioAssetStore: widget.audioAssetStore,
       onNudgeRequested: widget.onNudgeRequested,
       recordingPathBuilder: widget.recordingPathBuilder,
@@ -357,7 +375,15 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
   /// Region-intent changes drive navigation for practice only; the record
   /// flow renders declaratively as an in-canvas card (see `_ReaderCanvas`)
   /// so the selected passage stays spotlit behind it.
-  void _onRegionSelectionChanged(BuildContext context, ScoreState state) {
+  void _onScoreStateChanged(BuildContext context, ScoreState state) {
+    // A non-blocking write/read failure the bloc folded into `error` while the
+    // reader stays open — a denied stroke/erase/undo/audio-note write, or a
+    // mid-session live-read denial (M8.4). Surface it per G4 (blocking load
+    // failures render `ErrorRetryView` in `_buildBody`, not here).
+    final error = state.error;
+    if (error != null && state.status != ScoreStatus.failure) {
+      AppSnackbar.error(context, error);
+    }
     final region = state.activeRegion;
     final intent = state.regionIntent;
     if (region == null || intent == null) return;
@@ -392,11 +418,21 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     );
     final assetId = switch (putResult) {
       Success<String>(:final value) => value,
+      // An over-cap recording is a hard stop (M8.3): saving the note anyway
+      // would smuggle a file past the Storage rules' 5 MB audio cap only for
+      // the upload to bounce later. Unreachable with the recorder's AAC-LC
+      // mono config — this is the honest backstop, surfaced per G4.
+      ResultFailure<String>(error: AudioNoteTooLargeException()) => null,
       // Falls back to the raw path so the note isn't silently dropped; it
       // just won't survive past this recording's temp file the way a
       // properly-stored asset would.
       ResultFailure<String>() => recordedPath,
     };
+    if (assetId == null) {
+      scoreBloc.add(const ModeChanged(ScoreMode.view));
+      if (mounted) AppSnackbar.error(context, 'Recording too large');
+      return;
+    }
     final note = AudioNote(
       id: 'note_${DateTime.now().microsecondsSinceEpoch}',
       authorId: scoreBloc.state.currentUserId,
@@ -409,6 +445,9 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
     scoreBloc
       ..add(AudioNoteSaved(note, recordedPath))
       ..add(const ModeChanged(ScoreMode.view));
+    // The save succeeded — signal the core-action moment regardless of
+    // whether this screen is still mounted to show the snackbar below.
+    widget.onNoteSaved?.call();
     if (!mounted) return;
     final onNudge = widget.onNudgeRequested;
     // Only offer "Nudge" when there's actually a collaborator to nudge —
@@ -440,6 +479,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
               builder: (_) => PracticeView(
                 region: region,
                 renderService: widget.renderService,
+                checksum: state.piece?.basePdfChecksum ?? '',
                 pageCount: state.pageCount,
                 pieceTitle: state.piece?.title,
                 // Every layer, with visibility resolved the way the reader
@@ -634,6 +674,7 @@ class _ReaderCanvas extends StatefulWidget {
   const _ReaderCanvas({
     required this.state,
     required this.renderService,
+    required this.thumbnailCache,
     required this.audioAssetStore,
     required this.onNudgeRequested,
     required this.recordingPathBuilder,
@@ -642,6 +683,7 @@ class _ReaderCanvas extends StatefulWidget {
 
   final ScoreState state;
   final PdfRenderService renderService;
+  final ThumbnailCache thumbnailCache;
   final AudioAssetStore audioAssetStore;
   final Future<void> Function()? onNudgeRequested;
   final String Function() recordingPathBuilder;
@@ -682,18 +724,24 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
             width >= _kWideBreakpoint &&
             state.mode == ScoreMode.view &&
             !_layersPanelCollapsed;
+        // The piece PDF's content checksum keys cached thumbnail renders
+        // (see `ThumbnailCache`); the reader only mounts this canvas once
+        // the piece is ready, so it's normally present.
+        final checksum = state.piece?.basePdfChecksum;
         return Row(
           children: [
-            // TODO(reader-redesign): render real PDF thumbnails once a
-            // cheap per-page thumbnail render path exists; stylized cards
-            // are golden-safe and match the design in the meantime (see
-            // `PageThumbnailRail`'s class doc).
             if (showRail)
               PageThumbnailRail(
                 pageCount: state.pageCount,
                 currentPage: state.currentPage,
                 presence: _pagePresence(state),
                 onSelectPage: (page) => bloc.add(PageChanged(page)),
+                thumbnailFor: checksum == null
+                    ? null
+                    : (page) => widget.thumbnailCache.thumbnail(
+                        checksum: checksum,
+                        pageIndex: page,
+                      ),
                 dimmed: state.mode == ScoreMode.draw,
               ),
             Expanded(child: _canvasStack(context, state, bloc, width)),
@@ -765,7 +813,9 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
           child: Center(
             child: ScorePageCanvas(
               renderService: widget.renderService,
+              checksum: state.piece?.basePdfChecksum ?? '',
               pageIndex: pageIndex,
+              pageCount: state.pageCount,
               overlays: [
                 for (final layer in state.layers)
                   if (state.effectiveInkVisible(layer))

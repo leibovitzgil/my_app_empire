@@ -46,6 +46,20 @@ final class ScoreAnnotationsUpdated extends ScoreEvent {
   List<Object?> get props => [annotations];
 }
 
+/// Internal: fired when `AnnotationRepository.watch` *errors* rather than
+/// emitting — e.g. a rules `permission-denied` read after the viewer was
+/// removed from the piece mid-session (M8.4). The bloc folds it into
+/// [ScoreState.error] so it surfaces (a snackbar) instead of a swallowed,
+/// uncaught stream error that just freezes the live layers.
+final class ScoreAnnotationsFailed extends ScoreEvent {
+  const ScoreAnnotationsFailed(this.error);
+
+  final Object error;
+
+  @override
+  List<Object?> get props => [error];
+}
+
 /// The visible page changed (pagination/scroll).
 final class PageChanged extends ScoreEvent {
   const PageChanged(this.page);

@@ -1,0 +1,20 @@
+name: crash_reporting
+description: "Crash reporting seam: CrashReporter contract with Crashlytics and no-op implementations plus global crash hooks."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  firebase_core: ^4.11.0
+  firebase_crashlytics: ^5.2.4
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.0
+  very_good_analysis: ^10.3.0

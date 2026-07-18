@@ -8,9 +8,10 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
+  crash_reporting:
+    path: ../crash_reporting
   firebase_analytics: ^12.4.3
   firebase_core: ^4.11.0
-  firebase_crashlytics: ^5.2.4
   flutter:
     sdk: flutter
   talker_flutter: ^5.1.17

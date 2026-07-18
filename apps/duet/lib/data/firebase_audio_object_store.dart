@@ -28,7 +28,13 @@ class FirebaseAudioObjectStore implements AudioObjectStore {
     required String assetId,
     required String localPath,
   }) => Result.guard<void>(() async {
-    await _ref(pieceId, assetId).putFile(File(localPath));
+    // Explicit content type (M8.3): the object name has no extension, so
+    // nothing could be inferred. Recordings are AAC-LC in an MPEG-4
+    // container (`.m4a`) — `audio/mp4`, per docs/duet_cloud_schema.md.
+    await _ref(pieceId, assetId).putFile(
+      File(localPath),
+      SettableMetadata(contentType: 'audio/mp4'),
+    );
   });
 
   @override

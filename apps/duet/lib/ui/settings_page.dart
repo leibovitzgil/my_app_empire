@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/account_purge.dart';
+import 'package:duet/data/data_export.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/legal.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +40,7 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
   NotificationPermissionGateway? _gateway;
   var _signingOut = false;
   var _deleting = false;
+  var _exporting = false;
   late bool _discoverable = getIt<DirectoryPublisher>().discoverable;
 
   @override
@@ -98,6 +101,43 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
       );
     }
     // On success the auth redirect lands on /login by itself.
+  }
+
+  /// The GDPR self-service export flow (M7.5): ask the backend to gather
+  /// everything Duet holds about the account into a JSON bundle and hand the
+  /// resulting download link to the share-sheet (the sharing lives behind the
+  /// `DataExport` seam, so this never touches a platform channel headlessly).
+  /// A once-a-day server rate limit surfaces as its own retry-less message.
+  Future<void> _downloadData() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final result = await getIt<DataExport>().exportMyData();
+      if (!mounted) return;
+      switch (result) {
+        case Success<void>():
+          AppSnackbar.success(
+            context,
+            'Your data export is ready to share.',
+          );
+        case ResultFailure<void>(:final error):
+          final failure = error is DataExportFailure ? error : null;
+          AppSnackbar.error(
+            context,
+            failure?.message ?? 'Could not export your data. Please try again.',
+            // The daily-limit rejection can't be fixed by retrying now, so it
+            // gets no Retry action; everything else does.
+            actionLabel: failure?.kind == DataExportFailureKind.rateLimited
+                ? null
+                : 'Retry',
+            onAction: failure?.kind == DataExportFailureKind.rateLimited
+                ? null
+                : () => unawaited(_downloadData()),
+          );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   /// The post-confirmation deletion flow (M1.9): re-authenticate (the M1.8
@@ -203,6 +243,24 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
                 value: _discoverable,
                 onChanged: (value) => unawaited(_setDiscoverable(value)),
               ),
+              // GDPR self-service export (M7.5): a copy of everything Duet
+              // stores about you, delivered as a downloadable JSON bundle via
+              // the share-sheet. Non-destructive, so it sits here — not in the
+              // danger zone — beside the other privacy controls.
+              AppListTile(
+                leading: _exporting
+                    ? const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Icon(Icons.download_outlined),
+                title: const Text('Download my data'),
+                subtitle: const Text(
+                  'Get a copy of everything Duet stores about you.',
+                ),
+                enabled: !_exporting,
+                onTap: _exporting ? null : () => unawaited(_downloadData()),
+              ),
               const SectionHeader('Plan'),
               AppListTile(
                 leading: const Icon(Icons.workspace_premium_outlined),
@@ -236,6 +294,30 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
                     account?.provider ?? AuthProviderKind.unknown,
                   ),
                 ),
+              // Legal surfaces (M7.4): the policy/ToS every store listing
+              // requires, reachable in-app, plus the running version. The URLs
+              // are placeholders until the documents are hosted (Track B) —
+              // `PrivacyPolicyButton`/`TermsOfServiceButton` only launch them
+              // on a real tap. Aligned left so the text buttons read as rows,
+              // not centered CTAs.
+              const SectionHeader('About'),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: PrivacyPolicyButton(
+                  privacyPolicyUrl: kPrivacyPolicyUrl,
+                ),
+              ),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: TermsOfServiceButton(
+                  termsOfServiceUrl: kTermsOfServiceUrl,
+                ),
+              ),
+              const AppListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Version'),
+                subtitle: Text(kAppVersion),
+              ),
             ],
           );
         },

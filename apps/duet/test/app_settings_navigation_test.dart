@@ -13,10 +13,12 @@ import 'package:core_utils/core_utils.dart';
 import 'package:duet/app.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/domain/domain.dart';
+import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
@@ -28,6 +30,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
+import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
@@ -40,6 +43,12 @@ class _UnusedPdfRenderService implements PdfRenderService {
   @override
   Future<Result<PdfPageImage>> renderPage(int pageIndex, {double scale = 1}) =>
       throw UnimplementedError();
+
+  @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) => throw UnimplementedError();
 
   @override
   Future<Result<String>> checksum(String path) => throw UnimplementedError();
@@ -146,6 +155,21 @@ void main() {
       ..registerSingleton<AuthAccountProvider>(mockAuthRepository)
       ..registerSingleton<CurrentUser>(CurrentUser(Stream.value('user-1')))
       ..registerSingleton<CurrentUserName>(CurrentUserName(Stream.value(null)))
+      ..registerSingleton<CurrentUserEmail>(
+        CurrentUserEmail(Stream.value(null)),
+      )
+      // HomeScreen's invite-inbox banner (M5.6) resolves the message
+      // gateway + invite service — the in-memory pair, mirroring
+      // injection.dart's default branch.
+      ..registerSingleton<UserMessageGateway>(InMemoryUserMessaging())
+      ..registerLazySingleton<CollaboratorInviteService>(
+        () => DefaultCollaboratorInviteService(
+          userDirectory: getIt<UserDirectory>(),
+          pieceRepository: getIt<PieceRepository>(),
+          monetizationService: getIt<MonetizationService>(),
+          messageGateway: getIt<UserMessageGateway>(),
+        ),
+      )
       ..registerSingleton<PieceRepository>(_EmptyPieceRepository())
       ..registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new)
       ..registerLazySingleton<PdfBinaryCache>(

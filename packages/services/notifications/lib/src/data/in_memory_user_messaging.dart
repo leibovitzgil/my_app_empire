@@ -13,6 +13,7 @@ import 'package:notifications/src/domain/user_message_gateway.dart';
 /// `duet_flow_test.dart` exercise the full send-to-accept funnel headlessly.
 class InMemoryUserMessaging implements DeviceTokenRegistry, UserMessageGateway {
   final Map<String, Set<String>> _tokensByUid = <String, Set<String>>{};
+  final Map<String, bool> _pushEnabledByUid = <String, bool>{};
   final Map<String, List<UserMessage>> _inboxByUid =
       <String, List<UserMessage>>{};
   final Map<String, StreamController<List<UserMessage>>> _controllers =
@@ -48,6 +49,12 @@ class InMemoryUserMessaging implements DeviceTokenRegistry, UserMessageGateway {
       });
 
   @override
+  Future<Result<void>> setPushEnabled(String uid, {required bool enabled}) =>
+      Result.guard<void>(() async {
+        _pushEnabledByUid[uid] = enabled;
+      });
+
+  @override
   Future<Result<void>> sendToUser(UserMessage message) =>
       Result.guard<void>(() async {
         _inboxByUid
@@ -76,4 +83,8 @@ class InMemoryUserMessaging implements DeviceTokenRegistry, UserMessageGateway {
   /// The currently-registered tokens for [uid], for tests/debugging.
   Set<String> tokensFor(String uid) =>
       Set.unmodifiable(_tokensByUid[uid] ?? const <String>{});
+
+  /// The last-mirrored push preference for [uid], or `null` if never set —
+  /// for tests/debugging (mirrors `deviceTokens/{uid}.pushEnabled`).
+  bool? pushEnabledFor(String uid) => _pushEnabledByUid[uid];
 }

@@ -24,6 +24,15 @@ export const onPieceDeleted = onDocumentDeleted(
     const { pieceId } = event.params;
     // Subcollections outlive the parent doc, so delete them explicitly.
     await db().recursiveDelete(db().doc(`pieces/${pieceId}`));
+    // Outstanding invite tokens are keyed by token value at the top level
+    // (see docs/duet_cloud_schema.md), so sweep them by `pieceId` field —
+    // the same by-field delete `deleteAccount` does for `usersByEmail`. The
+    // `expiresAt` TTL policy is only a lagging (~72 h) backstop.
+    const tokens = await db()
+      .collection('inviteTokens')
+      .where('pieceId', '==', pieceId)
+      .get();
+    await Promise.all(tokens.docs.map((d) => d.ref.delete()));
     // base.pdf and every audio object live under this one prefix.
     try {
       await bucket().deleteFiles({ prefix: `pieces/${pieceId}/` });

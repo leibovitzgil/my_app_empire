@@ -9,9 +9,11 @@
 
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/account_purge.dart';
+import 'package:duet/data/data_export.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/legal.dart';
 import 'package:duet/ui/settings_page.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_paywall/feature_paywall.dart';
@@ -20,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:legal_compliance/legal_compliance.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:monetization/monetization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +38,22 @@ class _FakeAccountPurge implements AccountPurge {
 
   @override
   Future<Result<void>> deleteAccount() async {
+    calls++;
+    if (_results.isEmpty) return const Success(null);
+    return _results.removeAt(0);
+  }
+}
+
+/// A recording [DataExport]: pops scripted results in order (succeeding once
+/// the script runs dry) and counts calls.
+class _FakeDataExport implements DataExport {
+  _FakeDataExport([List<Result<void>>? results]) : _results = [...?results];
+
+  final List<Result<void>> _results;
+  int calls = 0;
+
+  @override
+  Future<Result<void>> exportMyData() async {
     calls++;
     if (_results.isEmpty) return const Success(null);
     return _results.removeAt(0);
@@ -62,10 +81,14 @@ class _FakeNotificationPermissionGateway
 void main() {
   late MockAuthRepository mockAuth;
   late _FakeAccountPurge fakePurge;
+  late _FakeDataExport fakeExport;
 
   tearDown(() async => getIt.reset());
 
-  Future<void> registerFakes({List<Result<void>>? purgeResults}) async {
+  Future<void> registerFakes({
+    List<Result<void>>? purgeResults,
+    List<Result<void>>? exportResults,
+  }) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final storage = await LocalStorageService.init();
     getIt.registerSingleton<LocalStorageService>(storage);
@@ -74,6 +97,8 @@ void main() {
     getIt.registerSingleton<AuthAccountProvider>(mockAuth);
     fakePurge = _FakeAccountPurge(purgeResults);
     getIt.registerSingleton<AccountPurge>(fakePurge);
+    fakeExport = _FakeDataExport(exportResults);
+    getIt.registerSingleton<DataExport>(fakeExport);
     getIt.registerLazySingleton<SettingsRepository>(
       () => LocalSettingsRepository(getIt<LocalStorageService>()),
     );
@@ -163,6 +188,24 @@ void main() {
     }
 
     expect(find.byType(PaywallScreen), findsOneWidget);
+  });
+
+  testWidgets('the About group shows policy/ToS links and the version', (
+    tester,
+  ) async {
+    await registerFakes();
+    await pumpSettings(tester);
+
+    // Scroll to the last About row (Version) so the whole group — the header
+    // and both link buttons above it — is laid out; scrolling only until the
+    // 'About' header appears leaves the buttons below it still off-screen
+    // (more so since M7.5 added the Privacy 'Download my data' row above).
+    await tester.scrollUntilVisible(find.text('Version'), 200);
+    expect(find.text('About'), findsOneWidget);
+    expect(find.byType(PrivacyPolicyButton), findsOneWidget);
+    expect(find.byType(TermsOfServiceButton), findsOneWidget);
+    expect(find.text('Version'), findsOneWidget);
+    expect(find.text(kAppVersion), findsOneWidget);
   });
 
   testWidgets('the profile group shows the signed-in name and email', (
@@ -257,6 +300,54 @@ void main() {
     await tester.pump();
 
     await signedOut;
+  });
+
+  /// Taps "Download my data" and pumps out the (immediate) fake export plus
+  /// the snackbar's entrance animation — bounded pumps, since the row's active
+  /// spinner would keep `pumpAndSettle` spinning forever.
+  Future<void> tapDownloadMyData(WidgetTester tester) async {
+    await tester.scrollUntilVisible(find.text('Download my data'), 250);
+    await tester.tap(find.text('Download my data'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
+  testWidgets('Download my data calls the export seam and confirms it is '
+      'ready to share', (tester) async {
+    await registerFakes();
+    await pumpSettings(tester);
+    await signIn(tester);
+
+    await tapDownloadMyData(tester);
+
+    expect(fakeExport.calls, 1);
+    expect(find.text('Your data export is ready to share.'), findsOneWidget);
+  });
+
+  testWidgets('a daily-limit rejection shows the once-a-day message with no '
+      'Retry action', (tester) async {
+    await registerFakes(
+      exportResults: [
+        const ResultFailure<void>(
+          DataExportFailure(DataExportFailureKind.rateLimited),
+        ),
+      ],
+    );
+    await pumpSettings(tester);
+    await signIn(tester);
+
+    await tapDownloadMyData(tester);
+
+    expect(fakeExport.calls, 1);
+    expect(
+      find.text(
+        'You can export your data once a day. Please try again '
+        'tomorrow.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Retry'), findsNothing);
   });
 
   /// Drives the danger-zone flow up to and including the re-auth dialog's

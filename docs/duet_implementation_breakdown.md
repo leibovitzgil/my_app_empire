@@ -150,25 +150,25 @@ in the Track B backlog.
 | M4.2 | ☑ Demote bundles; "nudge collaborator" affordances | M4.1 |
 | M4.3 | ☑ Attention loop: new-annotation + audio-pin "new" markers | M3.7, M4.1 |
 | M4.4 | ☑ Soft-delete tombstones for audio notes | M3.2 |
-| M4.5 | ☐ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
-| M5.2 | ☐ Invite tokens as expiring Firestore docs | M2.4 |
-| M5.3 | ☐ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
-| M5.4 | ☐ ▸B Batched annotation digest push | M5.3, M3.2 |
-| M5.5 | ☐ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
-| M5.6 | ☐ In-app invite inbox UI (email-invite acceptance) | M2.4 |
-| M6.4 | ☐ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
-| M7.1 | ☐ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
-| M7.2 | ☐ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
-| M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
-| M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
-| M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
-| M7.6 | ☐ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
-| M8.1 | ☐ Real page thumbnails + thumbnail cache | — |
-| M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
-| M8.3 | ☐ Audio note size caps + compression | — |
-| M8.4 | ☐ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
-| M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
-| M9.1 | ☐ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
+| M4.5 | ☑ ▸B Reader E2E against emulator in CI | M4.1–M4.4, M2.4 |
+| M5.2 | ☑ Invite tokens as expiring Firestore docs | M2.4 |
+| M5.3 | ☑ ▸B Push fan-out: `onInboxMessageCreated` → FCM + pruning | M2.4, M0.4 |
+| M5.4 | ☑ ▸B Batched annotation digest push | M5.3, M3.2 |
+| M5.5 | ☑ ▸B Notification tap-through → exact piece | M2.4 (FCM taps: M5.1, M5.3) |
+| M5.6 | ☑ In-app invite inbox UI (email-invite acceptance) | M2.4 |
+| M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
+| M7.1 | ☑ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
+| M7.2 | ☑ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
+| M7.3 | ☑ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
+| M7.4 | ☑ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
+| M7.5 | ☑ ▸B GDPR self-service data export | M1.8 |
+| M7.6 | ☑ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
+| M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
+| M8.2 | ☑ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
+| M8.3 | ☑ Audio note size caps + compression | — |
+| M8.4 | ☑ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
+| M8.5 | ☑ Device-matrix QA, a11y pass, l10n decision (agent parts; device matrix [HUMAN]) | M4.5 |
+| M9.1 | ☑ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
 
 ### Track B — name-gated (unblocks when the product name is decided)
 
@@ -203,7 +203,7 @@ in the Track B backlog.
 | Consent mechanism (CMP vs minimal in-house) | M7.4 | Minimal in-house consent record; CMP only if ads/tracking added |
 | PDF dedupe scope (per-piece vs global by checksum) | M2.1, M3.3 | Per-piece Storage object; checksum dedupes cache + re-upload only |
 | Platform priority | M9.2 | iOS-first, Android fast-follow |
-| Hebrew/RTL in 1.0 | M8.5 | English-only 1.0 |
+| Hebrew/RTL in 1.0 | M8.5 | English-only 1.0 — **CONFIRMED (M8.5)**. Ship 1.0 English-only; no l10n framework. A light sweep found user-facing copy already lives beside its widgets (no egregious hardcoding); the few cross-file duplicate literals are non-blocking backlog, not worth a strings-file refactor now. Hebrew/RTL, if it enters a later release, spins its own task series (the reader RTL audit — canvas gestures, rails, popovers — is substantial). |
 
 ---
 
@@ -2001,37 +2001,45 @@ lands with Track B — then the plan-M4 exit is fully met.
 **Landed (Track A artifacts).** A single turnkey **`melos run e2e-emulator`**
 script boots Auth+Firestore+Functions+Storage via `firebase emulators:exec`
 (rebuilding the functions first so the emulator serves the current
-callables/triggers) and runs the emulator-backed flows (`auth_lifecycle`
-M1.10, `cloud_pieces_flow` M3.8, `collaborator_flow`) plus the reader
-assertions of M4.1–M4.4 from `apps/duet`. It uses `npx --yes firebase-tools`
-so it runs with or without a global CLI (matching `dev.sh`). The
-**`emulator-e2e`** CI job (ci.yaml) wires Flutter + Node + Java + cached
-emulator binaries around it, gated by a `dorny/paths-filter` `changes` job so
-it only runs on PRs touching `apps/duet/**`/`packages/**`/`melos.yaml`/
-`ci.yaml` (per-job filter — a workflow-level `on.paths` would wrongly gate
-every job).
+callables/triggers) and runs the emulator-backed flows from `apps/duet`. It
+uses `npx --yes firebase-tools` so it runs with or without a global CLI
+(matching `dev.sh`). The **`emulator-e2e`** CI job (ci.yaml) wires
+Flutter + Node + Java + Chrome/chromedriver + cached emulator binaries around
+it, gated by a `dorny/paths-filter` `changes` job so it only runs on PRs
+touching `apps/duet/**`/`packages/**`/`melos.yaml`/`ci.yaml` (per-job filter —
+a workflow-level `on.paths` would wrongly gate every job).
 
-**Blocked on a platform limitation — the CI job is non-blocking for now.** The
-M4.5 review caught that two of the three suites (`cloud_pieces_flow`,
-`auth_lifecycle`) use `dart:io` (`File`/`Directory`/`HttpClient`), which the
-Flutter **web** target (`-d chrome`) lacks — so they can't run headlessly on a
-runner (they throw `UnsupportedError: _Namespace`). The repo's own test
-headers documented that `-d chrome` pattern, but it was aspirational. So the
-`emulator-e2e` job is `continue-on-error: true` (visible, not blocking) until
-the real fix: either a **native-device runner** (`flutter drive -d <device>`,
-where `dart:io` + native Firebase plugins coexist — matching the suites' "needs
-a device" headers) or **refactoring the two suites off `dart:io`** (`HttpClient`
-→ `package:http`; `File` uploads → in-memory `putData`). The turnkey script
-stays usable locally/on a device today. **CI hygiene:** the workflow's Flutter
-is pinned to `3.44.6` (this repo's dev version) because the floating `stable`
-channel had drifted the Firebase ecosystem (`firebase_core 4.12.0` /
-`cloud_firestore 6.7.0`) to versions referencing a `FirebasePlugin` the
-resolvable `firebase_core` lacks, reddening `analyze-and-test` repo-wide;
-the pin reproduces the known-good local resolution.
+**dart:io removed — the CI job is now blocking.** The M4.5 review had caught
+that two suites (`cloud_pieces_flow`, `auth_lifecycle`) used `dart:io`
+(`File`/`Directory`/`HttpClient`), which the Flutter **web** target lacks, so
+they couldn't compile/run on a headless runner (`UnsupportedError:
+_Namespace`). Both are now `dart:io`-free: `auth_lifecycle` hits the emulator's
+Auth/Firestore REST surfaces via **`package:http`** (browser client on web),
+and `cloud_pieces_flow` uploads the base PDF + audio objects with in-memory
+**`putData(Uint8List)`** instead of `File`/`putFile` and writes the owner's
+piece document straight to Firestore via `pieceToFirestore` (the same doc
+`importPiece` produces, minus the device-only file staging). Both now
+**compile and run on the web engine** (verified: they launch and execute the
+full loop headlessly in Chrome). A second, separate limitation surfaced doing
+this: `flutter test` refuses web devices for integration tests ("Web devices
+are not supported for integration tests yet") regardless of `dart:io`, so the
+runner uses **`flutter drive -d web-server` + chromedriver**
+(`apps/duet/tool/e2e_web_drive.sh`) — the M4.5-spec-sanctioned fallback — not
+`flutter test -d chrome`. A `test_driver/integration_test.dart` was added for
+it. With that, `emulator-e2e` drops `continue-on-error` and is **blocking**;
+a broken sync assertion in `cloud_pieces_flow` fails it. The two device-only
+suites (`collaborator_flow`, `app_flow`) still stage binaries via `dart:io`
+(`importPiece`/`runDuetImportFlow`) and stay on the on-device `melos run e2e`
+path. **CI hygiene:** the workflow's Flutter is pinned to `3.44.6` (this repo's
+dev version) because the floating `stable` channel had drifted the Firebase
+ecosystem (`firebase_core 4.12.0` / `cloud_firestore 6.7.0`) to versions
+referencing a `FirebasePlugin` the resolvable `firebase_core` lacks, reddening
+`analyze-and-test` repo-wide; the pin reproduces the known-good local
+resolution.
 
 **Remainder (human/admin):** making the check **"required"** is a repo
 branch-protection setting (admin), and the **▸B two-device staging demo** is
-Track-B/human — both on top of the platform fix above.
+Track-B/human.
 
 ---
 
@@ -2130,6 +2138,37 @@ the piece via `pairCollaborator`, which M2.2 rules forbid cross-user.
 (string already exists in `_requireValid`); consumed tokens can't be
 reused across two emulator accounts; rules tests deny direct token reads.
 
+**Landed.** Three v2 callables in `functions/src/inviteTokens.ts`:
+`createInviteToken` (owner-only, cap-checked, mints `/inviteTokens/{token}`
+with `expiresAt = now + 14d`, returns the URL), `resolveInviteToken` (kept a
+**separate read-only callable**, not a phase of accept, so opening a link
+can never mutate state), and `acceptInviteToken` (one transaction: validate
+→ join piece arrays → `consumed`/`consumedBy`; racing accepts contend on the
+token doc). Typed denials ride `HttpsError.details.reason`
+(`invalid|expired|consumed|at-cap|already-collaborator`). Deviations from
+the sketch: (1) the **cap is enforced now**, not deferred to M6.3 — the
+owner's tier reads `entitlements/{ownerId}` (absent = free, which is the
+pre-M6.3 truth; `ownerIsPro` in `collaboratorLimits.ts`); the M2.4 email
+path is untouched. (2) The schema doc's ACL row gave clients create/read on
+token docs — implemented **stricter**: `inviteTokens` is fully
+Function-only, rules deny all client access (schema doc updated; 4 new
+denial tests in `firestore_tests`). (3) `AcceptInviteCubit` is *almost*
+unchanged — same contracts (G3), but two behavior fixes were unavoidable:
+a fresh invitee's participant-gated `getPiece` denial now reads as `ready`
+(pre-M5.2 the piece was always locally readable), and a typed
+at-cap/already-collaborator denial from accept maps to its dedicated state.
+(4) A token consumed **by the caller** still resolves/reports
+`already-collaborator`, so re-opening a redeemed link is friendly; consumed
+by anyone else is a hard `consumed`. (5) `onPieceDeleted` also sweeps the
+piece's tokens by `pieceId` (TTL is only a lagging backstop). Client:
+`CallableInviteService` (`apps/duet/lib/data/`) under `useFirebase: true`;
+`DeepLinkInviteService` stays the mock path and now **enforces** the same
+14-day TTL (`tokenTtl`) it previously only modeled. **[HUMAN] open:** enable
+the Firestore TTL policy on `inviteTokens.expiresAt` (console/gcloud, per
+env) — expiry is always also checked at resolve/accept, so this is cleanup
+only. Gate green; functions 62/62, rules 49/49 (run `test:against-running`
+against the live dev emulators — `emulators:exec` couldn't bind 8080/9099).
+
 ### M5.3 — Push fan-out: `onInboxMessageCreated` → FCM + token pruning
 
 **Goal:** Invites (and nudges) reach the invitee's lock screen — the
@@ -2172,6 +2211,37 @@ contract docs). Local notifications flow through
 invite sent from device A shows a system notification on backgrounded
 device B (staging, human-verified).
 
+**Landed (Track A).** `functions/src/inboxPush.ts` —
+`onInboxMessageCreated` (v2 trigger on `userInbox/{uid}/messages/{id}`)
+reads `deviceTokens/{uid}` and multicasts via a new lazy `fcm()` seam in
+`firebase.ts` (`admin.messaging()`): notification title/body from the
+message, `data` = the message's own map + a `deepLink`
+(`https://duet.app/piece/<id>`, placeholder domain kept in sync with
+`inviteTokens.ts`, real domain is ▸B). Pruning: any
+`messaging/registration-token-not-registered` response `arrayRemove`s that
+token. **Foreground dedupe — strategy chosen: `pushed: true`.** After a
+successful send (successCount > 0) the function merges `pushed: true` onto
+the message doc; `InboxNotificationBridge` skips `showLocal` for
+[pushed] messages but still `markRead`s non-action ones (a pushed nudge is
+consumed without re-showing; a pushed invite stays unread for accept).
+Chosen over "bridge only when permission denied" because it needs no
+client-side permission branching, and it also kills the pre-existing
+re-notify-on-next-foreground double; a no-token recipient keeps bridge
+delivery. The foreground race (bridge fires before the function marks) is
+benign — foreground FCM isn't auto-displayed by the OS. `UserMessage`
+gained a server-owned `pushed` field (absent → false; G3: Firestore
+mapper + docs updated across the notifications package); `deviceTokens`'
+"forward-provisioning / nothing reads it" doc comments now name the
+function. Tests: `test/inbox_push.test.ts` (mocked
+`firebase-admin/messaging`, unique-id style — safe under
+`test:against-running`): fan-out happy path incl. `pushed` merge, absent
+and empty tokens, prune-keeps-live-tokens, transient-failure keeps token +
+leaves `pushed` unset; bridge tests cover pushed-invite/pushed-nudge
+skip + mixed snapshots. Functions build/lint/tests 67/67; duet +
+notifications analyze/tests green (full workspace gate runs on the
+integration branch). ▸B unchanged: APNs key, `firebase_messaging` real
+dependency, lock-screen verification.
+
 ### M5.4 — Batched annotation digest push
 
 **Goal:** "Maya added 3 notes to Clair de Lune" — bundled, not one push
@@ -2196,6 +2266,55 @@ per stroke.
 **Done when:** burst of 5 strokes + 2 notes → exactly one digest per
 recipient and muted users receive none (asserted in emulator/unit tests —
 Track A); real delivery rides M5.3's ▸B backlog item; gate green.
+
+**Landed (Track A).** `functions/src/annotationDigests.ts` — an
+enqueue+drain pair. **Enqueue:** `onLayerAnnotationsChanged` /
+`onNoteAnnotationsChanged` (v2 `onDocumentWritten` on
+`pieces/{id}/layers/{uid}` and `.../notes/{noteId}`, together the plan's
+`onAnnotationsChanged`, mirroring `pieceActivity.ts`'s one-pattern-each
+split) write a `pushDigests/{id}` doc `{pieceId, authorId, recipientIds,
+kind, count, createdAt}` instead of pushing. `recipientIds` =
+`participantIds` minus the author (solo piece → nothing enqueued); ink
+counts the *net strokes added* (an erase-only rewrite enqueues nothing),
+audio counts 1 per created note (tombstone updates ignored). **Drain:**
+`drainPushDigests` (`onSchedule`, every 10 min; core split into
+`drainPushDigestsOnce()` so tests invoke it directly, the
+`sweepTombstonesBefore` pattern) groups by (recipient, piece, author),
+sums `count`, composes `<author> added <n> note(s) to <title>` (author
+name resolved from the piece's `ownerName`/`collaborators`, `sendNudge`'s
+'Someone' fallback), and sends over M5.3's FCM path. That send+prune was
+**extracted** to `functions/src/pushSender.ts` (`sendPushAndPrune` +
+`DEEP_LINK_DOMAIN`); `inboxPush.ts` now calls it too (behavior
+unchanged). A group is **skipped** — queue docs deleted regardless, a skip
+is a decision not a retry — when the piece is gone, the recipient's
+`deviceTokens/{uid}.pushEnabled == false` (muted), they have no tokens, or
+their `reads/{uid}.lastOpenedAt` is at/after the group's newest
+`createdAt` (already opened the sheet). Snapshotted docs are then deleted
+(chunked under the 500-write batch limit); docs enqueued after the
+snapshot survive to the next run. **Author never notified** (excluded at
+enqueue and again in `groupDigests`). **Settings toggle honored:** the
+`DeviceTokenRegistry` contract gained `setPushEnabled(uid, enabled:)`
+(both impls + fakes updated, G3); a new Duet glue
+`MirroringSettingsRepository` (`apps/duet/lib/data/`) decorates
+`LocalSettingsRepository` and mirrors the toggle onto
+`deviceTokens/{uid}.pushEnabled` on write (best-effort over the
+authoritative local write; signed-out uid skipped) — `feature_settings`
+stays backend-agnostic. `pushDigests` is Function-only (explicit deny in
+`firestore.rules`, already covered by deny-by-default). Schema doc: new
+`pushDigests` collection + `deviceTokens.pushEnabled` field + ACL-matrix
+row. Tests: `functions/test/annotation_digests.test.ts` (mocked
+`firebase-admin/messaging`, unique-ids, safe under `test:against-running`)
+— `composeDigestCopy`/`groupDigests` units, enqueue deltas/tombstone/solo,
+and the drain (burst 5 strokes+2 notes = one 7-count digest per recipient,
+muted skip, opened-after skip, opened-before still sends, 'Someone'
+fallback, dead-token prune); `apps/duet/test/mirroring_settings_repository_test.dart`
+covers the mirror (persist+mirror, muted, delegate read, failed local
+write skips mirror, signed-out skips mirror). Functions build+lint clean,
+`test:against-running` 83/83 (ports 8080/9099 held by the live suite);
+duet + notifications analyze clean and their touched tests green (full
+workspace gate runs on the integration branch). ▸B unchanged: real FCM
+delivery (APNs key, `firebase_messaging` real dependency, lock-screen
+verification) rides M5.3's backlog item — no FCM emulator.
 
 ### M5.5 — Notification tap-through → the exact piece
 
@@ -2237,6 +2356,43 @@ called from tests, and `duetDeepLinkParser` doesn't map piece URIs yet.
 push → tap → the exact sheet opens — the **plan-M5 exit** path, minus the
 two-device demo recorded in M5.7.
 
+**Landed (Track A).** **Routing.** `duetDeepLinkParser` now maps
+`https://duet.app/piece/<id>` (exactly the shape M5.3's
+`onInboxMessageCreated` emits as `data.deepLink`) onto the existing
+`/score/:pieceId` route, re-encoding the id into the location the same way
+the invite path does; two-segment `/piece/<id>` only (empty id or trailing
+segments fall through to `UnrecognizedLinkException`). That route is now a
+push/deep-link destination, so it's guarded (`DuetScoreRouteGuard` in
+`ui/score_page.dart`): the id is resolved against `PieceRepository` first,
+and an unknown/denied one bounces to `/home` with an `AppSnackbar` (G4)
+instead of stranding the user on a dead reader. **Contract widening (G3).**
+`LocalNotificationPort.show` gained a `payload` param + an `onTap` payload
+stream; `PluginLocalNotificationPort` passes
+`onDidReceiveNotificationResponse` and re-emits non-empty payloads.
+`NotificationsManager.showLocal` threads `payload` through and exposes
+`onLocalNotificationTap`; every fake/mock/test updated (the package's
+`_FakeLocalNotificationPort`, duet's mocktail `showLocal` stubs). **Glue.**
+The inbox bridge sets each message's piece deep link as the notification
+payload (`InboxNotificationBridge.pieceDeepLinkFor`, kept in sync with the
+function's `DEEP_LINK_DOMAIN`); a new `NotificationTapRouter` (registered
+under `useFirebase` only, so the headless gate never resolves
+`NotificationsManager` — FIX-3/G2) `ingest`s tap payloads into
+`DeepLinkService`, and `AppView`'s existing `onIntent → _dispatchIntent`
+does the rest (signed-in → straight to the piece; signed-out → held until
+login). **Tests.** parser `/piece/<id>` valid/re-encoded/garbage;
+`notification_tap_router_test.dart` (ingest + drop-unparseable +
+parser-decides); three redirect tests mirroring
+`app_deep_link_redirect_test.dart` (signed-in opens the exact score,
+signed-out held-until-login, unknown-id → `/home` + snackbar); notifications
+package payload-threading + tap-stream tests; bridge tests pin the piece
+payload (and its absence for a piece-less message). duet analyze +
+589 tests green, notifications analyze + 30 tests green (trimmed gate; full
+workspace gate runs on the integration branch). **▸B remainder:** FCM
+`onMessageOpenedApp`/`getInitialMessage` wiring in the Firebase entry
+points → `data.deepLink` → `ingest` — needs M5.1/M0.2 (real
+`firebase_messaging` dependency + initialized app), no FCM emulator to
+verify against.
+
 ### M5.6 — In-app invite inbox UI (email-invite acceptance)
 
 **Goal:** An email-invited user can actually see and accept the invite
@@ -2244,10 +2400,9 @@ inside the app — today `watchInvites`/`acceptInvite` are **only called
 from tests**; production invitees get a one-shot local notification and
 then nothing.
 
-**Status:** step 4 landed ahead of this milestone (it was blocking the
-flow outright, not just the UI — see below); the invite now survives to
-be accepted. Steps 1–3 and 5 — the banner and its tests — are the work
-that remains.
+**Status:** done. Step 4 landed ahead of this milestone (it was blocking
+the flow outright, not just the UI — see below); steps 1–3 and 5 — the
+banner and its tests — landed after it (see **Landed.**).
 
 **Steps**
 1. Library surface: a pending-invites banner/section on `LibraryPage`
@@ -2287,6 +2442,30 @@ that remains.
 **Done when:** email invite (no link involved) is acceptable end-to-end in
 UI on the emulator: send from A → banner on B → accept → piece appears in
 B's gallery; headless flow test drives the same UI (G2).
+
+**Landed.** Steps 1–3 and 5, as `InviteInboxBanner` +
+`InviteInboxCubit` in the pairing feature
+(`apps/duet/lib/features/pairing/src/{ui/invite_inbox_banner.dart,
+bloc/invite_inbox_cubit.dart}`), composed at the app layer:
+`HomeScreen` mounts it above `LibraryPage` next to
+`EmailVerificationBanner` (the library feature can't import pairing —
+architecture test), wiring `onAccepted` to push `/score/:pieceId` (G8).
+One row per pending invite from `watchInvites(uid)`: Accept rides
+`CollaboratorInviteService.acceptInvite` (the M2.4 callable under
+Firebase); at-cap (`AtCapInviteException`) defers to the invite sheet's
+paywall-gate pattern — `PaywallScreen` in a bottom sheet; Dismiss is
+`UserMessageGateway.markRead` only. Deviations from the step-1 sketch:
+the copy is "{owner} invited you to collaborate on a sheet" — the piece
+*title* isn't knowable pre-accept (a non-participant can't read the
+piece doc under the M2.2 rules and the invite payload doesn't carry it);
+and `DefaultCollaboratorInviteService.acceptInvite` now marks the inbox
+message read on success, mirroring the callable's server-side consume,
+so the banner clears on accept in every composition. Tests:
+`invite_inbox_banner_test.dart` (all states over mocked seams),
+light/dark goldens, an accept-consumes case in the service test, and
+`duet_flow_test.dart` now drives invite→banner→accept through the real
+banner UI over an invitee-scoped library view — empty gallery →
+accept → sheet appears (the "Done when" flow, headless).
 
 ### M5.7 — Two-device staging validation + skill update
 
@@ -2445,6 +2624,35 @@ plumbing and the contract refactor is complete; gate green; `showcase`
 untouched or trivially updated. **(▸B):** flipping the flag in the
 staging console (after fetch interval) hides link sharing.
 
+**Landed (Track A).** `remote_config` refactored on `user_directory`'s
+contract/impl/fake split: `RemoteConfigService` (typed getters + `init()`
++ `refresh()`; deliberately not `Result`-shaped — a failed fetch is never
+a blocking error, the committed defaults just stay in effect),
+`FirebaseRemoteConfigService` (what `RemoteConfigManager` did — that
+class is gone; no other consumer existed), and a constructor-seeded
+`InMemoryRemoteConfigService`. All six keys with committed defaults live
+in `RemoteConfigKeys` (the three existing + `paywall_enabled` /
+`invite_links_enabled` kill-switches defaulting **enabled** +
+`pricing_experiment` string, default empty). Injection: **both** branches
+of `configureDependencies` bind the in-memory fake for now — the real
+service needs `Firebase.initializeApp` with real options (M0.2) and there
+is no Remote Config emulator, so binding the fake under `useFirebase` too
+keeps flag behavior defined instead of crashing (G2 holds; a
+`TODO(track-b)` marks the swap point). Proven use: `showInviteSheetFor`
+(`app.dart`) reads `inviteLinksEnabled` off the contract at open and
+threads it into `showInviteSheet` as a `linkSharingEnabled` param — the
+pairing feature never reads remote config itself (G3, same param seam as
+its other deps); flag off hides the "Share invite link instead"
+affordance + divider, email invites untouched. Tests: package unit tests
+for both impls (defaults, overrides, fetch-failure swallow), fake-driven
+widget tests of the kill-switch both ways, and an injection guardrail
+test pinning `InMemoryRemoteConfigService` + enabled defaults.
+`app_updater` still reads RC directly — untouched by design, reconciled
+in M7.6. **The ▸B remainder stays in the Track B backlog:** bind
+`FirebaseRemoteConfigService` under `useFirebase` once M0.2 lands real
+options, then flip `invite_links_enabled` in the staging console and
+watch the affordance disappear after the fetch interval.
+
 ---
 
 ## M7 — Observability & compliance
@@ -2488,6 +2696,26 @@ don't extend that; disentangle.
 dashboard; headless gate never touches Firebase (G2); package has fake-
 driven unit tests.
 
+**Landed (Track A).** `packages/services/crash_reporting`: `CrashReporter`
+contract (`recordError(error, stack, {fatal, context})` / `log` /
+`setUserId` — uid only, never email), `CrashlyticsCrashReporter`,
+`NoopCrashReporter`, and `installCrashHooks(reporter)` chaining
+`FlutterError.onError` (previous handler kept, so the console dump
+survives) + `PlatformDispatcher.instance.onError`; fake- and
+mocktail-driven unit tests for all three plus the hooks. `AppLogger`
+(`packages/services/analytics`) now takes an injected `CrashReporter`
+(defaults to the noop) and the analytics package dropped its direct
+`firebase_crashlytics` dependency. Duet binds `NoopCrashReporter` in both
+compositions (no Crashlytics emulator exists; a `TODO(M7.1-B)` in
+`injection.dart` marks the real-entry-point binding) plus an eager
+`CrashReporterUserBinder` (`lib/data/`, the `DirectoryPublisher` pattern)
+forwarding the account stream's uid and clearing it on sign-out —
+binder-tested, and the injection guardrail now pins the noop binding (G2).
+The package README documents the ▸B/[HUMAN] `flutterfire configure`
+re-run for the Crashlytics gradle plugin. **▸B remainder:** live
+Crashlytics wiring + `installCrashHooks` in the real entry points (after
+M0.2) and the forced-crash console check.
+
 ### M7.2 — Analytics: event catalogue + funnel instrumentation
 
 **Goal:** The plan's named funnels emit real events: import, invite
@@ -2521,6 +2749,30 @@ params)`), wired into no app, no screen-tracking helper.
 end-to-end; dashboards seeded (**[HUMAN]**: mark conversion events in the
 console); gate green.
 
+**Landed (Track A).** `apps/duet/lib/data/duet_analytics.dart`: the typed
+catalogue (`sheetImported{pieceId}` / `inviteSent{method}` /
+`inviteAccepted{method}` / `noteRecorded{durationMs}` / `practiceOpened` /
+`paywallShown` / `purchaseCompleted` / `signUp` / `screenViewed`), no PII
+in params. Instrumentation decided once (documented on the wrapper):
+feature code stays analytics-free (G3) — one app-level
+`DuetAnalyticsObserver` (`Bloc.observer`, set in `injection.dart`) maps
+bloc/cubit transitions to events (import success; invite sent email+link;
+BOTH accept paths — M5.6 inbox accept = email, M5.2 token accept = link;
+`AudioNoteSaved` = the `_saveAudioNote` success dispatch; the
+practice-intent region resolve; paywall gates; purchase-not-restore;
+sign-up-not-login), plus a `DuetRouteObserver` on the `GoRouter` logging
+route-template screen views and the `/paywall` route's `paywallShown`.
+`AppLogger` gained a Firebase-free default (no analytics instance =
+Talker-only); both Duet compositions bind it with the injected
+`CrashReporter` — `FirebaseAnalytics.instance` needs a real
+`initializeApp`, so the real binding is a `TODO(track-b)` in
+`injection.dart`, the M6.4/M7.1 precedent — and the injection guardrail
+pins the Firebase-free binding (G2). Fake-logger tests assert every
+funnel call site fires exactly once per action against the real blocs.
+**▸B remainder:** bind `FirebaseAnalytics.instance` under the real entry
+point (after M0.2), DebugView end-to-end check, console dashboards +
+conversion marking.
+
 ### M7.3 — Performance traces on the two hot paths
 
 **Goal:** PDF open and page render report real timings (plan M7 bullet).
@@ -2540,6 +2792,41 @@ console); gate green.
 
 **Done when:** staging dashboard shows both traces with sane numbers; M8.2
 uses them as its before/after metric.
+
+**Landed (Track A).** `firebase_performance` added to Duet. A Firebase-free
+seam (`apps/duet/lib/data/perf_tracer.dart`: `PerfTrace`/`PerfTracer` +
+`NoopPerfTracer`) lets the decorator and the screen trace record traces
+without importing Firebase — the two hot-path consumers and their tests talk
+only to the seam. `TracedPdfRenderService`
+(`apps/duet/lib/data/traced_pdf_render_service.dart`) wraps `open()` (trace
+`pdf_open`, attrs `page_count` + `byte_size_bucket`) and `renderPage()`
+(trace `pdf_render_page`, attr `scale`), delegating `renderThumbnail`
+(M8.1) and `checksum` straight through. **Zero critical-path cost (step 4):**
+trace *start* is a plain object build (no await), and every attribute write +
+`stop` is fire-and-forget AFTER the delegated future resolves — the
+byte-size read is kicked off concurrently with the open, never before it — so
+a caller awaits nothing extra. `DuetScorePage` starts a
+`reader_open_to_first_canvas` screen trace in `initState` and stops it on the
+first frame the reader mounts (dropped, never stopped, if the user backs out
+mid-load — so no truncated duration pollutes the data). The real
+`firebase_performance`-backed tracer (`FirebasePerfTracer`,
+`firebase_perf_tracer.dart`) is written and is the *only* file importing
+Firebase. **Injection (G2):** following the M6.4/M7.1/M7.2 `TODO(track-b)`
+precedent, both compositions bind the bare `PdfrxRenderService` and a
+`NoopPerfTracer` today — `FirebasePerformance` needs a real
+`Firebase.initializeApp` and has no emulator backend, so the reader trace is a
+no-op and the decorator is unwired until the real entry point (M0.2). The
+injection guardrail now asserts the mock branch binds `PdfrxRenderService`
+(not `TracedPdfRenderService`) and a `NoopPerfTracer`, never
+`FirebasePerformance`. Tests: a fake `PdfRenderService` wrapped by the
+decorator with a fake `PerfTracer` recorder asserts full delegation and that
+`pdf_open`/`pdf_render_page` start with the right attributes and stop; the
+noop-tracer path is a pure pass-through; byte-size bucketing is unit-tested.
+**▸B remainder:** flip the `TODO(track-b)` to bind
+`FirebasePerfTracer(FirebasePerformance.instance)` + wrap in
+`TracedPdfRenderService` under the real entry point (after M0.2), then confirm
+`pdf_open` + `pdf_render_page` (and the reader screen trace) land on the
+staging Performance dashboard with sane numbers.
 
 ### M7.4 — Legal surfaces: privacy policy, ToS, consent, store data maps
 
@@ -2568,6 +2855,38 @@ actually collects.
 **Done when:** policy/ToS reachable in-app; consent recorded server-side;
 data-map doc merged and store forms drafted.
 
+**Landed (Track A).** Settings gains an **About** group —
+`legal_compliance`'s `PrivacyPolicyButton` + a new sibling
+`TermsOfServiceButton` (both launch placeholder `kPrivacyPolicyUrl`/
+`kTermsOfServiceUrl` in `apps/duet/lib/legal.dart`, marked
+`TODO(track-b)` until hosted) and a static `Version` row
+(`kAppVersion`; `package_info_plus` isn't a dep, so it's a const kept in
+sync with `pubspec.yaml`). **Consent** is the minimal in-house record per
+the Open decision: `SignUpView` (core_ui) gains an optional required
+acceptance checkbox that gates the submit button, plumbed generically
+through `LoginScreen` (feature_auth stays app-agnostic — new
+`consentLabel`/`onConsentAccepted` params). The app wires it via a
+callback seam: ticking the box calls `SignUpConsentBinder.markPending`,
+and that eager binder (subscribed to `AuthAccountProvider.account`, like
+`DirectoryPublisher`/`CrashReporterUserBinder`) records a timestamped
+`ConsentRecord` against the new uid once it authenticates — via the
+app-level `ConsentRecorder` contract (`apps/duet/lib/data/`, the
+`AccountPurge`/`DataExport` precedent). Both DI branches bind the
+in-memory `InMemoryConsentRecorder` (G2); `FirestoreConsentRecorder`
+(writes `consent/{uid}`) is written and unit-tested but **unbound** until
+its rules + rules-tests land (G6), a `TODO(track-b)` one-liner mirroring
+the deferred remote-config/crash/analytics/perf bindings. The **data
+map** (`docs/duet_privacy_data_map.md`) enumerates every collected type
+with purpose + retention. Gate (trimmed, this host): `flutter analyze`
+clean and touched-package tests green under FVM Flutter 3.44.4 —
+`legal_compliance` (+`TermsOfServiceButton`), `core_ui` (SignUpView 8/8,
+incl. the checkbox gate), `feature_auth` (LoginScreen 8/8), `duet`
+(injection guardrail 14/14, settings incl. About 13/13, consent binder
+4/4). ▸B remainder (**[HUMAN]**): author + host the real policy/ToS URLs,
+land `consent/{uid}` rules to flip the Firestore recorder on, and
+transcribe the data map into the App Privacy label + Play Data Safety
+forms (M9.4 blocks on these).
+
 ### M7.5 — GDPR self-service data export
 
 **Goal:** A user can download everything Duet holds about them
@@ -2587,6 +2906,52 @@ data-map doc merged and store forms drafted.
 
 **Done when:** emulator export for user A contains A's notes and none of
 B's; Settings flow works on staging.
+
+**Landed (Track A).** Callable `exportMyData`
+(`functions/src/exportMyData.ts`, exported from the barrel) gathers everything
+Duet holds about the caller — auth profile (`adminAuth().getUser`), every
+`usersByEmail where uid ==` entry (the doc id is an email key, never derived
+from the token, so an old address still surfaces), `entitlements/{uid}`,
+device tokens, inbox, and every `pieces where participantIds array-contains
+uid` with **only the caller's own slice** (piece metadata + their `layers/{uid}`
+doc + `notes where authorId == uid` + each own note's audio path signed to a
+24 h URL). The gather is factored into an exported `gatherExport(uid)` helper
+(the isolation surface the two-user test asserts directly, the way
+`deleteAccount`'s purge logic is), then the callable writes the JSON bundle to
+a private `exports/{uid}/{ts}.json` Storage object and returns a 24 h signed
+URL. Storage is best-effort — `bucket()` is wrapped like `deleteAccount`'s, so
+the auth+firestore-only test emulator (no bucket) yields a null `downloadUrl`
+while the whole Firestore gather still runs; the **live staging export is the
+▸B tail** (`exports/` is already deny-by-default in `storage.rules`, and the
+client reads via the signed URL, so no rules change — G6 clean). Rate-limited
+to once per day per uid by reusing M2.5's fixed-window transaction on a
+**distinct key** (`rateLimits/{uid}__export`, 24 h window, budget 1) so it
+never collides with `lookupEmail`'s per-minute counter. App Check gate is
+env-driven and off on the emulator, matching `lookupEmail` (▸B flip). Client:
+a `DataExport` seam (`data/data_export.dart`) with `CallableDataExport` bound
+under `useFirebase` (calls the callable, hands the URL to `share_plus` — kept
+behind the seam, with an injectable `shareInvoker`, so the headless gate never
+touches a platform channel, G2) and `MockDataExport` under the default branch
+(simulated success — the mock identity's data is in-memory only). A
+non-destructive "Download my data" row sits in Settings' **Privacy** section
+(beside the discoverable switch, above the danger zone) → progress spinner →
+success snackbar on delivery; the once-a-day rejection surfaces its own
+retry-less message. Tests: functions emulator test seeds users A and B with a
+shared piece plus a solo piece each and asserts A's export carries A's
+profile/directory/entitlement/pieces and only A's layer/notes/audio while none
+of B's private data (directory entry, notes, audio, tokens, solo piece) leaks
+— B's legitimate co-membership in A's shared-piece metadata is the sole place
+`uid-b` appears; plus auth-rejection, honest-counts, and once-a-day-limit
+cases (5 tests, all 88 functions tests green). Dart: the injection guardrail
+pins `MockDataExport` under the default branch (never the callable), two
+widget tests drive the row → seam-called sequence with a recording fake (ready
+snackbar; daily-limit message with no Retry), and a `mapExportError` table
+test pins the code translation. Gate: functions `build`+`lint`+`test` green;
+`apps/duet` `flutter analyze` + `flutter test` (636) green, touched files
+`dart format`-clean. **The ▸B remainder stays in the Track B backlog:** the
+live staging export run once a real project/bucket is bound under `useFirebase`
+(M0.2) — a signed bundle URL downloads for real, the audio links resolve, and
+the Settings flow shares on a staging device (iPad).
 
 ### M7.6 — `review_prompter` + `app_updater` wiring
 
@@ -2616,6 +2981,49 @@ happened. `AppUpdateService`/`ForceUpdateWidget` read RC keys
 **Done when:** simulated below-min version blocks with the update screen;
 review prompt fires on the 5th open after saving a note (manual staging
 check); gate green.
+
+**Landed (Track A).** `app_updater` refactored onto M6.4's
+`RemoteConfigService` contract (its own `firebase_remote_config` dep
+dropped — nothing else in the package needed it): `AppUpdateService` now
+takes a `RemoteConfigService` (required) plus an injectable
+`currentVersion` seam (defaults to `package_info_plus`), reads
+`min_supported_version`/`store_url` off the contract, and fails open on
+an empty min, a swallowed refresh, or an unreadable current version.
+`store_url` was the one missing key — added to `RemoteConfigKeys` (default
+`''`, placeholder until store listings exist, M9.4) with getters on both
+the in-memory and Firebase impls (G3, all impls + the guardrail widened in
+one PR). `ForceUpdateWidget`'s service is now required (no
+`FirebaseRemoteConfig.instance` fallback). Duet wiring: both packages are
+path deps; `injection.dart` registers `AppUpdateService` over the bound
+`RemoteConfigService` (lazy) and `ReviewPrompter` via a lazy-async
+`ReviewPrompter.create` (new factory — construction touches the
+SharedPreferences platform channel, so nothing on the headless gate ever
+resolves it; the M7.1 keep-platform-channels-behind-a-seam precedent, G2).
+`main.dart`/`main_emulator.dart` fire `incrementAppOpenCount()` after
+`configureDependencies` (fire-and-forget, real entries only — the gate
+never runs `main`); `app.dart`'s `MaterialApp.router` `builder` wraps every
+routed screen in `ForceUpdateWidget` fed the injected service (fails open —
+the mock composition's `min_supported_version: 0.0.0` can never block, G2).
+The "saved a note" core-action moment rides a new `onNoteSaved` callback on
+`ScoreViewerScreen` (fired in `_saveAudioNote`'s success path, beside the
+existing snackbar) that `DuetScorePage` maps to
+`ReviewPrompter.logCoreActionCompleted()` — app glue, no `review_prompter`
+import inside `feature_score` (architecture-test clean). Tests:
+`app_updater` unit tests seed an `InMemoryRemoteConfigService` (no more
+Firebase fake) plus two widget tests (blocks below-min, renders child
+at/above); `review_prompter` gains an end-to-end fake-prefs test proving
+the prompt fires exactly once at the 5-open ∧ core-action threshold and
+never again; the injection guardrail pins the never-block gate + the lazy
+prompter registration; the deep-link redirect harness registers both new
+services (fixed `currentVersion` so the widget-test binding's absent
+`package_info` channel can't hang `pumpAndSettle`). Gate: `analyze` +
+`test` green across `app_updater`, `review_prompter`, `remote_config`, and
+`apps/duet` (goldens excluded as usual). **The ▸B remainder stays in the
+Track B backlog:** real RC values in the staging console
+(`min_supported_version` bump + per-platform `store_url`) once
+`FirebaseRemoteConfigService` is bound under `useFirebase` (M0.2), then the
+manual staging check — a below-min build shows the update screen and the
+review prompt fires on the 5th open after a saved note.
 
 ---
 
@@ -2657,6 +3065,34 @@ RGBA bytes.
 **Done when:** rail shows real pages on device; TODO comment deleted;
 goldens/tests green.
 
+**Landed.** `PdfRenderService.renderThumbnail(pageIndex, {maxWidth = 96})`
+joined the contract; `PdfrxRenderService` implements it as a low-scale
+render (scale = `min(1, maxWidth / page.width)`, sharing `renderPage`'s
+body), and every fake/impl was widened in the same PR (G3): the duet
+harness `FakePdfRenderService`, `main_screenshot.dart`'s
+`_StaffPaperRenderService`, and the four test fakes. New
+`apps/duet/lib/features/score/src/thumbnail_cache.dart`: an LRU of
+decoded `ui.Image`s keyed `(basePdfChecksum, pageIndex)`, capped at 40,
+disposing evicted images; callers receive *clones* they own, so eviction
+can never invalidate an image a widget is still drawing; in-flight
+renders dedupe; failures resolve `null` and are never cached (disk layer
+skipped — not trivial). `PageThumbnailRail` gained an optional
+`thumbnailFor` seam; the old stylized card is now the loading/unavailable
+placeholder, and `_ThumbImage` owns + disposes each image (dropping late
+arrivals for unmounted/recycled cards). `ScoreViewerScreen` owns one
+cache per screen (disposed with it) and wires the seam after `open()`
+succeeds; the `TODO(reader-redesign)` is gone. `PageInkPresence`,
+presence dots, semantics, and the 48×48 tap targets are unchanged
+(covered by new widget tests incl. a real-thumbnail tap-target check);
+`thumbnail_cache_test.dart` covers hit/miss, LRU eviction + recency,
+clone safety, dedupe, and failure retry. The rail golden now renders
+deterministic fake pages (raw-RGBA bands, decoded under
+`tester.runAsync` — no fonts/platform channels); its two PNGs were
+regenerated on a macOS host that carries the known sub-pixel font drift
+vs. the canonical Linux container, so CI should re-validate (re-update)
+just `page_thumbnail_rail*.png` there. Device check (real PDF on iPad)
+pending as the task's visual verification.
+
 ### M8.2 — Large-PDF memory strategy
 
 **Goal:** A 60-page scan doesn't OOM an older iPad: page eviction +
@@ -2690,6 +3126,38 @@ immediately.
 **Done when:** budgets doc has real numbers meeting targets (or filed
 exceptions); no regression in reader tests.
 
+**Landed.** **Page LRU.** `PageImageCache`
+(`apps/duet/lib/features/score/src/page_image_cache.dart`) — the full-page
+sibling of M8.1's `ThumbnailCache`, same clone/dispose ownership discipline
+(callers get a clone they own; the cache disposes only its own handle on
+eviction, on a sharper re-render, and on dispose, so an evicted image can never
+be yanked out from under a widget still drawing it). Keyed by
+`(checksum, pageIndex)`, hard cap `capacity = 3` (current ± 1 neighbour warm),
+each entry carrying the scale it was rendered at so a coarser cached copy is
+upgraded on zoom. `ScorePageCanvas` now consumes it (owning one per canvas, so
+it survives page flips) instead of private `_imageFuture`s. **Render scale by
+zoom.** Base render is fitted to the viewport × device pixel ratio (against a
+~1000 pt reference long-edge) rather than a fixed 2×; zooming past ~1.5× of
+base re-renders sharper (debounced ~250 ms, swapped in place over the old image
+so the page never blanks), and every render is clamped to ≤16 MP by
+`fittedRenderScale` / `maxPageImagePixels`
+(`packages/services/pdf_rendering/lib/src/domain/page_pixel_budget.dart`),
+enforced inside `PdfrxRenderService._renderAt` — the one place that knows the
+page's point size. **Prefetch.** Neighbours (page ± 1) are warmed post-frame on
+idle, cancelled when the page changes underneath. **Budgets.**
+`docs/duet_perf_budgets.md` records the targets (open < 2 s / 20 MB, warm flip
+< 300 ms, < 400 MB on a 60-page scan) with the cache-sizing rationale and the
+M7.3 `pdf_open` / `pdf_render_page` traces as the before/after metric; the
+device profile actuals are **[HUMAN]** (no device in CI). **Tests.**
+`page_image_cache_test.dart` (eviction / LRU recency / clone-dispose / sharper-
+on-zoom re-render / no-failure-caching / after-dispose) and
+`pdf_rendering/test/page_pixel_budget_test.dart` (budget clamp); the existing
+reader widget tests (`practice_view_test.dart`) and all 648 duet tests stay
+green — the rendering-path change is invisible at default zoom (`BoxFit.contain`
+means a raster's pixel resolution never moves layout, and the fake render
+services ignore scale). Reader goldens (`melos run golden`) were not
+re-baselined; none is expected to shift and none was touched.
+
 ### M8.3 — Audio note size caps + compression
 
 **Goal:** Notes stay small and uploads predictable.
@@ -2717,6 +3185,34 @@ exceptions); no regression in reader tests.
 **Done when:** a max-length note lands ≈ ≤ 1 MB on the emulator; caps
 enforced client + rules side; gate green.
 
+**Landed.** **Encoder.** `RecordAudioRecorderService.recordConfig` — a
+static const `RecordConfig(encoder: aacLc, bitRate: 64000, sampleRate:
+44100, numChannels: 1)` (AAC-LC mono ≈ 0.5 MB/min; defaults-matching
+values deliberately re-stated and lint-ignored, pinning against upstream
+drift) — now passed on every `start`. **Byte cap.** `maxAudioNoteBytes`
+(5 MB) + `AudioNoteTooLargeException` + a shared `ensureAudioNoteWithinCap`
+guard live beside the `AudioAssetStore` contract
+(`apps/duet/lib/domain/src/domain/audio_asset_store.dart`), cross-referenced
+comment-to-comment with the `storage.rules` audio rule; every `put` applies
+it — `LocalAudioAssetStore`, `CloudAudioAssetStore` (rejects *before*
+caching/enqueueing so an over-cap file never sits in the upload queue), and
+the in-memory fakes (flow harness, screenshot harness, migrator +
+review-sync test fakes) for G3 parity. **Surfacing.** `_saveAudioNote` in
+`score_viewer_screen.dart` treats `AudioNoteTooLargeException` as a hard
+stop — "Recording too large" via `AppSnackbar.error`, note not saved —
+instead of the raw-path fallback (which would have smuggled the file past
+the rules cap). **Format decision** recorded in `duet_cloud_schema.md`
+(Storage section): `.m4a`/MPEG-4, content-type `audio/mp4`, now set
+explicitly by `FirebaseAudioObjectStore.upload` via `SettableMetadata` (the
+extensionless object name infers nothing). **Tests.** Recorder-config
+assertion (`record_audio_recorder_service_test.dart`); over-cap +
+just-under-cap `put` tests (local store); over-cap nothing-cached /
+nothing-enqueued test (cloud store); the 60 s-cap
+`record_audio_cubit_test.dart` untouched and green. Also fixed en route:
+three pre-existing lint findings from the `main_emulator_driver.dart` dev
+entrypoint (package import, documented `depend_on_referenced_packages`
+ignore, dev_dependency sorting).
+
 ### M8.4 — Failure-mode audit: quota, interrupted uploads, rules-denied
 
 **Goal:** Every cloud failure surfaces as honest UI through the existing
@@ -2743,6 +3239,30 @@ bullet 2).
 **Done when:** checklist merged with every row green/linked; no failure
 mode ends in a spinner or silence.
 
+**Landed.** Audit doc `docs/duet_failure_modes.md` enumerates all eight
+cloud failure modes, each grounded in a real code path, asserting its G4
+surface (`ErrorRetryView` / `AppSnackbar.error` / bloc failure field). Five
+rows were already honest (quota upload, interrupted-import repair, offline
+invite send, callable deadline, and — pre-empted before it can queue — the
+over-cap recording). Three real gaps found and fixed: **(A)** the reader never
+surfaced `ScoreState.error` — denied stroke/erase/undo/audio writes rolled back
+silently and the live-`watch` subscription had no `onError` (mid-session
+rules-denied read → uncaught, frozen layers); now folded via a new
+`ScoreAnnotationsFailed` event and shown through `AppSnackbar.error`
+(`score_bloc.dart`, `score_event.dart`, `score_viewer_screen.dart`). **(B)**
+`AcceptInviteCubit.accept` left an expired/consumed/invalid token on a retryable
+`ready` + snackbar (an Accept button that could only fail again) — now a
+terminal `failure` → `ErrorRetryView`, matching the resolve-time path;
+`generic`/deadline stays retryable. **(C)** `AudioUploadQueue.drain` silently
+dropped a poison entry at `maxAttempts` (data loss; the sync badge falsely
+flipped to "synced") — now retained in a persisted `failed` dead-letter set
+exposed via a `failed` count stream + `failedTasks`, with `skip` (discard) and
+`retryFailed` affordances. Regression tests per gap: `score_bloc_test.dart`
+(group `failure surfacing (M8.4)`), `accept_invite_cubit_test.dart`
+(terminal-denial cases, parameterised), `audio_upload_queue_test.dart` (poison
+/ failed-stream / skip / retry / restart). Gate (trimmed): `flutter analyze`
+clean + `flutter test --exclude-tags golden` 646 passing on `apps/duet`.
+
 ### M8.5 — Device-matrix QA, accessibility pass, localization decision
 
 **Goal:** The plan's QA sweep, mostly human-executed with agent fixes.
@@ -2768,6 +3288,47 @@ mode ends in a spinner or silence.
 **Done when:** matrix checklist complete; a11y violations fixed or
 waived-with-rationale; l10n decision recorded in this doc's decisions
 table.
+
+**Landed (agent parts — steps 2 & 3).**
+
+- **Contrast (WCAG AA).** Audited the forced-dark reader chrome, the
+  status pills/badges, and the library/settings/paywall text against AA,
+  computing actual ratios from the seed-blue `ColorScheme.fromSeed`
+  palette both brightnesses share. **Every text pair passes** — reader
+  title `onSurface`/`surface` 14.3:1, subtitle/sync-pill
+  `onSurfaceVariant`/`surface` 10.9:1, tinted `primary`/`error` pill text
+  over its 10%-tint fill 9.0:1, light `primary`/`surface` 6.1:1. The only
+  sub-3:1 result was a pill's *decorative* `outlineVariant` border
+  (2.0:1), which is not text and not a meaningful boundary (the pill's
+  text carries the meaning). **No token changed**, so no golden
+  rebaseline is owed; a contrast-check note recording the ratios and the
+  "re-check if you re-seed the hue" caveat was added to
+  `core_theme/lib/src/app_theme.dart`.
+- **Dynamic type (200%).** Pumped Settings, the paywall, and the library
+  gallery at `TextScaler.linear(2.0)` on a 360dp phone. Settings (a
+  scrolling `ListView` of `ListTile`s) and the paywall (an `Expanded`
+  scrolling list over a stretch button) were clean. The **library
+  gallery overflowed twice**: the filter/sort bar's sort control forced
+  the row 184px past the screen, and the "Shared with me" section-header
+  label pushed its unread count pill 230px off-screen. Both fixed
+  surgically in `library_screen.dart` — the sort control is capped at 60%
+  of the bar with an ellipsizing label, and the section-header label is
+  now `Flexible`+ellipsis; normal-scale layout is byte-identical. A
+  regression test (`gallery does not overflow at 200% text scale on a
+  phone`) guards it in `apps/duet/test/features/library/`. The reader
+  Stage chrome was left un-pinned — it did not overflow at 2.0 — so no
+  scale-pinning rationale was needed.
+- **Localization.** English-only 1.0 **confirmed** and recorded in the
+  decisions table above. A light sweep found user-facing copy already
+  lives beside its widgets; the handful of cross-file duplicate literals
+  (a generic "Something went wrong…", a couple of pairing/library confirm
+  strings) are non-blocking backlog, not worth a strings-file refactor
+  now — and no l10n framework was introduced.
+
+**[HUMAN] remainder.** Step 1's physical device-matrix pass (iPad
+landscape, small/large phone, tablet portrait) is still owed — run it on
+hardware and batch any layout issues back as agent fixes. The
+agent-reachable a11y hardening (contrast + dynamic type) is done.
 
 ---
 
@@ -2798,6 +3359,42 @@ include its PR-side functions build/test job here.
 
 **Done when:** a PR touching `apps/duet` runs the full gate; required
 checks block merge; wall-clock recorded in the workflow file header.
+
+**Landed.** `.github/workflows/ci.yaml` now carries the whole gate. Most
+jobs pre-existed from prior tasks — `analyze-and-test`,
+`rules-tests` (M1.7/M2.3), the `changes` path-filter, and `emulator-e2e`
+(M4.5, blocking, `flutter drive -d web-server` via
+`apps/duet/tool/e2e_web_drive.sh`) — so M9.1 was wiring + hardening, not
+new pipelines. **Added:** a `functions-tests` job (the M0.5 PR-side half:
+`npm ci && lint && tsc build && vitest` in `apps/duet/functions`, Node +
+Java only, no melos), and a `gate` aggregator job (`if: always()`,
+`needs` the four required jobs) that is green when each either passed or
+was path-filter-skipped and red on any failure — the single check to mark
+required, sidestepping the "skipped required check blocks merge" gotcha.
+Path filters extended: `changes` now emits `rules` and `functions`
+outputs so `rules-tests`/`functions-tests` skip on unrelated PRs (as
+`emulator-e2e` already did via `duet`). Caches: pub (flutter-action
+`cache: true`), npm (`setup-node` per lockfile), and the Firebase
+emulator binaries (`~/.cache/firebase/emulators`) on every emulator job;
+concurrency cancels superseded PR runs but never a `master` push. Header
+records the < ~15 min wall-clock target.
+
+**Goldens decision — kept NON-BLOCKING** (`continue-on-error: true`, out
+of `gate`), still run on every PR with actual+diff artifacts uploaded.
+Reason: although CI is Linux (`ubuntu-latest`), that image floats — a
+runner bump can shift fallback-font/Skia rendering and redline every
+golden at once — and nothing enforces that committed PNGs were generated
+on the CI runner (`melos run update-goldens` is run by devs on macOS,
+where the same goldens already drift). Making it required demands verified
+single-environment stability that can't be established from a dev machine.
+Promotion path is documented in the job comment: pin the runner image
+(`ubuntu-24.04`) and make that pinned runner the only place goldens are
+regenerated, then move the job into `gate`.
+
+**Remainder — [HUMAN].** Branch protection on `master` (repo settings):
+mark the `gate` check (recommended single required check) — or the four
+individual jobs — as required. Not automatable from here; noted in the
+workflow header.
 
 ### M9.H — [HUMAN] Signing + store presence
 

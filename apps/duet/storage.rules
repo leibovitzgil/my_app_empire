@@ -47,7 +47,10 @@ service firebase.storage {
     }
 
     // Audio-note recordings: any participant may add one (they author their
-    // own notes), capped at 5 MB (align M8.3).
+    // own notes), capped at 5 MB (M8.3). Keep in sync with
+    // `maxAudioNoteBytes` in lib/domain/src/domain/audio_asset_store.dart —
+    // the client-side backstop every `AudioAssetStore.put` applies before
+    // storing/uploading; change both together.
     match /pieces/{pieceId}/audio/{assetId} {
       function piece() {
         return firestore.get(

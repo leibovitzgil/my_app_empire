@@ -254,21 +254,24 @@ the caller holds.
 | `ownerId` | `string` | The inviting owner's uid. |
 | `ownerName` | `string?` | Owner display name for the accept screen. |
 | `createdAt` | `Timestamp` | Issued-at. Local model stores `createdAtMillis` (int epoch) — the mapper converts. |
-| `expiresAt` | `Timestamp` | **New.** Server-set expiry; the accept flow rejects an expired token (M5.4). |
+| `expiresAt` | `Timestamp` | **New.** Server-set expiry (`createdAt + 14d`); resolve/accept always reject an expired token (M5.2). Also carries the Firestore **TTL policy** for cleanup — a **[HUMAN]** console/`gcloud` toggle per environment (`gcloud firestore fields ttls update expiresAt --collection-group=inviteTokens --enable-ttl`); TTL deletion lags up to ~72 h, which is why expiry is checked at redemption time regardless. |
 | `consumed` | `bool` | Redeemed flag. |
 | `consumedBy` | `string?` | **New.** The uid that redeemed it. Set **only** by the acceptance Function (redemption adds the collaborator + enforces the cap atomically — see [below](#function-only-mutations)). |
 
 > **A token is an invitation, not a view grant.** Holding the link lets a
-> signed-in user *read this token document* — `pieceId` + `ownerName`, enough
+> signed-in user *preview the invitation* — piece title + `ownerName`, enough
 > to render the accept screen ("Sam invited you to Clair de Lune") — and
-> **nothing else**. It grants **no** read on the piece: `pieces/{id}` and every
+> **nothing else**. As landed (M5.2, stricter than first sketched), even that
+> preview is **not** a direct doc read: the rules deny clients all access to
+> `inviteTokens`, and the read-only `resolveInviteToken` callable serves the
+> preview. It grants **no** read on the piece: `pieces/{id}` and every
 > subcollection (`layers`, `notes`, `reads`) are gated on participant
 > membership (`P`), and a link-holder is **not** a participant until they
 > *accept* and the redemption Function adds them to `participantIds` (subject
 > to the cap). So a stranger with only the link can never see notes,
-> annotations, or even the piece metadata beyond the owner's name — they see
-> an invitation, and access begins at redemption. (This is deliberate
-> capability-URL design: the token doc is readable by whoever holds the
+> annotations, or even the piece metadata beyond title and owner name — they
+> see an invitation, and access begins at redemption. (This is deliberate
+> capability-URL design: the invitation is previewable by whoever holds the
 > unguessable token, but it is inert — it carries no content.)
 
 ### `/entitlements/{uid}`
@@ -291,6 +294,53 @@ entitlement is trivially cheatable).
 | `updatedAt` | `Timestamp` | Last change. |
 | `source` | `string` | Where the grant came from (RevenueCat webhook, promo, manual). |
 
+### `/pushDigests/{digestId}`
+
+One document per burst of annotation activity, enqueued by the
+`onLayerAnnotationsChanged` / `onNoteAnnotationsChanged` triggers and drained
+by the `drainPushDigests` scheduled Function every 10 minutes (M5.4). The
+queue is what turns "one push per stroke" into "Maya added 3 notes to Clair
+de Lune" — a batched digest, not a per-write notification. **Entirely
+Function-owned**: clients never read or write it (deny-all in
+`firestore.rules`, and it's covered by deny-by-default regardless).
+
+```jsonc
+{
+  "pieceId": "piece_1",
+  "authorId": "uid_def",              // who made the edits (never notified about them)
+  "recipientIds": ["uid_abc"],        // the piece's OTHER participants at enqueue time
+  "kind": "strokes",                  // "strokes" | "notes"
+  "count": 3,                         // strokes added (delta) or notes created (1)
+  "createdAt": <Timestamp>            // enqueue instant — the "batch time"
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `pieceId` | `string` | The piece the activity happened on. |
+| `authorId` | `string` | The editing participant. Excluded from `recipientIds` at enqueue and again at grouping — an author is never notified of their own edits. |
+| `recipientIds` | `string[]` | The piece's `participantIds` minus the author, snapshotted at enqueue. A solo piece enqueues nothing. |
+| `kind` | `string` | `strokes` (ink layer delta) or `notes` (audio note). Both surface to the recipient as the musician-facing word "notes" in the composed copy. |
+| `count` | `int` | Ink: the net strokes *added* (`after.strokes − before.strokes`; an erase-only rewrite enqueues nothing). Audio: `1` per created note. |
+| `createdAt` | `Timestamp` | Enqueue instant. The drain compares each recipient's newest group `createdAt` against their `reads/{uid}.lastOpenedAt` and skips recipients who already opened the sheet. |
+
+**Drain semantics.** `drainPushDigests` reads the whole queue, groups by
+`(recipient, piece, author)`, sums `count`, composes one line per group
+(`<author> added <n> notes to <title>`, author name resolved from the piece's
+`ownerName`/`collaborators`), and sends over M5.3's shared `sendPushAndPrune`
+FCM path (same dead-token pruning). A group is **skipped** (its queue docs
+deleted regardless — a skip is a decision, not a retry) when: the piece is
+gone; the recipient's `deviceTokens/{uid}.pushEnabled` is `false` (the muted
+Settings toggle); the recipient has no registered tokens; or the recipient's
+`reads/{uid}.lastOpenedAt` is at/after the group's newest `createdAt` (they
+already saw it). Every snapshotted doc is then deleted (chunked under the
+500-write batch limit); docs enqueued *after* the snapshot survive to the
+next run.
+
+**Track A scope.** Triggers + drain with mocked-messaging tests
+(`test/annotation_digests.test.ts`). Real FCM delivery rides M5.3's ▸B
+backlog — there is no FCM emulator.
+
 ### Live identity collections (M1 — governed by `firestore.rules` today)
 
 Defined by the current rules file; listed here so this doc is the complete map.
@@ -300,6 +350,18 @@ inbox invites ride over). Their ACLs are already in
 `apps/duet/firestore.rules`; the [ACL matrix](#acl-matrix) restates them for
 completeness and marks the one M2.4 change (inbox `create` moves behind a
 Function).
+
+**`deviceTokens/{uid}` shape.** `{tokens: [String, ...], pushEnabled?: bool}`.
+`tokens` is the FCM registration list (`DeviceTokenSync` / `FirestoreUser
+Messaging`, arrayUnion/arrayRemove; the push senders `arrayRemove` any token
+FCM reports unregistered). `pushEnabled` (**new, M5.4**) mirrors the client's
+Settings push toggle (`SettingsRepository.readPushEnabled`, which is
+otherwise client-side only) so a server-side sender can honor it — the
+`drainPushDigests` drain skips a recipient whose `pushEnabled == false`.
+Written client-side by Duet's `MirroringSettingsRepository` glue (a
+`DeviceTokenRegistry.setPushEnabled` field-merge that leaves `tokens`
+untouched); absent = treated as enabled (opt-out, not opt-in). Self-owned
+like the rest of the doc (the `self` ACL below covers it).
 
 ---
 
@@ -335,6 +397,19 @@ when present and otherwise downloads the object (a collaborator resolving a note
 they didn't record). Storage transfer sits behind an `AudioObjectStore` seam so
 the queue/cache orchestration is fake-testable; the Firebase transfer itself is
 emulator-verified.
+
+**Audio format + size caps (recorded once, here, M8.3).** Recordings are
+**AAC-LC mono, 64 kbps / 44.1 kHz** in an MPEG-4 container (`.m4a`) — the
+explicit `RecordAudioRecorderService.recordConfig` (voice quality,
+≈ 0.5 MB/min, so a max-length 60 s note lands around 0.5 MB). Uploads set
+**content-type `audio/mp4`** explicitly (`FirebaseAudioObjectStore.upload`;
+the object name has no extension, so nothing could be inferred). Size is
+capped twice: the Storage rules reject audio objects ≥ 5 MB
+(`apps/duet/storage.rules`), and every `AudioAssetStore.put` applies the
+same cap client-side (`maxAudioNoteBytes` in
+`apps/duet/lib/domain/src/domain/audio_asset_store.dart`, kept in sync with
+the rule) — unreachable with the encoder settings; an honest backstop
+surfaced as "Recording too large".
 
 ---
 
@@ -416,8 +491,9 @@ get(pieces/{id}).data.participantIds`); `self` = the doc id equals
 | `pieces/{id}/layers/{uid}` | `self` **and** `P` (author writes own layer) | `P` | `self` **and** `P` | `self` (piece deletion cascades via Function) |
 | `pieces/{id}/notes/{noteId}` | `P`, `authorId == auth.uid` | `P` | author only (e.g. set `deletedAt`) | **never** (tombstone via `deletedAt`) |
 | `pieces/{id}/reads/{uid}` | `self` **and** `P` | `self` | `self` **and** `P` | `self` |
-| `inviteTokens/{token}` | owner of `pieceId` (`auth.uid == ownerId`) | `auth != null` — **the token doc only** (invite preview: `pieceId` + `ownerName`); grants **no** read on the piece, whose content stays `P`-gated | **Function only** (redemption sets `consumed`/`consumedBy`) | owner |
+| `inviteTokens/{token}` | **Function only** (`createInviteToken`: owner + cap checked server-side) | **Function only** (`resolveInviteToken` serves the preview — landed stricter than the original client-`get` sketch); grants **no** read on the piece, whose content stays `P`-gated | **Function only** (`acceptInviteToken` redemption sets `consumed`/`consumedBy`) | **Function/TTL only** (piece-delete cascade sweeps by `pieceId`; `expiresAt` TTL backstops) |
 | `entitlements/{uid}` | **Function only** | `self` | **Function only** | **Function only** |
+| `pushDigests/{id}` *(M5.4)* | **Function only** (annotation triggers enqueue) | **Function only** | — | **Function only** (the drain deletes) — clients denied all access |
 | `usersByEmail/{email}` *(M1, live)* | self (`auth.uid == resource.uid`) | `get` if `discoverable` or self; **no `list`** | self (owner of existing doc + new doc) | self |
 | `deviceTokens/{uid}` *(M1, live)* | `self` | `self` | `self` | `self` |
 | `userInbox/{uid}/messages/{id}` *(M1, live)* | v1: any signed-in sender w/ matching `toUid`; **M2.4 → Function only** | recipient (`self`) | recipient | **never** |
@@ -433,13 +509,18 @@ Client mutations the rules can't safely express, named here so each has a home
    M3.8**, which is what lets the collaborator's `watchPieces` see the sheet.
    The per-piece **cap** (`CollaboratorLimits`) stays deferred to **M6.3**: it
    needs the *owner's* pro tier, which isn't knowable server-side yet
-   (`collaboratorLimits.ts`). M5 wires the tokenized `inviteTokens` path to the
-   same callable.
+   (`collaboratorLimits.ts`). The tokenized path landed as its **own**
+   callable, `acceptInviteToken` (M5.2), which **does** enforce the cap —
+   reading the owner's tier from `entitlements/{ownerId}` in the same
+   transaction (absent = free tier, the pre-M6.3 truth).
 2. **Collaborator remove / leave.** The reverse — removes from both arrays.
 3. **Inbox send** (`userInbox/.../messages` create). v1 lets any signed-in
    client write (documented spam vector); **M2.4** moves it behind a Function
    that authorizes the sender.
-4. **Invite token redemption** (`inviteTokens/{token}` update). Only the
+4. **Invite token redemption** (`inviteTokens/{token}` update — landed M5.2
+   as `acceptInviteToken`, with `createInviteToken`/`resolveInviteToken`
+   covering mint and preview since the whole collection is client-denied).
+   Only the
    acceptance Function sets `consumed`/`consumedBy`.
 5. **Entitlement writes** (`entitlements/{uid}`). Only the RevenueCat webhook /
    server (M6.3) — never a client.

@@ -6,9 +6,21 @@
  * re-export; pin every function to the shared region (src/region.ts).
  */
 export { acceptInvite } from './acceptInvite';
+export {
+  drainPushDigests,
+  onLayerAnnotationsChanged,
+  onNoteAnnotationsChanged,
+} from './annotationDigests';
 export { deleteAccount } from './deleteAccount';
+export { exportMyData } from './exportMyData';
 export { gcTombstones } from './gcTombstones';
 export { healthcheck } from './healthcheck';
+export { onInboxMessageCreated } from './inboxPush';
+export {
+  acceptInviteToken,
+  createInviteToken,
+  resolveInviteToken,
+} from './inviteTokens';
 export { leavePiece } from './leavePiece';
 export { lookupEmail } from './lookupEmail';
 export { onLayerWrite, onNoteWrite } from './pieceActivity';

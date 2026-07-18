@@ -11,16 +11,21 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:analytics/analytics.dart';
+import 'package:app_updater/app_updater.dart';
 import 'package:audio/audio.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/app.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/current_user.dart';
+import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/directory_publisher.dart';
+import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/fake_deep_link_service.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
@@ -32,9 +37,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_storage/local_storage.dart';
+import 'package:monetization/monetization.dart';
+import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
+
+import 'duet_flow_harness.dart';
 
 /// Grants everything without platform channels — mirrors
 /// `app_settings_navigation_test.dart`'s fake.
@@ -54,6 +64,17 @@ class _FakeNotificationPermissionGateway
   Future<Result<void>> openSystemSettings() async => const Success<void>(null);
 }
 
+/// Fails every resolve, fast and without `dart:io` — the piece-deep-link
+/// tests below only need the score route's *guard* to pass (the piece
+/// exists); actually resolving/rendering the PDF is the reader's own
+/// business, covered elsewhere (and real file I/O never completes inside a
+/// `testWidgets` body in this sandbox — see `duet_flow_harness.dart`).
+class _FailingPdfBinaryCache implements PdfBinaryCache {
+  @override
+  Future<Result<String>> pathFor(Piece piece) async =>
+      ResultFailure<String>(StateError('no binaries in this test'));
+}
+
 void main() {
   late Directory tempDir;
 
@@ -69,10 +90,24 @@ void main() {
   /// Registers the full dependency graph `HomeScreen` (real `feature_library`
   /// content, not a placeholder) needs to build, backed by temp-dir/in-memory
   /// fakes so this stays a plain `flutter test` — no real platform channels.
-  Future<void> registerFakes() async {
+  ///
+  /// [pieceRepository] swaps the default (real, empty `LocalPieceRepository`)
+  /// for a pre-seeded fake — the piece-deep-link tests (M5.5) need
+  /// `/score/:pieceId`'s guard to find the piece. [pdfBinaryCache] likewise
+  /// swaps the real cache for one with no file I/O (see
+  /// [_FailingPdfBinaryCache]).
+  Future<void> registerFakes({
+    PieceRepository? pieceRepository,
+    PdfBinaryCache? pdfBinaryCache,
+  }) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final storage = await LocalStorageService.init();
     getIt.registerSingleton<LocalStorageService>(storage);
+    // The router's screen-view observer resolves the analytics catalogue
+    // (M7.2); a Talker-only AppLogger keeps it headless like injection.dart.
+    getIt.registerLazySingleton<DuetAnalytics>(
+      () => DuetAnalytics(AppLogger()),
+    );
     final mockAuthRepository = MockAuthRepository();
     getIt.registerSingleton<AuthRepository>(mockAuthRepository);
     // HomeScreen's verify-email banner resolves the account seam too —
@@ -85,6 +120,28 @@ void main() {
     final currentUserName = CurrentUserName(mockAuthRepository.displayName);
     getIt.registerSingleton<CurrentUserName>(currentUserName);
 
+    // HomeScreen's invite-inbox banner (M5.6) resolves the email seam, the
+    // message gateway + invite service, and the monetization service — the
+    // in-memory/simulated set, mirroring injection.dart's default branch.
+    getIt.registerSingleton<CurrentUserEmail>(
+      CurrentUserEmail(
+        mockAuthRepository.account.map((account) => account?.email),
+      ),
+    );
+    getIt.registerLazySingleton<MonetizationService>(
+      SimulatedMonetizationService.new,
+    );
+    getIt.registerSingleton<UserMessageGateway>(InMemoryUserMessaging());
+    getIt.registerLazySingleton<CollaboratorInviteService>(
+      () => DefaultCollaboratorInviteService(
+        userDirectory: getIt<UserDirectory>(),
+        pieceRepository: getIt<PieceRepository>(),
+        monetizationService: getIt<MonetizationService>(),
+        messageGateway: getIt<UserMessageGateway>(),
+      ),
+    );
+
+    getIt.registerLazySingleton<PerfTracer>(NoopPerfTracer.new);
     getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
     getIt.registerLazySingleton<AudioRecorderService>(
       RecordAudioRecorderService.new,
@@ -95,16 +152,20 @@ void main() {
     getIt.registerLazySingleton<AudioAssetStore>(
       () => LocalAudioAssetStore(documentsDirectory: () async => tempDir),
     );
-    getIt.registerLazySingleton<PieceRepository>(
-      () => LocalPieceRepository(
-        storage: getIt<LocalStorageService>(),
-        currentUserId: getIt<CurrentUser>().call,
-        pdfRenderService: getIt<PdfRenderService>(),
-        annotationRepository: getIt.call<AnnotationRepository>,
-        audioAssetStore: getIt<AudioAssetStore>(),
-        documentsDirectory: () async => tempDir,
-      ),
-    );
+    if (pieceRepository != null) {
+      getIt.registerSingleton<PieceRepository>(pieceRepository);
+    } else {
+      getIt.registerLazySingleton<PieceRepository>(
+        () => LocalPieceRepository(
+          storage: getIt<LocalStorageService>(),
+          currentUserId: getIt<CurrentUser>().call,
+          pdfRenderService: getIt<PdfRenderService>(),
+          annotationRepository: getIt.call<AnnotationRepository>,
+          audioAssetStore: getIt<AudioAssetStore>(),
+          documentsDirectory: () async => tempDir,
+        ),
+      );
+    }
     getIt.registerLazySingleton<AnnotationRepository>(
       () => LocalAnnotationRepository(
         storage: getIt<LocalStorageService>(),
@@ -113,13 +174,17 @@ void main() {
       ),
     );
     getIt.registerLazySingleton<PieceBinaryStore>(NoopPieceBinaryStore.new);
-    getIt.registerLazySingleton<PdfBinaryCache>(
-      () => DefaultPdfBinaryCache(
-        binaryStore: getIt<PieceBinaryStore>(),
-        pdfRenderService: getIt<PdfRenderService>(),
-        storage: getIt<LocalStorageService>(),
-      ),
-    );
+    if (pdfBinaryCache != null) {
+      getIt.registerSingleton<PdfBinaryCache>(pdfBinaryCache);
+    } else {
+      getIt.registerLazySingleton<PdfBinaryCache>(
+        () => DefaultPdfBinaryCache(
+          binaryStore: getIt<PieceBinaryStore>(),
+          pdfRenderService: getIt<PdfRenderService>(),
+          storage: getIt<LocalStorageService>(),
+        ),
+      );
+    }
     // The score page subscribes to this on mount (M4.1); the local monitor
     // reports always-synced.
     getIt.registerLazySingleton<PieceSyncMonitor>(LocalPieceSyncMonitor.new);
@@ -135,6 +200,22 @@ void main() {
     );
     getIt.registerLazySingleton<UserDirectory>(InMemoryUserDirectory.new);
     getIt.registerLazySingleton<AccountPurge>(MockAccountPurge.new);
+    // The force-update gate wraps every routed screen (app.dart); the
+    // in-memory remote config's default `min_supported_version: 0.0.0`
+    // means it never blocks these navigation tests.
+    getIt.registerSingleton<RemoteConfigService>(
+      InMemoryRemoteConfigService(),
+    );
+    getIt.registerLazySingleton<AppUpdateService>(
+      () => AppUpdateService(
+        remoteConfig: getIt<RemoteConfigService>(),
+        // Fixed so the gate never reaches for the `package_info_plus`
+        // platform channel (unanswered under the widget-test binding, which
+        // would leave `ForceUpdateWidget`'s spinner animating and hang
+        // pumpAndSettle). Above the 0.0.0 default → never blocks.
+        currentVersion: () async => '1.0.0',
+      ),
+    );
     getIt.registerSingleton<DirectoryPublisher>(
       DirectoryPublisher(
         directory: getIt<UserDirectory>(),
@@ -272,10 +353,26 @@ void main() {
     },
   );
 
+  /// Seeds [pieces] with one piece and returns it.
+  Future<Piece> seedPiece(FakePieceRepository pieces) async {
+    final result = await pieces.importPiece(
+      title: 'Clair de Lune',
+      sourcePath: 'clair.pdf',
+    );
+    return (result as Success<Piece>).value;
+  }
+
   testWidgets(
     'the score and collaborators routes render their pages by piece id',
     (tester) async {
-      await registerFakes();
+      // Seeded: `/score/:pieceId` now guards the id against the repository
+      // (M5.5), so rendering the page requires the piece to exist.
+      final pieces = FakePieceRepository();
+      final piece = await seedPiece(pieces);
+      await registerFakes(
+        pieceRepository: pieces,
+        pdfBinaryCache: _FailingPdfBinaryCache(),
+      );
       final fakeDeepLinks = FakeDeepLinkService();
       addTearDown(fakeDeepLinks.dispose);
       getIt.registerLazySingleton<DeepLinkService>(() => fakeDeepLinks);
@@ -287,15 +384,104 @@ void main() {
       final context = tester.element(find.byType(HomeScreen));
       final router = GoRouter.of(context);
 
-      unawaited(router.push('/score/some-piece-id'));
+      unawaited(router.push('/score/${piece.id}'));
       await tester.pumpAndSettle();
       expect(find.byType(DuetScorePage), findsOneWidget);
       router.pop();
       await tester.pumpAndSettle();
 
-      unawaited(router.push('/collaborators/some-piece-id'));
+      unawaited(router.push('/collaborators/${piece.id}'));
       await tester.pumpAndSettle();
       expect(find.byType(CollaboratorsPage), findsOneWidget);
+    },
+  );
+
+  // M5.5 — notification tap-through → the exact piece. A push's tap payload
+  // (`https://duet.app/piece/<id>`) reaches `DeepLinkService.ingest` via
+  // `NotificationTapRouter` (unit-covered in
+  // `notification_tap_router_test.dart`); these prove the ingested link
+  // actually lands on the right screen through the real `AppView` wiring.
+
+  testWidgets(
+    'a piece deep link delivered while signed in opens that exact score',
+    (tester) async {
+      final pieces = FakePieceRepository();
+      final piece = await seedPiece(pieces);
+      await registerFakes(
+        pieceRepository: pieces,
+        pdfBinaryCache: _FailingPdfBinaryCache(),
+      );
+      final fakeDeepLinks = FakeDeepLinkService();
+      addTearDown(fakeDeepLinks.dispose);
+      getIt.registerLazySingleton<DeepLinkService>(() => fakeDeepLinks);
+
+      await tester.pumpWidget(const App());
+      await tester.pumpAndSettle();
+      await logIn(tester);
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      fakeDeepLinks.ingest(Uri.parse('https://duet.app/piece/${piece.id}'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DuetScorePage), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a piece deep link arriving while signed out is held until login, '
+    'then opens the score',
+    (tester) async {
+      final pieces = FakePieceRepository();
+      final piece = await seedPiece(pieces);
+      await registerFakes(
+        pieceRepository: pieces,
+        pdfBinaryCache: _FailingPdfBinaryCache(),
+      );
+      final fakeDeepLinks = FakeDeepLinkService();
+      addTearDown(fakeDeepLinks.dispose);
+      getIt.registerLazySingleton<DeepLinkService>(() => fakeDeepLinks);
+
+      await tester.pumpWidget(const App());
+      await tester.pumpAndSettle();
+
+      fakeDeepLinks.ingest(Uri.parse('https://duet.app/piece/${piece.id}'));
+      await tester.pumpAndSettle();
+
+      // Signed out: held, not navigated.
+      expect(find.byType(DuetScorePage), findsNothing);
+      expect(find.text('Duet'), findsOneWidget);
+
+      await logIn(tester);
+
+      expect(find.byType(DuetScorePage), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a piece deep link with an unknown id lands on /home with a snackbar',
+    (tester) async {
+      // Default (empty) repository: any id is unknown.
+      await registerFakes();
+      final fakeDeepLinks = FakeDeepLinkService();
+      addTearDown(fakeDeepLinks.dispose);
+      getIt.registerLazySingleton<DeepLinkService>(() => fakeDeepLinks);
+
+      await tester.pumpWidget(const App());
+      await tester.pumpAndSettle();
+      await logIn(tester);
+
+      fakeDeepLinks.ingest(Uri.parse('https://duet.app/piece/no-such-piece'));
+      await tester.pumpAndSettle();
+
+      // Bounced home with the G4 snackbar, not stranded on a dead reader.
+      expect(find.byType(DuetScorePage), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.text('That sheet is no longer available'), findsOneWidget);
+
+      // Let the snackbar's auto-dismiss timer elapse so the test ends with
+      // no pending timers.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
     },
   );
 }

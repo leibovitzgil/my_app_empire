@@ -1,15 +1,20 @@
 import 'dart:async';
 
+import 'package:app_updater/app_updater.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:core_utils/core_utils.dart';
 import 'package:deep_linking/deep_linking.dart';
 import 'package:duet/data/current_user.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/duet_analytics.dart';
+import 'package:duet/data/duet_route_observer.dart';
+import 'package:duet/data/sign_up_consent_binder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/library/library.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/legal.dart';
 import 'package:duet/ui/migration_prompt.dart';
 import 'package:duet/ui/score_page.dart';
 import 'package:duet/ui/settings_page.dart';
@@ -20,7 +25,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:monetization/monetization.dart';
+import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -53,6 +60,12 @@ class _AppViewState extends State<AppView> {
     super.initState();
     _router = GoRouter(
       redirect: _redirect,
+      // Screen views (M7.2): logs each pushed route's template name —
+      // go_router names pages `state.name ?? state.path`, so `/score/
+      // :pieceId` is logged, never a concrete id-carrying location.
+      observers: [
+        DuetRouteObserver(analytics: getIt<DuetAnalytics>()),
+      ],
       routes: [
         // `_redirect` immediately resolves `/` to `/login` or `/home`; this
         // builder only covers the transient frame between an auth change and
@@ -63,9 +76,22 @@ class _AppViewState extends State<AppView> {
         ),
         GoRoute(
           path: '/login',
-          builder: (context, state) => const LoginScreen(
+          builder: (context, state) => LoginScreen(
             title: 'Duet',
-            logo: AppLogoMark(icon: Icons.music_note),
+            logo: const AppLogoMark(icon: Icons.music_note),
+            // Sign-up consent gate (M7.4): a required acceptance checkbox on
+            // the sign-up view. Ticking it records the acceptance against the
+            // new account via `SignUpConsentBinder` (injection.dart), which
+            // fires once the account authenticates. The documents themselves
+            // are also reachable from Settings ▸ About.
+            // TODO(track-b): make the Terms/Privacy words tappable links to
+            // `kTermsOfServiceUrl`/`kPrivacyPolicyUrl` once those are hosted
+            // (M7.4 ▸B) — needs a url-launcher seam in the label.
+            consentLabel: const Text(
+              'I agree to the Terms of Service and Privacy Policy.',
+            ),
+            onConsentAccepted: () =>
+                getIt<SignUpConsentBinder>().markPending(kLegalDocumentVersion),
           ),
         ),
         GoRoute(
@@ -87,8 +113,11 @@ class _AppViewState extends State<AppView> {
         ),
         GoRoute(
           path: '/score/:pieceId',
+          // Guarded (M5.5): this route is a push/deep-link destination, so
+          // the id is resolved first — unknown/denied ones bounce to
+          // `/home` with a snackbar (G4).
           builder: (context, state) =>
-              DuetScorePage(pieceId: state.pathParameters['pieceId']!),
+              DuetScoreRouteGuard(pieceId: state.pathParameters['pieceId']!),
         ),
         GoRoute(
           path: '/collaborators/:pieceId',
@@ -202,6 +231,16 @@ class _AppViewState extends State<AppView> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       routerConfig: _router,
+      // The force-update gate (M7.6) wraps every routed destination: below
+      // the remotely-configured minimum version the whole app is replaced
+      // by the update screen. It sits in the router's `builder` so it's
+      // under `MaterialApp` (theme/directionality) yet above every screen.
+      // The gate fails open — the headless/mock composition's committed
+      // default (`min_supported_version: 0.0.0`) can never block (G2).
+      builder: (context, child) => ForceUpdateWidget(
+        appUpdateService: getIt<AppUpdateService>(),
+        child: child!,
+      ),
     );
   }
 }
@@ -223,6 +262,11 @@ void showInviteSheetFor(
       ownerId: ownerId,
       pieceId: pieceId,
       ownerName: getIt<CurrentUserName>().call(),
+      // The `invite_links_enabled` kill-switch (M6.4), read at open so a
+      // refreshed flag applies to the next sheet. The feature never reads
+      // remote config itself — the app threads the decision in, the same
+      // seam as every other dependency above.
+      linkSharingEnabled: getIt<RemoteConfigService>().inviteLinksEnabled,
     ),
   );
 }
@@ -248,6 +292,20 @@ class HomeScreen extends StatelessWidget {
         // signed-in account on first cloud sign-in (M3.6); renders nothing and
         // is a no-op unless the Firebase composition registered a migrator.
         const MigrationPrompt(),
+        // Pending email invites for the signed-in user (M5.6): accept joins
+        // the sheet — the gallery below live-updates via `watchPieces` — and
+        // opens it; dismiss marks the inbox message read, nothing more.
+        InviteInboxBanner(
+          collaboratorInviteService: getIt<CollaboratorInviteService>(),
+          messageGateway: getIt<UserMessageGateway>(),
+          monetizationService: getIt<MonetizationService>(),
+          currentUserId: currentUserId,
+          currentUserName: getIt<CurrentUserName>().call(),
+          currentUserEmail: getIt<CurrentUserEmail>().call(),
+          onAccepted: (pieceId) => context.push(
+            '/score/${Uri.encodeComponent(pieceId)}',
+          ),
+        ),
         Expanded(
           child: LibraryPage(
             pieceRepository: getIt<PieceRepository>(),

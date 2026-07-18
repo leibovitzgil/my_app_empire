@@ -1,7 +1,9 @@
 export 'src/bloc/audio_playback_cubit.dart';
 export 'src/bloc/record_audio_cubit.dart';
 export 'src/bloc/score_bloc.dart';
+export 'src/page_image_cache.dart';
 export 'src/participant_layer.dart';
+export 'src/thumbnail_cache.dart';
 export 'src/ui/practice_view.dart';
 export 'src/ui/score_viewer_screen.dart';
 export 'src/ui/widgets/audio_pin_marker.dart';

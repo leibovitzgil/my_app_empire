@@ -1,3 +1,27 @@
+# CI — the full PR gate (task M9.1)
+#
+# One required gate for every PR into `master`, assembled from the jobs prior
+# tasks built:
+#   - analyze-and-test  bootstrap + format-check + lint + test + coverage
+#   - goldens           screenshot diffs (NON-BLOCKING — see the job's note)
+#   - rules-tests       Firestore + Storage security-rules tests (M1.7 / M2.3)
+#   - functions-tests   Cloud Functions build/lint/test    (M0.5 PR-side job)
+#   - emulator-e2e      reader/cloud E2E on the Firebase emulator (M4.5)
+# A final `gate` job aggregates the required results into one check.
+#
+# Wall-clock target: < ~15 min. Kept there by (a) per-job path filters so the
+# heavy emulator/functions/rules jobs only run when their inputs change, (b)
+# concurrency cancellation of superseded PR runs, and (c) caches for pub
+# (flutter-action), npm, and the Firebase emulator binaries. Gradle is not
+# cached here because no ci.yaml job builds Android — that lives in
+# deploy_apps.yaml.
+#
+# [HUMAN] Branch protection: mark the `gate` check (or, equivalently, the
+# individual required jobs) as required on `master` in the repo settings —
+# see task M9.1. The `gate` job is the recommended single required check: it
+# stays green when a path-filtered job is skipped and red when any required
+# job fails, which sidesteps the "skipped required check blocks merge" gotcha.
+
 name: CI
 
 on:
@@ -7,7 +31,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR runs; never cancel a push build on master.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze-and-test:
@@ -53,11 +78,46 @@ jobs:
           path: packages/**/coverage/lcov.info
           if-no-files-found: ignore
 
+  changes:
+    name: Detect changed paths
+    # Per-job path filter: a workflow-level `on.paths` would gate *every* job,
+    # but analyze-and-test/goldens must run on all PRs. This job publishes
+    # which areas changed so the heavy Duet-only jobs (emulator-e2e,
+    # rules-tests, functions-tests) are skipped on unrelated PRs.
+    runs-on: ubuntu-latest
+    outputs:
+      duet: ${{ steps.filter.outputs.duet }}
+      rules: ${{ steps.filter.outputs.rules }}
+      functions: ${{ steps.filter.outputs.functions }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            duet:
+              - 'apps/duet/**'
+              - 'packages/**'
+              - 'melos.yaml'
+              - '.github/workflows/ci.yaml'
+            rules:
+              - 'apps/duet/firestore.rules'
+              - 'apps/duet/storage.rules'
+              - 'apps/duet/firestore_tests/**'
+              - '.github/workflows/ci.yaml'
+            functions:
+              - 'apps/duet/functions/**'
+              - '.github/workflows/ci.yaml'
+
   rules-tests:
     name: Firestore + Storage rules tests
     # Guards apps/duet/firestore.rules + storage.rules (M1.7 identity + M2.3
     # pieces/Storage). `npm test` boots the Firestore + Storage emulators.
-    # Node-only — no Flutter setup — and cheap enough to run on every PR.
+    # Node-only — no Flutter setup. Path-filtered to rules changes (see the
+    # `changes` job); cheap, but no reason to run on PRs that touch neither
+    # the rules nor their tests.
+    needs: changes
+    if: needs.changes.outputs.rules == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -89,11 +149,76 @@ jobs:
         run: npm test
         working-directory: apps/duet/firestore_tests
 
+  functions-tests:
+    name: Cloud Functions build & test
+    # The M0.5 PR-side job (folded in here per M9.1 while M0.5's deploy half
+    # stays deferred): install, lint, `tsc` build, and vitest the Duet Cloud
+    # Functions workspace (apps/duet/functions — npm/TypeScript, outside the
+    # melos packages). `npm test` boots the Auth + Firestore emulators around
+    # vitest, so Java is required. Mirrors `melos run functions-test` but runs
+    # the npm steps directly to stay Node-only (no Dart/melos activation).
+    # Path-filtered to functions changes (see the `changes` job).
+    needs: changes
+    if: needs.changes.outputs.functions == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/duet/functions/package-lock.json
+
+      - name: Set up Java (Firebase emulator runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: apps/duet/functions
+
+      - name: Lint
+        run: npm run lint
+        working-directory: apps/duet/functions
+
+      - name: Build (tsc)
+        run: npm run build
+        working-directory: apps/duet/functions
+
+      - name: Test (vitest on Auth + Firestore emulator)
+        run: npm test
+        working-directory: apps/duet/functions
+
   goldens:
     name: Golden screenshots
     runs-on: ubuntu-latest
-    # Non-blocking: golden rendering can drift across environments. Failures
-    # are uploaded as artifacts (actual + diff) for review rather than blocking.
+    # NON-BLOCKING (deliberate — not in the required `gate`). Golden PNGs are
+    # rendered with a fallback font and are sensitive to the exact rendering
+    # environment. Two facts keep this off the required path:
+    #   1. `ubuntu-latest` is a floating image; a runner image bump can shift
+    #      fallback-font/Skia rendering and redline every golden at once.
+    #   2. Nothing enforces that committed PNGs were generated on this runner
+    #      — `melos run update-goldens` is run by developers locally (this
+    #      repo's are on macOS, where the same goldens already drift), so a PR
+    #      can legitimately carry non-Linux-canonical PNGs.
+    # So it runs on every PR for signal and uploads actual+diff artifacts for
+    # review, but never blocks merge.
+    #
+    # Promote to required (move it into `gate`, drop continue-on-error) only
+    # after: (a) pinning the runner image (e.g. `runs-on: ubuntu-24.04`, not
+    # `-latest`), and (b) making that pinned runner the ONLY place goldens are
+    # regenerated (a `melos run update-goldens` CI lane), so the committed
+    # baseline and the gate share one environment.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
@@ -127,45 +252,22 @@ jobs:
           path: "**/test/golden/failures/*.png"
           if-no-files-found: ignore
 
-  changes:
-    name: Detect changed paths
-    # Per-job path filter: a workflow-level `on.paths` would gate *every* job,
-    # but analyze-and-test/rules-tests/goldens must run on all PRs. This job
-    # publishes whether Duet-relevant files changed so only the (heavy)
-    # emulator-e2e job below is skipped on unrelated PRs.
-    runs-on: ubuntu-latest
-    outputs:
-      duet: ${{ steps.filter.outputs.duet }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            duet:
-              - 'apps/duet/**'
-              - 'packages/**'
-              - 'melos.yaml'
-              - '.github/workflows/ci.yaml'
-
   emulator-e2e:
     name: Reader/cloud E2E (Firebase emulator)
-    # The plan-M4 exit (M4.5): drives the integration_test flows
-    # (auth_lifecycle, cloud_pieces_flow, collaborator_flow + reader
+    # The plan-M4 exit (M4.5): drives the two `dart:io`-free integration_test
+    # flows (auth_lifecycle M1.10, cloud_pieces_flow M3.8 + M4.1-M4.4 reader
     # assertions) against the REAL Auth+Firestore+Functions+Storage emulator,
     # proving `useFirebase: true` server-authoritative end-to-end — the
     # standard gate only exercises the in-memory fakes. Skipped on PRs that
     # touch no Duet/package code (see the `changes` job).
     #
-    # NON-BLOCKING for now: two of the three suites (cloud_pieces_flow,
-    # auth_lifecycle) use `dart:io` (File/Directory/HttpClient), which the
-    # Flutter web target (`-d chrome`) lacks, so they can't run headlessly on a
-    # runner. Making this a required green check needs either a native-device
-    # runner (`flutter drive`) or those two suites refactored off `dart:io`
-    # (HttpClient -> package:http, File uploads -> in-memory putData). Tracked
-    # as the M4.5 follow-up; the `melos e2e-emulator` script stays usable
-    # locally/on a device today.
-    continue-on-error: true
+    # BLOCKING: those two suites were refactored off `dart:io` (HttpClient ->
+    # package:http, File uploads -> in-memory putData), so the web engine
+    # compiles and runs them headlessly. `flutter test` refuses web devices for
+    # integration tests, so the runner uses `flutter drive -d web-server` +
+    # chromedriver (see `apps/duet/tool/e2e_web_drive.sh`). The device-only
+    # suites (`collaborator_flow`, `app_flow`) still stage binaries via
+    # `dart:io` and stay on the `melos run e2e` device path.
     needs: changes
     if: needs.changes.outputs.duet == 'true'
     runs-on: ubuntu-latest
@@ -197,6 +299,14 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # Chrome + a matching chromedriver: the suites run headlessly under
+      # `flutter drive -d web-server`, which drives a served app through a
+      # WebDriver server.
+      - name: Set up Chrome + chromedriver
+        uses: browser-actions/setup-chrome@v1
+        with:
+          install-chromedriver: true
+
       - name: Cache Firebase emulator binaries
         uses: actions/cache@v4
         with:
@@ -209,11 +319,45 @@ jobs:
       - name: Bootstrap
         run: melos bootstrap
 
-      # Runs the emulator suite around `flutter test integration_test -d
-      # chrome`; the functions are rebuilt inside the script so the Functions
-      # emulator serves the current callables. Expected to fail until the
-      # dart:io suites are made web-runnable or moved to `flutter drive` on a
-      # native device (hence continue-on-error above) — `web-server` is still
-      # the web platform, so it wouldn't help.
+      # Boots the emulators and drives the two `dart:io`-free suites headlessly
+      # via `flutter drive -d web-server` + chromedriver
+      # (apps/duet/tool/e2e_web_drive.sh); the functions are rebuilt inside the
+      # script so the Functions emulator serves the current callables.
       - name: Reader/cloud E2E against the emulator
         run: melos run e2e-emulator
+
+  gate:
+    name: PR gate (required checks aggregate)
+    # The single check to mark required on `master` ([HUMAN], repo settings).
+    # Runs always so it reports even when path-filtered jobs are skipped; it
+    # passes when every required job either succeeded or was skipped, and fails
+    # if any required job failed or was cancelled. `goldens` is intentionally
+    # excluded (non-blocking). This is what keeps a skipped path-filtered job
+    # from wedging the required check as "pending".
+    needs:
+      - analyze-and-test
+      - rules-tests
+      - functions-tests
+      - emulator-e2e
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs passed (skipped is OK)
+        run: |
+          results="analyze-and-test=${{ needs.analyze-and-test.result }}"
+          results="$results rules-tests=${{ needs.rules-tests.result }}"
+          results="$results functions-tests=${{ needs.functions-tests.result }}"
+          results="$results emulator-e2e=${{ needs.emulator-e2e.result }}"
+          echo "Upstream results: $results"
+          failed=0
+          for kv in $results; do
+            r="${kv#*=}"
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::Required job '$kv' did not pass."
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All required jobs passed or were skipped."

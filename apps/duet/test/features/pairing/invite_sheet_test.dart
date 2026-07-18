@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:monetization/monetization.dart';
+import 'package:remote_config/remote_config.dart';
 
 class MockCollaboratorInviteService extends Mock
     implements CollaboratorInviteService {}
@@ -50,7 +51,14 @@ void main() {
       when(() => monetization.getOfferings()).thenAnswer((_) async => null);
     });
 
-    Future<void> openSheet(WidgetTester tester) async {
+    Future<void> openSheet(
+      WidgetTester tester, {
+      RemoteConfigService? remoteConfig,
+    }) async {
+      // The same seam the app composes in `showInviteSheetFor`: the
+      // `invite_links_enabled` kill-switch is read off the (fake)
+      // remote-config contract and threaded in as a parameter.
+      final config = remoteConfig ?? InMemoryRemoteConfigService();
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(useMaterial3: true),
@@ -65,6 +73,7 @@ void main() {
                   pieceRepository: pieceRepository,
                   ownerId: ownerId,
                   pieceId: pieceId,
+                  linkSharingEnabled: config.inviteLinksEnabled,
                 ),
                 child: const Text('open'),
               ),
@@ -195,5 +204,45 @@ void main() {
         expect(find.text('Share invite link instead'), findsOneWidget);
       },
     );
+
+    group('invite_links_enabled kill-switch (M6.4)', () {
+      setUp(() {
+        when(() => monetization.isProUser()).thenAnswer((_) async => true);
+        when(
+          () => pieceRepository.getPiece(pieceId),
+        ).thenAnswer((_) async => Success(piece()));
+      });
+
+      testWidgets(
+        'flag off hides the link-share affordance; email invites remain',
+        (tester) async {
+          await openSheet(
+            tester,
+            remoteConfig: InMemoryRemoteConfigService(
+              overrides: const {RemoteConfigKeys.inviteLinksEnabled: false},
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('Share invite link instead'), findsNothing);
+          expect(find.text('or'), findsNothing);
+          // The primary email path is untouched by the kill-switch.
+          expect(find.text('Send invite'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'the committed default (flag on) keeps the link-share affordance',
+        (tester) async {
+          await openSheet(
+            tester,
+            remoteConfig: InMemoryRemoteConfigService(),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('Share invite link instead'), findsOneWidget);
+        },
+      );
+    });
   });
 }

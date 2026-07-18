@@ -6,13 +6,117 @@
 // `integration_test/app_flow_test.dart`, device-only).
 import 'package:core_utils/core_utils.dart';
 import 'package:duet/domain/domain.dart';
+import 'package:duet/features/library/library.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/features/score/score.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
 import 'package:user_directory/user_directory.dart';
 
 import 'duet_flow_harness.dart';
+
+/// The invitee's view over the shared [FakePieceRepository]: only pieces
+/// where [collaboratorId] is actually a collaborator. The fake itself has no
+/// per-viewer scoping (the real backends scope `watchPieces` to the caller),
+/// so without this the invited sheet would sit in the collaborator's gallery
+/// *before* they accept — hiding exactly the live-update this flow proves.
+class _CollaboratorLibraryView implements PieceRepository {
+  const _CollaboratorLibraryView({
+    required this.inner,
+    required this.collaboratorId,
+  });
+
+  final FakePieceRepository inner;
+  final String collaboratorId;
+
+  @override
+  Stream<List<Piece>> watchPieces() => inner.watchPieces().map(
+    (pieces) => pieces.where((p) => p.isCollaborator(collaboratorId)).toList(),
+  );
+
+  @override
+  Stream<Map<String, DateTime>> watchReads() => inner.watchReads();
+
+  @override
+  Future<Result<void>> markOpened(String pieceId) => inner.markOpened(pieceId);
+
+  @override
+  Future<Result<Piece>> getPiece(String pieceId) => inner.getPiece(pieceId);
+
+  @override
+  Future<Result<Piece>> importPiece({
+    required String title,
+    required String sourcePath,
+    String? ownerName,
+  }) => inner.importPiece(
+    title: title,
+    sourcePath: sourcePath,
+    ownerName: ownerName,
+  );
+
+  @override
+  Future<Result<void>> renamePiece(String pieceId, String title) =>
+      inner.renamePiece(pieceId, title);
+
+  @override
+  Future<Result<void>> deletePiece(String pieceId) =>
+      inner.deletePiece(pieceId);
+
+  @override
+  Future<Result<void>> leavePiece(String pieceId) => inner.leavePiece(pieceId);
+
+  @override
+  Future<Result<void>> addCollaborator(
+    String pieceId, {
+    required String userId,
+    String? name,
+    String? email,
+  }) => inner.addCollaborator(
+    pieceId,
+    userId: userId,
+    name: name,
+    email: email,
+  );
+
+  @override
+  Future<Result<void>> removeCollaborator(String pieceId, String userId) =>
+      inner.removeCollaborator(pieceId, userId);
+
+  @override
+  Future<Result<Piece>> pairCollaborator(
+    String pieceId, {
+    required String collaboratorId,
+    String? collaboratorName,
+    String? collaboratorEmail,
+    String? ownerName,
+  }) => inner.pairCollaborator(
+    pieceId,
+    collaboratorId: collaboratorId,
+    collaboratorName: collaboratorName,
+    collaboratorEmail: collaboratorEmail,
+    ownerName: ownerName,
+  );
+
+  @override
+  Future<Result<Piece>> registerImportedPiece({
+    required String pieceId,
+    required String title,
+    required String ownerId,
+    required String sourcePath,
+    String? collaboratorId,
+    String? ownerName,
+    String? collaboratorName,
+  }) => inner.registerImportedPiece(
+    pieceId: pieceId,
+    title: title,
+    ownerId: ownerId,
+    sourcePath: sourcePath,
+    collaboratorId: collaboratorId,
+    ownerName: ownerName,
+    collaboratorName: collaboratorName,
+  );
+}
 
 void main() {
   testWidgets(
@@ -157,9 +261,9 @@ void main() {
   );
 
   testWidgets(
-    'email invite -> (foreground) inbox delivery -> accept, over the shared '
-    'in-memory message gateway, records the collaborator with their email '
-    '(AC-1, AC-2)',
+    'email invite -> pending-invite banner over the invitee library -> '
+    'accept via the banner UI (M5.6): the sheet joins the gallery live and '
+    'records the collaborator with their email (AC-1, AC-2)',
     (tester) async {
       const collaboratorId = 'collaborator-e2e';
       const collaboratorEmail = 'friend@duet.dev';
@@ -203,21 +307,65 @@ void main() {
       expect(sendResult.isSuccess, isTrue);
       expect((sendResult as Success<LookupOutcome>).value, isA<Resolved>());
 
-      final invites = await inviteService.watchInvites(collaboratorId).first;
-      expect(invites, hasLength(1));
-      expect(invites.single.pieceId, piece.id);
-      expect(invites.single.ownerId, ownerId);
-
-      // 2. The invitee accepts; the sheet now records them as a
-      // collaborator, with their email attached (AC-2).
-      final acceptResult = await inviteService.acceptInvite(
-        invites.single,
-        accepterId: collaboratorId,
-        accepterName: 'Friend',
-        accepterEmail: collaboratorEmail,
+      // 2. The invitee's Home surface: the pending-invite banner (M5.6)
+      // over their — initially empty — library, exactly as `app.dart`'s
+      // `HomeScreen` composes them.
+      String? acceptedPieceId;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: true),
+          home: Scaffold(
+            body: Column(
+              children: [
+                InviteInboxBanner(
+                  collaboratorInviteService: inviteService,
+                  messageGateway: messaging,
+                  monetizationService: FakeMonetizationService(),
+                  currentUserId: collaboratorId,
+                  currentUserName: 'Friend',
+                  currentUserEmail: collaboratorEmail,
+                  onAccepted: (pieceId) => acceptedPieceId = pieceId,
+                ),
+                Expanded(
+                  child: LibraryPage(
+                    pieceRepository: _CollaboratorLibraryView(
+                      inner: pieceRepository,
+                      collaboratorId: collaboratorId,
+                    ),
+                    renderService: imported.renderService,
+                    binaryStore: const NoopPieceBinaryStore(),
+                    currentUserId: collaboratorId,
+                    appName: 'Duet',
+                    onOpenScore: (_) {},
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
-      expect(acceptResult.isSuccess, isTrue);
+      await settle(tester);
 
+      // The banner surfaces the invite; the gallery has nothing yet — the
+      // invitee is not a collaborator until they accept.
+      expect(
+        find.text('Owner invited you to collaborate on a sheet.'),
+        findsOneWidget,
+      );
+      expect(find.text('Your library is empty'), findsOneWidget);
+
+      // 3. Accept from the banner: the accept path consumes the invite (the
+      // banner clears), fires the navigation callback with the piece id, and
+      // the gallery below live-updates via `watchPieces`.
+      await tester.tap(find.text('Accept'));
+      await settle(tester);
+
+      expect(acceptedPieceId, piece.id);
+      expect(find.text('Accept'), findsNothing);
+      expect(find.text('Nocturne'), findsWidgets);
+
+      // The sheet now records the invitee as a collaborator, with their
+      // email attached (AC-2).
       final updated = (await pieceRepository.getPiece(piece.id)).orThrow();
       expect(updated.isCollaborator(collaboratorId), isTrue);
       final collaborator = updated.collaborators.firstWhere(

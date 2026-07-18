@@ -429,6 +429,47 @@ void main() {
         handle.dispose();
       },
     );
+
+    // Regression (M8.5 dynamic-type pass): at 200% text scale on a small
+    // phone the filter/sort bar's sort control used to force the row wider
+    // than the screen (RenderFlex overflowed by 184px). The sort control is
+    // now capped and its label ellipsizes, so the gallery lays out cleanly.
+    testWidgets('gallery does not overflow at 200% text scale on a phone', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 690);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: MaterialApp(
+            home: LibraryPage(
+              pieceRepository: repository,
+              renderService: renderService,
+              binaryStore: const NoopPieceBinaryStore(),
+              currentUserId: currentUserId,
+              appName: 'Duet',
+              onOpenScore: (_) {},
+              onOpenSettings: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      piecesController.add([
+        myPiece(title: 'Sonata in the Rain, Op. 27 No. 2'),
+        sharedPiece(),
+      ]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(tester.takeException(), isNull);
+      // The filter/sort bar is present (proving we exercised the fixed row),
+      // and its sort label ellipsized rather than overflowing.
+      expect(find.text('Recently updated'), findsOneWidget);
+    });
   });
 
   group('columnsForWidth', () {

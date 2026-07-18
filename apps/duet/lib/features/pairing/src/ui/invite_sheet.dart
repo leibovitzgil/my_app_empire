@@ -16,8 +16,13 @@ import 'package:share_plus/share_plus.dart';
 /// Opens the "Invite a collaborator" flow for [pieceId] (owned by
 /// [ownerId]): email is the PRIMARY path (live lookup-as-you-type via
 /// [collaboratorInviteService]), with the tokenized deep-link
-/// [inviteService] always available as a "Share invite link instead"
-/// fallback.
+/// [inviteService] available as a "Share invite link instead" fallback.
+///
+/// [linkSharingEnabled] is the `invite_links_enabled` remote-config
+/// kill-switch, threaded in by the app (this feature never reads remote
+/// config itself — the same callback/param seam as every other dependency
+/// here): when false, the link-share affordance is hidden entirely and
+/// email remains the only invite path.
 ///
 /// Builds and owns an [InviteBloc] for the lifetime of the sheet — the
 /// per-piece paywall-gate check (see [InviteBloc._onOpened]) runs first via
@@ -38,6 +43,7 @@ Future<void> showInviteSheet(
   required String ownerId,
   required String pieceId,
   String? ownerName,
+  bool linkSharingEnabled = true,
 }) async {
   final bloc = InviteBloc(
     collaboratorInviteService: collaboratorInviteService,
@@ -57,7 +63,7 @@ Future<void> showInviteSheet(
         create: (_) =>
             PaywallBloc(monetizationService: monetizationService)
               ..add(const PaywallStarted()),
-        child: const _InviteSheetBody(),
+        child: _InviteSheetBody(linkSharingEnabled: linkSharingEnabled),
       ),
     ),
   );
@@ -65,7 +71,9 @@ Future<void> showInviteSheet(
 }
 
 class _InviteSheetBody extends StatefulWidget {
-  const _InviteSheetBody();
+  const _InviteSheetBody({required this.linkSharingEnabled});
+
+  final bool linkSharingEnabled;
 
   @override
   State<_InviteSheetBody> createState() => _InviteSheetBodyState();
@@ -113,6 +121,7 @@ class _InviteSheetBodyState extends State<_InviteSheetBody> {
           InviteStatus.sent => _ReadyBody(
             state: state,
             emailController: _controller,
+            linkSharingEnabled: widget.linkSharingEnabled,
           ),
         };
       },
@@ -136,10 +145,18 @@ class _PaywallGateBody extends StatelessWidget {
 }
 
 class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({required this.state, required this.emailController});
+  const _ReadyBody({
+    required this.state,
+    required this.emailController,
+    required this.linkSharingEnabled,
+  });
 
   final InviteState state;
   final TextEditingController emailController;
+
+  /// The `invite_links_enabled` kill-switch: when false, the
+  /// "Share invite link instead" affordance is hidden entirely.
+  final bool linkSharingEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -221,18 +238,20 @@ class _ReadyBody extends StatelessWidget {
                   )
                 : null,
           ),
-          const SizedBox(height: AppSpacing.md),
-          const LabeledDivider(label: 'or'),
-          const SizedBox(height: AppSpacing.md),
-          SecondaryButton(
-            label: 'Share invite link instead',
-            isLoading: busy,
-            onPressed: busy
-                ? null
-                : () => context.read<InviteBloc>().add(
-                    const InviteLinkCreateRequested(),
-                  ),
-          ),
+          if (linkSharingEnabled) ...[
+            const SizedBox(height: AppSpacing.md),
+            const LabeledDivider(label: 'or'),
+            const SizedBox(height: AppSpacing.md),
+            SecondaryButton(
+              label: 'Share invite link instead',
+              isLoading: busy,
+              onPressed: busy
+                  ? null
+                  : () => context.read<InviteBloc>().add(
+                      const InviteLinkCreateRequested(),
+                    ),
+            ),
+          ],
         ],
       ],
     );

@@ -668,52 +668,63 @@ class _FilterSortBar extends StatelessWidget {
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChip(
-                    label: 'All',
-                    selected: state.filter == LibraryFilter.all,
-                    onSelected: () => bloc.add(
-                      const LibraryFilterChanged(LibraryFilter.all),
+      // The sort control is capped at 60% of the bar and its label ellipsizes
+      // (see `_SortControl`) so a large text scale can't force it wider than
+      // the bar and overflow the row — at normal scale it stays tight to its
+      // content, well under the cap even on a 320dp phone.
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'All',
+                      selected: state.filter == LibraryFilter.all,
+                      onSelected: () => bloc.add(
+                        const LibraryFilterChanged(LibraryFilter.all),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _FilterChip(
-                    label: 'My sheets',
-                    selected: state.filter == LibraryFilter.mine,
-                    onSelected: () => bloc.add(
-                      const LibraryFilterChanged(LibraryFilter.mine),
+                    const SizedBox(width: AppSpacing.sm),
+                    _FilterChip(
+                      label: 'My sheets',
+                      selected: state.filter == LibraryFilter.mine,
+                      onSelected: () => bloc.add(
+                        const LibraryFilterChanged(LibraryFilter.mine),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _FilterChip(
-                    label: 'Shared with me',
-                    selected: state.filter == LibraryFilter.shared,
-                    showDot: state.unreadSharedCount > 0,
-                    onSelected: () => bloc.add(
-                      const LibraryFilterChanged(LibraryFilter.shared),
+                    const SizedBox(width: AppSpacing.sm),
+                    _FilterChip(
+                      label: 'Shared with me',
+                      selected: state.filter == LibraryFilter.shared,
+                      showDot: state.unreadSharedCount > 0,
+                      onSelected: () => bloc.add(
+                        const LibraryFilterChanged(LibraryFilter.shared),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _FilterChip(
-                    label: 'Favorites',
-                    selected: state.filter == LibraryFilter.favorites,
-                    onSelected: () => bloc.add(
-                      const LibraryFilterChanged(LibraryFilter.favorites),
+                    const SizedBox(width: AppSpacing.sm),
+                    _FilterChip(
+                      label: 'Favorites',
+                      selected: state.filter == LibraryFilter.favorites,
+                      onSelected: () => bloc.add(
+                        const LibraryFilterChanged(LibraryFilter.favorites),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _SortControl(sort: state.sort),
-        ],
+            const SizedBox(width: AppSpacing.sm),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth * 0.6,
+              ),
+              child: _SortControl(sort: state.sort),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -776,7 +787,14 @@ class _SortControl extends StatelessWidget {
         children: [
           Icon(Icons.swap_vert, color: scheme.onSurfaceVariant),
           const SizedBox(width: AppSpacing.xs),
-          Text(_label(sort)),
+          Flexible(
+            child: Text(
+              _label(sort),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           Icon(Icons.arrow_drop_down, color: scheme.onSurfaceVariant),
         ],
       ),
@@ -998,12 +1016,18 @@ class _SectionHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(
-              label,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurfaceVariant,
+            // Flexible + ellipsis so a large text scale shrinks the label
+            // rather than pushing the count pill off the row's right edge.
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
             if (badgeCount > 0) ...[

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:duet/app.dart';
@@ -8,6 +10,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:review_prompter/review_prompter.dart';
 
 /// Host the Firebase emulators are reachable at from *this* running app.
 ///
@@ -74,5 +77,12 @@ Future<void> main() async {
   // Storage emulator (`firebase.json` :9199) too.
   await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
   await configureDependencies(useFirebase: true);
+  // Count this open toward the review-prompt threshold (M7.6) — same seam
+  // as `main.dart`; fire-and-forget so it can never delay first frame.
+  unawaited(
+    getIt.getAsync<ReviewPrompter>().then(
+      (prompter) => prompter.incrementAppOpenCount(),
+    ),
+  );
   runApp(const App());
 }

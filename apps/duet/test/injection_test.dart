@@ -5,16 +5,29 @@
 // a Firebase object (there's no `Firebase.initializeApp()` anywhere in this
 // file; any accidental real-Firebase call site would throw for lack of an
 // initialized app, which this test would then fail on).
+import 'package:analytics/analytics.dart';
+import 'package:app_updater/app_updater.dart';
+import 'package:crash_reporting/crash_reporting.dart';
 import 'package:duet/data/account_purge.dart';
+import 'package:duet/data/crash_reporter_user_binder.dart';
 import 'package:duet/data/current_user_email.dart';
 import 'package:duet/data/current_user_name.dart';
+import 'package:duet/data/data_export.dart';
+import 'package:duet/data/duet_analytics.dart';
+import 'package:duet/data/duet_analytics_observer.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/perf_tracer.dart';
+import 'package:duet/data/traced_pdf_render_service.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
 import 'package:feature_auth/feature_auth.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
+import 'package:pdf_rendering/pdf_rendering.dart';
+import 'package:remote_config/remote_config.dart';
+import 'package:review_prompter/review_prompter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_directory/user_directory.dart';
 
@@ -100,6 +113,15 @@ void main() {
     );
 
     test(
+      'binds a MockDataExport — never the callable (no Firebase)',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<DataExport>(), isA<MockDataExport>());
+      },
+    );
+
+    test(
       'binds an always-synced LocalPieceSyncMonitor — never Firebase',
       () async {
         await configureDependencies();
@@ -114,6 +136,86 @@ void main() {
         await configureDependencies();
 
         expect(getIt<NudgeService>(), isA<DefaultNudgeService>());
+      },
+    );
+
+    test(
+      'binds the in-memory RemoteConfigService with the committed '
+      'defaults — never FirebaseRemoteConfig (M6.4)',
+      () async {
+        await configureDependencies();
+
+        final remoteConfig = getIt<RemoteConfigService>();
+        expect(remoteConfig, isA<InMemoryRemoteConfigService>());
+        // Kill-switches default to enabled.
+        expect(remoteConfig.paywallEnabled, isTrue);
+        expect(remoteConfig.inviteLinksEnabled, isTrue);
+        expect(remoteConfig.pricingExperiment, isEmpty);
+      },
+    );
+
+    test(
+      'binds AppUpdateService over the in-memory remote config — the '
+      'headless composition can never force-block (M7.6)',
+      () async {
+        await configureDependencies();
+
+        // The committed default (`min_supported_version: 0.0.0`) plus the
+        // fail-open current-version read mean the gate never blocks here.
+        expect(await getIt<AppUpdateService>().isUpdateRequired(), isFalse);
+      },
+    );
+
+    test(
+      'registers ReviewPrompter lazily — never constructed (and no '
+      'platform channel touched) unless an entry point resolves it (M7.6)',
+      () async {
+        await configureDependencies();
+
+        expect(getIt.isRegistered<ReviewPrompter>(), isTrue);
+      },
+    );
+
+    test(
+      'binds a NoopCrashReporter — never Crashlytics — and the uid binder '
+      'subscribes before sign-in',
+      () async {
+        await configureDependencies();
+
+        expect(getIt<CrashReporter>(), isA<NoopCrashReporter>());
+        // Eagerly constructed (never throws resolving it).
+        expect(
+          getIt<CrashReporterUserBinder>(),
+          isA<CrashReporterUserBinder>(),
+        );
+      },
+    );
+
+    test(
+      'binds a Talker-only AppLogger + DuetAnalytics and installs the '
+      'analytics BlocObserver — never FirebaseAnalytics (M7.2)',
+      () async {
+        await configureDependencies();
+
+        // No `Firebase.initializeApp` exists here, so logging an event can
+        // only complete cleanly if the bound AppLogger never touches
+        // `FirebaseAnalytics.instance`.
+        await getIt<AppLogger>().logEvent('m72_headless_smoke', {'ok': 1});
+        expect(getIt<DuetAnalytics>(), isA<DuetAnalytics>());
+        expect(Bloc.observer, isA<DuetAnalyticsObserver>());
+      },
+    );
+
+    test(
+      'binds the bare PdfrxRenderService and a NoopPerfTracer — the mock '
+      'branch is never traced, never FirebasePerformance (M7.3)',
+      () async {
+        await configureDependencies();
+
+        final renderService = getIt<PdfRenderService>();
+        expect(renderService, isA<PdfrxRenderService>());
+        expect(renderService, isNot(isA<TracedPdfRenderService>()));
+        expect(getIt<PerfTracer>(), isA<NoopPerfTracer>());
       },
     );
   });

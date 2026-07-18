@@ -210,11 +210,13 @@ class _FakeAudioAssetStore implements AudioAssetStore {
   Future<Result<String>> put(
     String sourcePath, {
     required String pieceId,
-  }) async {
+  }) => Result.guard<String>(() async {
+    // Same cap behavior as the real stores (G3, M8.3).
+    ensureAudioNoteWithinCap(sourcePath);
     final id = '$_label-${_seq++}';
     _files[id] = await File(sourcePath).readAsBytes();
-    return Success(id);
-  }
+    return id;
+  });
 
   @override
   Future<Result<String>> pathFor(

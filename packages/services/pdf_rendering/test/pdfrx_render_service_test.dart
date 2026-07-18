@@ -75,6 +75,16 @@ void main() {
       );
     });
 
+    test('renderThumbnail fails before a document is open()ed', () async {
+      final result = await service.renderThumbnail(0);
+
+      expect(result, isA<ResultFailure<PdfPageImage>>());
+      expect(
+        (result as ResultFailure<PdfPageImage>).error,
+        isA<PdfRenderException>(),
+      );
+    });
+
     // `open` and `renderPage`'s actual pdfrx interaction both need the PDFium
     // engine initialized via a real platform (Android/iOS/macOS/Windows/Web)
     // and aren't exercised in a plain `flutter test` VM run here, so `open`'s

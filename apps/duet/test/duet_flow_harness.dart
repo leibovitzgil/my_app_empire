@@ -90,6 +90,12 @@ class FakePdfRenderService implements PdfRenderService {
   );
 
   @override
+  Future<Result<PdfPageImage>> renderThumbnail(
+    int pageIndex, {
+    int maxWidth = 96,
+  }) => renderPage(pageIndex);
+
+  @override
   Future<Result<String>> checksum(String path) async =>
       Success('checksum-$path');
 }
@@ -446,11 +452,13 @@ class FakeAudioAssetStore implements AudioAssetStore {
   Future<Result<String>> put(
     String sourcePath, {
     required String pieceId,
-  }) async {
+  }) => Result.guard<String>(() async {
+    // Same cap behavior as the real stores (G3, M8.3).
+    ensureAudioNoteWithinCap(sourcePath);
     final id = 'asset_${_seq++}';
     _ids.add(id);
-    return Success(id);
-  }
+    return id;
+  });
 
   @override
   Future<Result<String>> pathFor(
