@@ -35,6 +35,7 @@ class PracticeView extends StatefulWidget {
     required this.renderService,
     required this.layers,
     required this.pageCount,
+    this.checksum = '',
     this.pieceTitle,
     super.key,
   });
@@ -44,6 +45,10 @@ class PracticeView extends StatefulWidget {
 
   /// The already-opened PDF render service.
   final PdfRenderService renderService;
+
+  /// The piece PDF's content checksum, keying the page-image cache (see
+  /// [ScorePageCanvas]).
+  final String checksum;
 
   /// Every participant's ink layer; each layer's `visible` flag seeds this
   /// view's own per-layer toggles.
@@ -146,7 +151,9 @@ class _PracticeViewState extends State<PracticeView> {
                       padding: const EdgeInsets.all(AppSpacing.md),
                       child: ScorePageCanvas(
                         renderService: widget.renderService,
+                        checksum: widget.checksum,
                         pageIndex: _region.pageIndex,
+                        pageCount: widget.pageCount,
                         focusRegion: _region,
                         boundaryMargin: const EdgeInsets.all(480),
                         overlays: [
