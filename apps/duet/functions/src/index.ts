@@ -12,6 +12,7 @@ export {
   onNoteAnnotationsChanged,
 } from './annotationDigests';
 export { deleteAccount } from './deleteAccount';
+export { exportMyData } from './exportMyData';
 export { gcTombstones } from './gcTombstones';
 export { healthcheck } from './healthcheck';
 export { onInboxMessageCreated } from './inboxPush';
