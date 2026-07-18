@@ -470,6 +470,7 @@ class _ScoreViewerScreenState extends State<ScoreViewerScreen> {
               builder: (_) => PracticeView(
                 region: region,
                 renderService: widget.renderService,
+                checksum: state.piece?.basePdfChecksum ?? '',
                 pageCount: state.pageCount,
                 pieceTitle: state.piece?.title,
                 // Every layer, with visibility resolved the way the reader
@@ -803,7 +804,9 @@ class _ReaderCanvasState extends State<_ReaderCanvas> {
           child: Center(
             child: ScorePageCanvas(
               renderService: widget.renderService,
+              checksum: state.piece?.basePdfChecksum ?? '',
               pageIndex: pageIndex,
+              pageCount: state.pageCount,
               overlays: [
                 for (final layer in state.layers)
                   if (state.effectiveInkVisible(layer))

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:core_utils/core_utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:pdf_rendering/src/data/pdf_render_exception.dart';
+import 'package:pdf_rendering/src/domain/page_pixel_budget.dart';
 import 'package:pdf_rendering/src/domain/pdf_page_image.dart';
 import 'package:pdf_rendering/src/domain/pdf_render_service.dart';
 import 'package:pdfrx/pdfrx.dart' as pdfrx;
@@ -86,7 +87,16 @@ class PdfrxRenderService implements PdfRenderService {
     }
     try {
       final page = pages[pageIndex];
-      final scale = scaleFor(page);
+      // Cap the caller's requested scale by the per-image pixel budget
+      // (M8.2): render-scale-by-zoom asks for higher scales as the player
+      // zooms, and this is the one place that knows the page's point size,
+      // so it's where the ≤16 MP ceiling on any single decoded page is
+      // enforced — bounding memory no matter how far anyone zooms.
+      final scale = fittedRenderScale(
+        requestedScale: scaleFor(page),
+        pointWidth: page.width,
+        pointHeight: page.height,
+      );
       // Omit width/height so the full page is rendered; fullWidth/
       // fullHeight set the target resolution (page points × scale).
       final rendered = await page.render(

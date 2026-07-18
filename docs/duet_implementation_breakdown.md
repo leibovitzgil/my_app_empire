@@ -164,7 +164,7 @@ in the Track B backlog.
 | M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
 | M7.6 | ☑ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
 | M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
-| M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
+| M8.2 | ☑ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
 | M8.3 | ☑ Audio note size caps + compression | — |
 | M8.4 | ☐ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
 | M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
@@ -3039,6 +3039,38 @@ immediately.
 
 **Done when:** budgets doc has real numbers meeting targets (or filed
 exceptions); no regression in reader tests.
+
+**Landed.** **Page LRU.** `PageImageCache`
+(`apps/duet/lib/features/score/src/page_image_cache.dart`) — the full-page
+sibling of M8.1's `ThumbnailCache`, same clone/dispose ownership discipline
+(callers get a clone they own; the cache disposes only its own handle on
+eviction, on a sharper re-render, and on dispose, so an evicted image can never
+be yanked out from under a widget still drawing it). Keyed by
+`(checksum, pageIndex)`, hard cap `capacity = 3` (current ± 1 neighbour warm),
+each entry carrying the scale it was rendered at so a coarser cached copy is
+upgraded on zoom. `ScorePageCanvas` now consumes it (owning one per canvas, so
+it survives page flips) instead of private `_imageFuture`s. **Render scale by
+zoom.** Base render is fitted to the viewport × device pixel ratio (against a
+~1000 pt reference long-edge) rather than a fixed 2×; zooming past ~1.5× of
+base re-renders sharper (debounced ~250 ms, swapped in place over the old image
+so the page never blanks), and every render is clamped to ≤16 MP by
+`fittedRenderScale` / `maxPageImagePixels`
+(`packages/services/pdf_rendering/lib/src/domain/page_pixel_budget.dart`),
+enforced inside `PdfrxRenderService._renderAt` — the one place that knows the
+page's point size. **Prefetch.** Neighbours (page ± 1) are warmed post-frame on
+idle, cancelled when the page changes underneath. **Budgets.**
+`docs/duet_perf_budgets.md` records the targets (open < 2 s / 20 MB, warm flip
+< 300 ms, < 400 MB on a 60-page scan) with the cache-sizing rationale and the
+M7.3 `pdf_open` / `pdf_render_page` traces as the before/after metric; the
+device profile actuals are **[HUMAN]** (no device in CI). **Tests.**
+`page_image_cache_test.dart` (eviction / LRU recency / clone-dispose / sharper-
+on-zoom re-render / no-failure-caching / after-dispose) and
+`pdf_rendering/test/page_pixel_budget_test.dart` (budget clamp); the existing
+reader widget tests (`practice_view_test.dart`) and all 648 duet tests stay
+green — the rendering-path change is invisible at default zoom (`BoxFit.contain`
+means a raster's pixel resolution never moves layout, and the fake render
+services ignore scale). Reader goldens (`melos run golden`) were not
+re-baselined; none is expected to shift and none was touched.
 
 ### M8.3 — Audio note size caps + compression
 
