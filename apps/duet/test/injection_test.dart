@@ -15,6 +15,8 @@ import 'package:duet/data/current_user_name.dart';
 import 'package:duet/data/duet_analytics.dart';
 import 'package:duet/data/duet_analytics_observer.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/perf_tracer.dart';
+import 'package:duet/data/traced_pdf_render_service.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
 import 'package:duet/injection.dart';
@@ -22,6 +24,7 @@ import 'package:feature_auth/feature_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:notifications/notifications.dart';
+import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:remote_config/remote_config.dart';
 import 'package:review_prompter/review_prompter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -190,6 +193,19 @@ void main() {
         await getIt<AppLogger>().logEvent('m72_headless_smoke', {'ok': 1});
         expect(getIt<DuetAnalytics>(), isA<DuetAnalytics>());
         expect(Bloc.observer, isA<DuetAnalyticsObserver>());
+      },
+    );
+
+    test(
+      'binds the bare PdfrxRenderService and a NoopPerfTracer — the mock '
+      'branch is never traced, never FirebasePerformance (M7.3)',
+      () async {
+        await configureDependencies();
+
+        final renderService = getIt<PdfRenderService>();
+        expect(renderService, isA<PdfrxRenderService>());
+        expect(renderService, isNot(isA<TracedPdfRenderService>()));
+        expect(getIt<PerfTracer>(), isA<NoopPerfTracer>());
       },
     );
   });

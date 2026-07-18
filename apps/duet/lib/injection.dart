@@ -35,6 +35,7 @@ import 'package:duet/data/firestore_piece_sync_monitor.dart';
 import 'package:duet/data/local_piece_migrator.dart';
 import 'package:duet/data/mirroring_settings_repository.dart';
 import 'package:duet/data/mock_auth_repository.dart';
+import 'package:duet/data/perf_tracer.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
 import 'package:duet/features/pairing/pairing.dart';
@@ -308,6 +309,24 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     ),
   );
 
+  // PDF performance traces (M7.3). Both compositions bind the bare
+  // `PdfrxRenderService` and a `NoopPerfTracer` today: `FirebasePerformance`
+  // needs a real `Firebase.initializeApp` and has NO emulator backend, so —
+  // exactly like the M6.4 remote-config and M7.1/M7.2 crash/analytics
+  // bindings — the Firebase-free path is bound in BOTH branches now and the
+  // live wiring is deferred to the real entry point (G2). The decorator
+  // (`TracedPdfRenderService`) and the real seam
+  // (`FirebasePerfTracer`, `firebase_perf_tracer.dart`) are written and
+  // unit-tested; flipping them on is a Track-B one-liner, and until then
+  // `DuetScorePage`'s reader-open trace is a no-op against the noop tracer.
+  // TODO(track-b): under `useFirebase` (which becomes the real Firebase entry
+  // point after M0.2), bind
+  //   PerfTracer      -> FirebasePerfTracer(FirebasePerformance.instance)
+  //   PdfRenderService -> TracedPdfRenderService(
+  //       delegate: PdfrxRenderService(), tracer: getIt<PerfTracer>())
+  // then confirm `pdf_open` + `pdf_render_page` land on the staging
+  // Performance dashboard (M7.3 ▸B; needs M0.2).
+  getIt.registerLazySingleton<PerfTracer>(NoopPerfTracer.new);
   getIt.registerLazySingleton<PdfRenderService>(PdfrxRenderService.new);
   getIt.registerLazySingleton<AudioRecorderService>(
     RecordAudioRecorderService.new,

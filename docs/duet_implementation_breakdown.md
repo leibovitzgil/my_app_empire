@@ -159,7 +159,7 @@ in the Track B backlog.
 | M6.4 | ☑ ▸B Remote Config package contract + Duet wiring | — (real binding: M0.2) |
 | M7.1 | ☑ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
 | M7.2 | ☑ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
-| M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
+| M7.3 | ☑ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
 | M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
 | M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
 | M7.6 | ☑ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
@@ -2784,6 +2784,41 @@ conversion marking.
 
 **Done when:** staging dashboard shows both traces with sane numbers; M8.2
 uses them as its before/after metric.
+
+**Landed (Track A).** `firebase_performance` added to Duet. A Firebase-free
+seam (`apps/duet/lib/data/perf_tracer.dart`: `PerfTrace`/`PerfTracer` +
+`NoopPerfTracer`) lets the decorator and the screen trace record traces
+without importing Firebase — the two hot-path consumers and their tests talk
+only to the seam. `TracedPdfRenderService`
+(`apps/duet/lib/data/traced_pdf_render_service.dart`) wraps `open()` (trace
+`pdf_open`, attrs `page_count` + `byte_size_bucket`) and `renderPage()`
+(trace `pdf_render_page`, attr `scale`), delegating `renderThumbnail`
+(M8.1) and `checksum` straight through. **Zero critical-path cost (step 4):**
+trace *start* is a plain object build (no await), and every attribute write +
+`stop` is fire-and-forget AFTER the delegated future resolves — the
+byte-size read is kicked off concurrently with the open, never before it — so
+a caller awaits nothing extra. `DuetScorePage` starts a
+`reader_open_to_first_canvas` screen trace in `initState` and stops it on the
+first frame the reader mounts (dropped, never stopped, if the user backs out
+mid-load — so no truncated duration pollutes the data). The real
+`firebase_performance`-backed tracer (`FirebasePerfTracer`,
+`firebase_perf_tracer.dart`) is written and is the *only* file importing
+Firebase. **Injection (G2):** following the M6.4/M7.1/M7.2 `TODO(track-b)`
+precedent, both compositions bind the bare `PdfrxRenderService` and a
+`NoopPerfTracer` today — `FirebasePerformance` needs a real
+`Firebase.initializeApp` and has no emulator backend, so the reader trace is a
+no-op and the decorator is unwired until the real entry point (M0.2). The
+injection guardrail now asserts the mock branch binds `PdfrxRenderService`
+(not `TracedPdfRenderService`) and a `NoopPerfTracer`, never
+`FirebasePerformance`. Tests: a fake `PdfRenderService` wrapped by the
+decorator with a fake `PerfTracer` recorder asserts full delegation and that
+`pdf_open`/`pdf_render_page` start with the right attributes and stop; the
+noop-tracer path is a pure pass-through; byte-size bucketing is unit-tested.
+**▸B remainder:** flip the `TODO(track-b)` to bind
+`FirebasePerfTracer(FirebasePerformance.instance)` + wrap in
+`TracedPdfRenderService` under the real entry point (after M0.2), then confirm
+`pdf_open` + `pdf_render_page` (and the reader screen trace) land on the
+staging Performance dashboard with sane numbers.
 
 ### M7.4 — Legal surfaces: privacy policy, ToS, consent, store data maps
 
