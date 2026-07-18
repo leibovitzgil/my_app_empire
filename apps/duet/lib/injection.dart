@@ -33,6 +33,7 @@ import 'package:duet/data/firestore_annotation_repository.dart';
 import 'package:duet/data/firestore_piece_repository.dart';
 import 'package:duet/data/firestore_piece_sync_monitor.dart';
 import 'package:duet/data/local_piece_migrator.dart';
+import 'package:duet/data/mirroring_settings_repository.dart';
 import 'package:duet/data/mock_auth_repository.dart';
 import 'package:duet/data/recording_path_builder.dart';
 import 'package:duet/domain/domain.dart';
@@ -153,8 +154,18 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
     NotificationsManager.create,
   );
 
+  // The push preference is stored locally (`LocalSettingsRepository`) AND
+  // mirrored onto `deviceTokens/{uid}.pushEnabled` so the digest-drain
+  // Function (M5.4) can skip a muted recipient. The mirror is Duet glue
+  // (`MirroringSettingsRepository`), not `feature_settings` — that package
+  // stays backend-agnostic (G3). Lazy, so the `DeviceTokenRegistry`/
+  // `CurrentUser` it reads are bound by first runtime resolution.
   getIt.registerLazySingleton<SettingsRepository>(
-    () => LocalSettingsRepository(getIt<LocalStorageService>()),
+    () => MirroringSettingsRepository(
+      delegate: LocalSettingsRepository(getIt<LocalStorageService>()),
+      registry: getIt<DeviceTokenRegistry>(),
+      currentUserId: getIt<CurrentUser>().call,
+    ),
   );
 
   // `UserDirectory` (email -> account resolution) and `DeviceTokenRegistry`/
@@ -276,7 +287,7 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
       currentUserId: getIt<CurrentUser>().call,
       tokenGetter: useFirebase
           ? () async =>
-                (await getIt.getAsync<NotificationsManager>()).getToken()
+              (await getIt.getAsync<NotificationsManager>()).getToken()
           : () async => null,
       onTokenRefresh: useFirebase
           ? Stream.fromFuture(

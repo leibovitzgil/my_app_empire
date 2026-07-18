@@ -14,4 +14,11 @@ abstract class DeviceTokenRegistry {
   /// Unregisters [token] for [uid] (e.g. on sign-out). Idempotent: a no-op
   /// if [token] isn't currently registered.
   Future<Result<void>> unregister(String uid, String token);
+
+  /// Mirrors [uid]'s push preference onto `deviceTokens/{uid}.pushEnabled`,
+  /// so a server-side sender can honor the client's Settings toggle. The
+  /// preference itself lives client-side (`SettingsRepository`); this write
+  /// is the seam that lets Duet's digest-drain Function (M5.4) skip a muted
+  /// recipient. A no-op field-merge that leaves the token list untouched.
+  Future<Result<void>> setPushEnabled(String uid, {required bool enabled});
 }

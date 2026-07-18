@@ -181,6 +181,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Batched annotation digest queue (M5.4): entirely Function-owned. The
+    // `onLayerAnnotationsChanged`/`onNoteAnnotationsChanged` triggers enqueue
+    // (Admin SDK) and the scheduled `drainPushDigests` consumes + deletes.
+    // Already covered by the deny-by-default below — stated explicitly so
+    // nobody "opens it up" for a client later.
+    match /pushDigests/{digestId} {
+      allow read, write: if false;
+    }
+
     // Deny-by-default: any path not explicitly matched above (this is what
     // keeps `entitlements` closed until M6.3).
     match /{document=**} {
