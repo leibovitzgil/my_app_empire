@@ -65,6 +65,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.4"
+  app_updater:
+    dependency: "direct main"
+    description:
+      path: "../../packages/core/app_updater"
+      relative: true
+    source: path
+    version: "0.0.1"
   archive:
     dependency: "direct main"
     description:
@@ -233,7 +240,7 @@ packages:
     source: hosted
     version: "3.1.2"
   core_theme:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
       path: "../../packages/core/core_theme"
       relative: true
@@ -480,6 +487,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.2.3"
+  firebase_remote_config:
+    dependency: transitive
+    description:
+      name: firebase_remote_config
+      sha256: d642fe803397a142199d1d1f45683021d822af59f989a78ba8f050d9ebede382
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.5.5"
+  firebase_remote_config_platform_interface:
+    dependency: transitive
+    description:
+      name: firebase_remote_config_platform_interface
+      sha256: "04ccfae1e90e218096f5251da42c5aa520b1ef4858b0dcb5f0c9eec0dee58715"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.5"
+  firebase_remote_config_web:
+    dependency: transitive
+    description:
+      name: firebase_remote_config_web
+      sha256: a81e9495eabde81f3ae93fe5d132384522925d6f2cce869510ebef7fe43b1c50
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.10.12"
   firebase_storage:
     dependency: "direct main"
     description:
@@ -697,6 +728,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.8.0"
+  in_app_review:
+    dependency: transitive
+    description:
+      name: in_app_review
+      sha256: "364db0c160b37fe7fad9cdaa18f968473924b17368869010af902760421b6bf8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.12"
+  in_app_review_platform_interface:
+    dependency: transitive
+    description:
+      name: in_app_review_platform_interface
+      sha256: fed2c755f2125caa9ae10495a3c163aa7fab5af3585a9c62ef4a6920c5b45f10
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.5"
   integration_test:
     dependency: "direct dev"
     description: flutter
@@ -914,6 +961,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  package_info_plus:
+    dependency: transitive
+    description:
+      name: package_info_plus
+      sha256: "127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481"
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.2.1"
+  package_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: package_info_plus_platform_interface
+      sha256: db762cb2f4f25ee60fb6359773861b0f199e00b90d237bd85a76a1e806b46ef4
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.1.0"
   path:
     dependency: "direct main"
     description:
@@ -1161,6 +1224,20 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.2"
+  remote_config:
+    dependency: "direct main"
+    description:
+      path: "../../packages/services/remote_config"
+      relative: true
+    source: path
+    version: "0.0.1"
+  review_prompter:
+    dependency: "direct main"
+    description:
+      path: "../../packages/core/review_prompter"
+      relative: true
+    source: path
+    version: "0.0.1"
   rx:
     dependency: transitive
     description:

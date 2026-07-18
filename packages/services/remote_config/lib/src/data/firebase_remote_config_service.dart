@@ -53,6 +53,9 @@ class FirebaseRemoteConfigService implements RemoteConfigService {
       _remoteConfig.getString(RemoteConfigKeys.minSupportedVersion);
 
   @override
+  String get storeUrl => _remoteConfig.getString(RemoteConfigKeys.storeUrl);
+
+  @override
   bool get paywallEnabled =>
       _remoteConfig.getBool(RemoteConfigKeys.paywallEnabled);
 

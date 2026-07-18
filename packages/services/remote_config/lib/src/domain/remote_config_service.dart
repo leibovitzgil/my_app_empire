@@ -17,6 +17,10 @@ abstract final class RemoteConfigKeys {
   /// The minimum supported app version.
   static const String minSupportedVersion = 'min_supported_version';
 
+  /// The platform store listing to send users to when a forced update is
+  /// required; empty until store listings exist (M9.4).
+  static const String storeUrl = 'store_url';
+
   /// Kill-switch: whether the paywall may be shown at all.
   static const String paywallEnabled = 'paywall_enabled';
 
@@ -32,6 +36,7 @@ abstract final class RemoteConfigKeys {
     showPaywallOnOnboarding: false,
     maintenanceMode: false,
     minSupportedVersion: '0.0.0',
+    storeUrl: '',
     paywallEnabled: true,
     inviteLinksEnabled: true,
     pricingExperiment: '',
@@ -69,6 +74,10 @@ abstract class RemoteConfigService {
 
   /// The minimum supported app version.
   String get minSupportedVersion;
+
+  /// The platform store listing to send users to when a forced update is
+  /// required; empty when not configured.
+  String get storeUrl;
 
   /// Kill-switch: whether the paywall may be shown at all.
   bool get paywallEnabled;

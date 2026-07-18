@@ -7,12 +7,16 @@ import 'package:url_launcher/url_launcher.dart';
 class ForceUpdateWidget extends StatefulWidget {
   const ForceUpdateWidget({
     required this.child,
-    this.appUpdateService,
+    required this.appUpdateService,
     super.key,
   });
 
   final Widget child;
-  final AppUpdateService? appUpdateService;
+
+  /// The injected update checker. Required — the service consumes the
+  /// app's `RemoteConfigService` binding, so only the composition root
+  /// knows how to build it.
+  final AppUpdateService appUpdateService;
 
   @override
   State<ForceUpdateWidget> createState() => _ForceUpdateWidgetState();
@@ -26,7 +30,7 @@ class _ForceUpdateWidgetState extends State<ForceUpdateWidget> {
   @override
   void initState() {
     super.initState();
-    _service = widget.appUpdateService ?? AppUpdateService();
+    _service = widget.appUpdateService;
     unawaited(_checkUpdate());
   }
 

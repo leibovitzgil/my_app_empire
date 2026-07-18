@@ -162,7 +162,7 @@ in the Track B backlog.
 | M7.3 | ☐ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
 | M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
 | M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
-| M7.6 | ☐ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
+| M7.6 | ☑ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
 | M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
 | M8.2 | ☐ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
 | M8.3 | ☑ Audio note size caps + compression | — |
@@ -2811,6 +2811,49 @@ happened. `AppUpdateService`/`ForceUpdateWidget` read RC keys
 **Done when:** simulated below-min version blocks with the update screen;
 review prompt fires on the 5th open after saving a note (manual staging
 check); gate green.
+
+**Landed (Track A).** `app_updater` refactored onto M6.4's
+`RemoteConfigService` contract (its own `firebase_remote_config` dep
+dropped — nothing else in the package needed it): `AppUpdateService` now
+takes a `RemoteConfigService` (required) plus an injectable
+`currentVersion` seam (defaults to `package_info_plus`), reads
+`min_supported_version`/`store_url` off the contract, and fails open on
+an empty min, a swallowed refresh, or an unreadable current version.
+`store_url` was the one missing key — added to `RemoteConfigKeys` (default
+`''`, placeholder until store listings exist, M9.4) with getters on both
+the in-memory and Firebase impls (G3, all impls + the guardrail widened in
+one PR). `ForceUpdateWidget`'s service is now required (no
+`FirebaseRemoteConfig.instance` fallback). Duet wiring: both packages are
+path deps; `injection.dart` registers `AppUpdateService` over the bound
+`RemoteConfigService` (lazy) and `ReviewPrompter` via a lazy-async
+`ReviewPrompter.create` (new factory — construction touches the
+SharedPreferences platform channel, so nothing on the headless gate ever
+resolves it; the M7.1 keep-platform-channels-behind-a-seam precedent, G2).
+`main.dart`/`main_emulator.dart` fire `incrementAppOpenCount()` after
+`configureDependencies` (fire-and-forget, real entries only — the gate
+never runs `main`); `app.dart`'s `MaterialApp.router` `builder` wraps every
+routed screen in `ForceUpdateWidget` fed the injected service (fails open —
+the mock composition's `min_supported_version: 0.0.0` can never block, G2).
+The "saved a note" core-action moment rides a new `onNoteSaved` callback on
+`ScoreViewerScreen` (fired in `_saveAudioNote`'s success path, beside the
+existing snackbar) that `DuetScorePage` maps to
+`ReviewPrompter.logCoreActionCompleted()` — app glue, no `review_prompter`
+import inside `feature_score` (architecture-test clean). Tests:
+`app_updater` unit tests seed an `InMemoryRemoteConfigService` (no more
+Firebase fake) plus two widget tests (blocks below-min, renders child
+at/above); `review_prompter` gains an end-to-end fake-prefs test proving
+the prompt fires exactly once at the 5-open ∧ core-action threshold and
+never again; the injection guardrail pins the never-block gate + the lazy
+prompter registration; the deep-link redirect harness registers both new
+services (fixed `currentVersion` so the widget-test binding's absent
+`package_info` channel can't hang `pumpAndSettle`). Gate: `analyze` +
+`test` green across `app_updater`, `review_prompter`, `remote_config`, and
+`apps/duet` (goldens excluded as usual). **The ▸B remainder stays in the
+Track B backlog:** real RC values in the staging console
+(`min_supported_version` bump + per-platform `store_url`) once
+`FirebaseRemoteConfigService` is bound under `useFirebase` (M0.2), then the
+manual staging check — a below-min build shows the update screen and the
+review prompt fires on the 5th open after a saved note.
 
 ---
 

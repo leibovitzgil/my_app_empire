@@ -9,6 +9,8 @@ environment:
 dependencies:
   analytics:
     path: ../../packages/services/analytics
+  app_updater:
+    path: ../../packages/core/app_updater
   archive: ^4.0.7
   audio:
     path: ../../packages/services/audio
@@ -53,6 +55,8 @@ dependencies:
     path: ../../packages/services/pdf_rendering
   remote_config:
     path: ../../packages/services/remote_config
+  review_prompter:
+    path: ../../packages/core/review_prompter
   share_plus: ^13.2.0
   user_directory:
     path: ../../packages/core/user_directory

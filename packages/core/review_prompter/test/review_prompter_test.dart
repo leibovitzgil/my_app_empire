@@ -8,6 +8,17 @@ class MockInAppReview extends Mock implements InAppReview {}
 
 class MockSharedPreferences extends Mock implements SharedPreferences {}
 
+/// Counts review requests instead of hitting the store platform channel.
+class _CountingInAppReview extends Fake implements InAppReview {
+  int requests = 0;
+
+  @override
+  Future<bool> isAvailable() async => true;
+
+  @override
+  Future<void> requestReview() async => requests++;
+}
+
 void main() {
   late ReviewPrompter reviewPrompter;
   late MockInAppReview mockInAppReview;
@@ -187,5 +198,33 @@ void main() {
 
       verifyNever(() => mockInAppReview.requestReview());
     });
+
+    test(
+      'end to end over real prefs: prompts exactly once when the 5th open '
+      'meets a completed core action, and never again after',
+      () async {
+        TestWidgetsFlutterBinding.ensureInitialized();
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final inAppReview = _CountingInAppReview();
+        final prompter = ReviewPrompter(
+          prefs: await SharedPreferences.getInstance(),
+          inAppReview: inAppReview,
+        );
+
+        await prompter.logCoreActionCompleted();
+        for (var open = 1; open <= 4; open++) {
+          await prompter.incrementAppOpenCount();
+        }
+        expect(inAppReview.requests, 0);
+
+        await prompter.incrementAppOpenCount();
+        expect(inAppReview.requests, 1);
+
+        // Threshold conditions keep holding — the prompt must not repeat.
+        await prompter.incrementAppOpenCount();
+        await prompter.logCoreActionCompleted();
+        expect(inAppReview.requests, 1);
+      },
+    );
   });
 }

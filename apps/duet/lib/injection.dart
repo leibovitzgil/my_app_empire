@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:analytics/analytics.dart';
+import 'package:app_updater/app_updater.dart';
 import 'package:audio/audio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -48,6 +49,7 @@ import 'package:monetization/monetization.dart';
 import 'package:notifications/notifications.dart';
 import 'package:pdf_rendering/pdf_rendering.dart';
 import 'package:remote_config/remote_config.dart';
+import 'package:review_prompter/review_prompter.dart';
 import 'package:user_directory/user_directory.dart';
 
 /// The app's service locator.
@@ -121,6 +123,25 @@ Future<void> configureDependencies({bool useFirebase = false}) async {
   final remoteConfigService = InMemoryRemoteConfigService();
   await remoteConfigService.init();
   getIt.registerSingleton<RemoteConfigService>(remoteConfigService);
+
+  // Force-update gate (M7.6): `ForceUpdateWidget` (app.dart) asks this
+  // service whether the running version is below the remote minimum. It
+  // consumes the `RemoteConfigService` contract bound above — one config
+  // pipeline, no Firebase object of its own — so with the in-memory
+  // defaults (`min_supported_version: 0.0.0`) it can never block, keeping
+  // the headless gate green (G2). Track B changes behavior by binding the
+  // real config service above, not by touching this registration.
+  getIt.registerLazySingleton<AppUpdateService>(
+    () => AppUpdateService(remoteConfig: getIt<RemoteConfigService>()),
+  );
+
+  // Review prompting (M7.6): opens are counted in the real entry points
+  // (`main.dart` / `main_emulator.dart`), and the "saved a note" happy
+  // moment logs the core action (see `DuetScorePage`). Lazy-async like
+  // `NotificationsManager`: construction touches the SharedPreferences
+  // platform channel, so nothing on the headless gate ever resolves it
+  // (G2 — the M7.1 keep-platform-channels-behind-a-seam precedent).
+  getIt.registerLazySingletonAsync<ReviewPrompter>(ReviewPrompter.create);
 
   // Lazy-async since it awaits `SharedPreferences.getInstance()`. Now
   // consumed three ways: `NotificationPermissionGateway` below (for the
