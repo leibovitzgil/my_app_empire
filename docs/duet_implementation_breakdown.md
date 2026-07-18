@@ -167,7 +167,7 @@ in the Track B backlog.
 | M8.2 | ☑ Large-PDF memory strategy (cache/eviction/zoom scale) | M8.1 |
 | M8.3 | ☑ Audio note size caps + compression | — |
 | M8.4 | ☑ Failure-mode audit (quota/upload/rules-denied) | M3.6 |
-| M8.5 | ☐ Device-matrix QA, a11y pass, l10n decision | M4.5 |
+| M8.5 | ☑ Device-matrix QA, a11y pass, l10n decision (agent parts; device matrix [HUMAN]) | M4.5 |
 | M9.1 | ☐ CI: full PR gate (melos + rules tests + emulator E2E) | M1.7, M2.3, M4.5 |
 
 ### Track B — name-gated (unblocks when the product name is decided)
@@ -203,7 +203,7 @@ in the Track B backlog.
 | Consent mechanism (CMP vs minimal in-house) | M7.4 | Minimal in-house consent record; CMP only if ads/tracking added |
 | PDF dedupe scope (per-piece vs global by checksum) | M2.1, M3.3 | Per-piece Storage object; checksum dedupes cache + re-upload only |
 | Platform priority | M9.2 | iOS-first, Android fast-follow |
-| Hebrew/RTL in 1.0 | M8.5 | English-only 1.0 |
+| Hebrew/RTL in 1.0 | M8.5 | English-only 1.0 — **CONFIRMED (M8.5)**. Ship 1.0 English-only; no l10n framework. A light sweep found user-facing copy already lives beside its widgets (no egregious hardcoding); the few cross-file duplicate literals are non-blocking backlog, not worth a strings-file refactor now. Hebrew/RTL, if it enters a later release, spins its own task series (the reader RTL audit — canvas gestures, rails, popovers — is substantial). |
 
 ---
 
@@ -3280,6 +3280,47 @@ clean + `flutter test --exclude-tags golden` 646 passing on `apps/duet`.
 **Done when:** matrix checklist complete; a11y violations fixed or
 waived-with-rationale; l10n decision recorded in this doc's decisions
 table.
+
+**Landed (agent parts — steps 2 & 3).**
+
+- **Contrast (WCAG AA).** Audited the forced-dark reader chrome, the
+  status pills/badges, and the library/settings/paywall text against AA,
+  computing actual ratios from the seed-blue `ColorScheme.fromSeed`
+  palette both brightnesses share. **Every text pair passes** — reader
+  title `onSurface`/`surface` 14.3:1, subtitle/sync-pill
+  `onSurfaceVariant`/`surface` 10.9:1, tinted `primary`/`error` pill text
+  over its 10%-tint fill 9.0:1, light `primary`/`surface` 6.1:1. The only
+  sub-3:1 result was a pill's *decorative* `outlineVariant` border
+  (2.0:1), which is not text and not a meaningful boundary (the pill's
+  text carries the meaning). **No token changed**, so no golden
+  rebaseline is owed; a contrast-check note recording the ratios and the
+  "re-check if you re-seed the hue" caveat was added to
+  `core_theme/lib/src/app_theme.dart`.
+- **Dynamic type (200%).** Pumped Settings, the paywall, and the library
+  gallery at `TextScaler.linear(2.0)` on a 360dp phone. Settings (a
+  scrolling `ListView` of `ListTile`s) and the paywall (an `Expanded`
+  scrolling list over a stretch button) were clean. The **library
+  gallery overflowed twice**: the filter/sort bar's sort control forced
+  the row 184px past the screen, and the "Shared with me" section-header
+  label pushed its unread count pill 230px off-screen. Both fixed
+  surgically in `library_screen.dart` — the sort control is capped at 60%
+  of the bar with an ellipsizing label, and the section-header label is
+  now `Flexible`+ellipsis; normal-scale layout is byte-identical. A
+  regression test (`gallery does not overflow at 200% text scale on a
+  phone`) guards it in `apps/duet/test/features/library/`. The reader
+  Stage chrome was left un-pinned — it did not overflow at 2.0 — so no
+  scale-pinning rationale was needed.
+- **Localization.** English-only 1.0 **confirmed** and recorded in the
+  decisions table above. A light sweep found user-facing copy already
+  lives beside its widgets; the handful of cross-file duplicate literals
+  (a generic "Something went wrong…", a couple of pairing/library confirm
+  strings) are non-blocking backlog, not worth a strings-file refactor
+  now — and no l10n framework was introduced.
+
+**[HUMAN] remainder.** Step 1's physical device-matrix pass (iPad
+landscape, small/large phone, tablet portrait) is still owed — run it on
+hardware and batch any layout issues back as agent fixes. The
+agent-reachable a11y hardening (contrast + dynamic type) is done.
 
 ---
 
