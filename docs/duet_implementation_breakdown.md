@@ -160,7 +160,7 @@ in the Track B backlog.
 | M7.1 | ☑ ▸B New `crash_reporting` service package + wiring | — (live wiring: M0.2) |
 | M7.2 | ☑ ▸B Analytics: event catalogue + funnel instrumentation | — (live wiring: M0.2) |
 | M7.3 | ☑ ▸B Performance traces on PDF open / page render | M7.1 (dashboards: M0.2) |
-| M7.4 | ☐ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
+| M7.4 | ☑ ▸B Legal surfaces: policy/ToS, consent, store data maps | — |
 | M7.5 | ☐ ▸B GDPR self-service data export | M1.8 |
 | M7.6 | ☑ ▸B `review_prompter` + `app_updater` wiring | M6.4 |
 | M8.1 | ☑ Real page thumbnails + thumbnail cache | — |
@@ -2846,6 +2846,38 @@ actually collects.
 
 **Done when:** policy/ToS reachable in-app; consent recorded server-side;
 data-map doc merged and store forms drafted.
+
+**Landed (Track A).** Settings gains an **About** group —
+`legal_compliance`'s `PrivacyPolicyButton` + a new sibling
+`TermsOfServiceButton` (both launch placeholder `kPrivacyPolicyUrl`/
+`kTermsOfServiceUrl` in `apps/duet/lib/legal.dart`, marked
+`TODO(track-b)` until hosted) and a static `Version` row
+(`kAppVersion`; `package_info_plus` isn't a dep, so it's a const kept in
+sync with `pubspec.yaml`). **Consent** is the minimal in-house record per
+the Open decision: `SignUpView` (core_ui) gains an optional required
+acceptance checkbox that gates the submit button, plumbed generically
+through `LoginScreen` (feature_auth stays app-agnostic — new
+`consentLabel`/`onConsentAccepted` params). The app wires it via a
+callback seam: ticking the box calls `SignUpConsentBinder.markPending`,
+and that eager binder (subscribed to `AuthAccountProvider.account`, like
+`DirectoryPublisher`/`CrashReporterUserBinder`) records a timestamped
+`ConsentRecord` against the new uid once it authenticates — via the
+app-level `ConsentRecorder` contract (`apps/duet/lib/data/`, the
+`AccountPurge`/`DataExport` precedent). Both DI branches bind the
+in-memory `InMemoryConsentRecorder` (G2); `FirestoreConsentRecorder`
+(writes `consent/{uid}`) is written and unit-tested but **unbound** until
+its rules + rules-tests land (G6), a `TODO(track-b)` one-liner mirroring
+the deferred remote-config/crash/analytics/perf bindings. The **data
+map** (`docs/duet_privacy_data_map.md`) enumerates every collected type
+with purpose + retention. Gate (trimmed, this host): `flutter analyze`
+clean and touched-package tests green under FVM Flutter 3.44.4 —
+`legal_compliance` (+`TermsOfServiceButton`), `core_ui` (SignUpView 8/8,
+incl. the checkbox gate), `feature_auth` (LoginScreen 8/8), `duet`
+(injection guardrail 14/14, settings incl. About 13/13, consent binder
+4/4). ▸B remainder (**[HUMAN]**): author + host the real policy/ToS URLs,
+land `consent/{uid}` rules to flip the Firestore recorder on, and
+transcribe the data map into the App Privacy label + Play Data Safety
+forms (M9.4 blocks on these).
 
 ### M7.5 — GDPR self-service data export
 

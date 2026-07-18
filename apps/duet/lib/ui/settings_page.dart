@@ -5,6 +5,7 @@ import 'package:core_utils/core_utils.dart';
 import 'package:duet/data/account_purge.dart';
 import 'package:duet/data/directory_publisher.dart';
 import 'package:duet/injection.dart';
+import 'package:duet/legal.dart';
 import 'package:feature_auth/feature_auth.dart';
 import 'package:feature_settings/feature_settings.dart';
 import 'package:flutter/material.dart';
@@ -236,6 +237,30 @@ class _DuetSettingsPageState extends State<DuetSettingsPage> {
                     account?.provider ?? AuthProviderKind.unknown,
                   ),
                 ),
+              // Legal surfaces (M7.4): the policy/ToS every store listing
+              // requires, reachable in-app, plus the running version. The URLs
+              // are placeholders until the documents are hosted (Track B) —
+              // `PrivacyPolicyButton`/`TermsOfServiceButton` only launch them
+              // on a real tap. Aligned left so the text buttons read as rows,
+              // not centered CTAs.
+              const SectionHeader('About'),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: PrivacyPolicyButton(
+                  privacyPolicyUrl: kPrivacyPolicyUrl,
+                ),
+              ),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: TermsOfServiceButton(
+                  termsOfServiceUrl: kTermsOfServiceUrl,
+                ),
+              ),
+              const AppListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Version'),
+                subtitle: Text(kAppVersion),
+              ),
             ],
           );
         },

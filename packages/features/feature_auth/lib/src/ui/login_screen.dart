@@ -19,13 +19,30 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 /// creation without touching their routers.
 class LoginScreen extends StatefulWidget {
   /// Creates a [LoginScreen], optionally branded with a [logo] and [title].
-  const LoginScreen({this.logo, this.title, super.key});
+  const LoginScreen({
+    this.logo,
+    this.title,
+    this.consentLabel,
+    this.onConsentAccepted,
+    super.key,
+  });
 
   /// Optional branding shown above the form, e.g. an [AppLogoMark].
   final Widget? logo;
 
   /// Optional headline, e.g. the app name.
   final String? title;
+
+  /// Optional required legal-acceptance label shown as a checkbox on the
+  /// sign-up view (see [SignUpView.consentLabel]). Passed straight through so
+  /// this generic screen stays unaware of any specific consent policy —
+  /// apps decide whether to gate sign-up and what the label links to.
+  final Widget? consentLabel;
+
+  /// Invoked when a consent-gated sign-up is submitted with the box ticked
+  /// (see [SignUpView.onConsentAccepted]). Apps wire this to their own
+  /// consent-recording seam; [LoginScreen] never records consent itself.
+  final VoidCallback? onConsentAccepted;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -107,6 +124,8 @@ class _LoginScreenState extends State<LoginScreen> {
             logo: widget.logo,
             title: widget.title,
             errorText: errorText,
+            consentLabel: widget.consentLabel,
+            onConsentAccepted: widget.onConsentAccepted,
             onSignUp: (email, password, displayName) => bloc.add(
               AuthSignUpRequested(email, password, displayName: displayName),
             ),

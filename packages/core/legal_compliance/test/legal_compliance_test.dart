@@ -79,4 +79,20 @@ void main() {
       expect(find.text('Privacy Policy'), findsOneWidget);
     });
   });
+
+  group('TermsOfServiceButton', () {
+    testWidgets('renders correctly', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: TermsOfServiceButton(
+              termsOfServiceUrl: 'https://example.com',
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Terms of Service'), findsOneWidget);
+    });
+  });
 }
